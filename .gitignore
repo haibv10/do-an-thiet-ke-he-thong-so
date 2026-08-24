@@ -1,0 +1,56 @@
+# OS and editor files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# Generic build and coverage output
+build/
+out/
+dist/
+coverage/
+
+# Simulation output
+work/
+transcript
+vsim.wlf
+*.wlf
+*.vcd
+*.fst
+*.ghw
+*.log
+
+# Intel Quartus generated output
+db/
+incremental_db/
+output_files/
+greybox_tmp/
+*.qws
+*.rpt
+*.summary
+*.smsg
+*.jdi
+*.sof
+*.pof
+*.rbf
+
+# AMD/Xilinx generated output
+.Xil/
+*.cache/
+*.gen/
+*.runs/
+*.sim/
+*.hw/
+*.ip_user_files/
+*.jou
+*.str
+*.bit
+*.ltx
+
+# Temporary synthesis and simulator files
+*.bak
+*.tmp
+*.dump

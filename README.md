@@ -121,6 +121,18 @@ Các thành phần không thuộc phạm vi hiện tại:
 
 ## Công cụ và phần cứng
 
-Project không bị ràng buộc trong README này bởi một FPGA vendor, kit cụ thể hoặc một công cụ EDA cụ thể.
-Các lựa chọn về FPGA kit, pin assignment, toolchain, synthesis tool và USB-UART interface sẽ được cập nhật
-theo phần cứng và môi trường triển khai thực tế.
+RTL baseline hiện tại sử dụng FPGA Gowin `GW1NR-LV9QN88PC6/I5` với clock onboard 27 MHz. Pin assignment
+cho clock, reset, button, LED và UART TX được định nghĩa trong `src/fpga_project.cst`. Gowin EDA project và
+command synthesis/programming sẽ được bổ sung sau khi build được tái tạo trong repository này.
+
+## Simulation
+
+CPU module và integration test sử dụng Icarus Verilog có hỗ trợ SystemVerilog-2012. Chạy toàn bộ test từ
+thư mục gốc của repository:
+
+```bash
+bash tb/run_tests.sh
+```
+
+Script compile từng testbench độc lập trong thư mục tạm. Integration test nạp một chương trình RV32I ngắn
+để kiểm tra forwarding, load-use stall, branch và JAL flush, Data Memory, GPIO MMIO và UART TX.

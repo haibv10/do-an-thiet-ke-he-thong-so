@@ -1,0 +1,52 @@
+`timescale 1ns/1ps
+
+module control_unit_tb;
+  logic [6:0] opcode;
+  logic [2:0] funct3;
+  logic funct7_5;
+  logic Branch;
+  logic [1:0] Jump;
+  logic MemRead;
+  logic MemtoReg;
+  logic MemWrite;
+  logic ALUSrc;
+  logic RegWrite;
+  logic [3:0] alu_ctrl;
+
+  control_unit dut (.*);
+
+  task automatic decode(
+    input logic [6:0] op,
+    input logic [2:0] f3,
+    input logic f7
+  );
+    opcode = op;
+    funct3 = f3;
+    funct7_5 = f7;
+    #1;
+  endtask
+
+  initial begin
+    decode(7'b0110011, 3'b000, 1'b0);
+    if (!RegWrite || ALUSrc || alu_ctrl != 4'b0000) $fatal(1, "ADD decode");
+    decode(7'b0110011, 3'b000, 1'b1);
+    if (alu_ctrl != 4'b1000) $fatal(1, "SUB decode");
+    decode(7'b0010011, 3'b101, 1'b1);
+    if (!RegWrite || !ALUSrc || alu_ctrl != 4'b1101) $fatal(1, "SRAI decode");
+    decode(7'b0000011, 3'b010, 1'b0);
+    if (!MemRead || !MemtoReg || !RegWrite || !ALUSrc) $fatal(1, "load decode");
+    decode(7'b0100011, 3'b010, 1'b0);
+    if (!MemWrite || !ALUSrc || RegWrite) $fatal(1, "store decode");
+    decode(7'b1100011, 3'b001, 1'b0);
+    if (!Branch || alu_ctrl != 4'b1000) $fatal(1, "branch decode");
+    decode(7'b1101111, 3'b000, 1'b0);
+    if (Jump != 2'b01 || !RegWrite) $fatal(1, "JAL decode");
+    decode(7'b1100111, 3'b000, 1'b0);
+    if (Jump != 2'b10 || !RegWrite || !ALUSrc) $fatal(1, "JALR decode");
+    decode(7'b1111111, 3'b111, 1'b1);
+    if ({Branch, Jump, MemRead, MemtoReg, MemWrite, ALUSrc, RegWrite} != '0)
+      $fatal(1, "illegal opcode defaults");
+    $display("control_unit_tb: PASS");
+    $finish;
+  end
+endmodule

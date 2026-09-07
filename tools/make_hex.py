@@ -1,6 +1,6 @@
 import sys
 
-def convert_elf_to_hex(bin_path, hex_path):
+def convert_bin_to_hex(bin_path, hex_path):
     with open(bin_path, "rb") as f:
         data = f.read()
 
@@ -15,4 +15,4 @@ def convert_elf_to_hex(bin_path, hex_path):
             f.write(f"{word:08X}\n")
 
 if __name__ == "__main__":
-    convert_elf_to_hex(sys.argv[1], sys.argv[2])
+    convert_bin_to_hex(sys.argv[1], sys.argv[2])

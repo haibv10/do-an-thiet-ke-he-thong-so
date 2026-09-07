@@ -2,8 +2,8 @@
 set -euo pipefail
 
 repo_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-test_tmp_dir=$(mktemp -d)
-trap 'rm -rf -- "$test_tmp_dir"' EXIT
+test_build_dir="$repo_dir/build/sim"
+mkdir -p "$test_build_dir"
 cd "$repo_dir"
 
 command -v iverilog >/dev/null || {
@@ -18,8 +18,8 @@ command -v vvp >/dev/null || {
 run_test() {
   local top=$1
   shift
-  iverilog -g2012 -s "$top" -o "$test_tmp_dir/$top.vvp" "$@"
-  vvp "$test_tmp_dir/$top.vvp"
+  iverilog -g2012 -s "$top" -o "$test_build_dir/$top.vvp" "$@"
+  vvp "$test_build_dir/$top.vvp"
 }
 
 run_test alu_tb src/alu.v tb/alu_tb.sv
@@ -33,4 +33,7 @@ run_test pipe_if_id_tb src/pipe_if_id.v tb/pipe_if_id_tb.sv
 run_test pipe_id_ex_tb src/pipe_id_ex.v tb/pipe_id_ex_tb.sv
 run_test pipe_ex_mem_tb src/pipe_ex_mem.v tb/pipe_ex_mem_tb.sv
 run_test pipe_mem_wb_tb src/pipe_mem_wb.v tb/pipe_mem_wb_tb.sv
+run_test uart_rx_tb src/uart_rx.v tb/uart_rx_tb.sv
+run_test uart_mmio_tb \
+  src/uart_tx.v src/uart_rx.v src/uart_mmio.v tb/uart_mmio_tb.sv
 run_test cpu_top_tb src/*.v tb/cpu_top_tb.sv

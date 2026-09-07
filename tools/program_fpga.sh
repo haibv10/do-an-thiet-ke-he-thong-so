@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-repo_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+repo_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 gowin_root=${GOWIN_ROOT:-}
-bitstream="$repo_dir/impl/pnr/fpga_project.fs"
+bitstream="$repo_dir/build/gowin/impl/pnr/fpga_project.fs"
 
 if [[ -z "$gowin_root" ]]; then
   echo "GOWIN_ROOT must point to the extracted Gowin installation" >&2
@@ -18,7 +18,7 @@ if [[ ! -x "$programmer_bin" ]]; then
 fi
 
 if [[ ! -f "$bitstream" ]]; then
-  echo "bitstream not found; run bash build_fpga.sh first" >&2
+  echo "bitstream not found; run bash tools/build_fpga.sh first" >&2
   exit 1
 fi
 

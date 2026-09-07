@@ -121,6 +121,58 @@ Các thành phần không thuộc phạm vi hiện tại:
 
 ## Công cụ và phần cứng
 
-Project không bị ràng buộc trong README này bởi một FPGA vendor, kit cụ thể hoặc một công cụ EDA cụ thể.
-Các lựa chọn về FPGA kit, pin assignment, toolchain, synthesis tool và USB-UART interface sẽ được cập nhật
-theo phần cứng và môi trường triển khai thực tế.
+RTL baseline hiện tại sử dụng FPGA Gowin `GW1NR-LV9QN88PC6/I5` với clock onboard 27 MHz. Pin assignment
+cho clock, reset, button, LED và UART TX được định nghĩa trong `src/fpga_project.cst`. Gowin EDA project và
+command synthesis/programming sẽ được bổ sung sau khi build được tái tạo trong repository này.
+
+## Simulation
+
+CPU module và integration test sử dụng Icarus Verilog có hỗ trợ SystemVerilog-2012. Chạy toàn bộ test từ
+thư mục gốc của repository:
+
+```bash
+bash tb/run_tests.sh
+```
+
+Script compile từng testbench độc lập trong thư mục tạm. Integration test nạp một chương trình RV32I ngắn
+để kiểm tra forwarding, load-use stall, branch và JAL flush, Data Memory, GPIO MMIO và UART TX.
+
+## Gowin FPGA build
+
+Gowin project sử dụng device `GW1NR-LV9QN88PC6/I5`, top module `cpu_top`, Verilog-2001 và timing constraint
+27 MHz trong `src/fpga_project.sdc`. Có thể mở `fpga_project.gprj` bằng Gowin EDA hoặc chạy toàn bộ flow từ
+thư mục gốc của repository:
+
+```bash
+export GOWIN_ROOT="$HOME/tools/Gowin_V1.9.12.03"
+bash build_fpga.sh
+```
+
+Trên Windows, dùng executable tương ứng:
+
+```powershell
+gw_sh.exe build_gowin.tcl
+```
+
+Flow thực hiện synthesis, placement/routing, timing analysis và tạo bitstream dưới `impl/pnr/`. Thư mục
+`impl/` là generated output và không được commit. Cần lưu lại synthesis log, timing summary và kết quả
+program board làm verification evidence trước khi merge branch.
+
+Tang Nano 9K hiện tại sử dụng FT2232 với interface 0 cho JTAG và interface 1 cho UART. Gowin Programmer cần
+quyền truy cập raw USB trên Linux. Kiểm tra FT2CH JTAG channel và program SRAM bằng:
+
+```bash
+sudo "$GOWIN_ROOT/Programmer/bin/programmer_cli" --scan --cable-index 1 --channel 0
+sudo env GOWIN_ROOT="$GOWIN_ROOT" bash program_fpga.sh
+```
+
+Gowin Programmer có thể unload `ftdi_sio` khi chiếm FT2232 cho JTAG. Nạp lại driver sau khi program để khôi
+phục UART device node mà không rút nguồn board:
+
+```bash
+sudo modprobe ftdi_sio
+ls -l /dev/ttyUSB*
+```
+
+SRAM programming là volatile; bitstream mất khi board mất nguồn. Kết quả simulation và FPGA build hiện tại
+được ghi trong `docs/verification/rv32i_pipeline.md`.

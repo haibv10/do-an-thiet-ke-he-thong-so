@@ -7,6 +7,9 @@ Thumbs.db
 .vscode/
 .idea/
 
+# Local tool licenses
+*.lic
+
 # Generic build and coverage output
 build/
 out/
@@ -54,3 +57,7 @@ greybox_tmp/
 *.bak
 *.tmp
 *.dump
+
+# Gowin generated output and per-user project state
+impl/
+*.gprj.user

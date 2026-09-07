@@ -1,0 +1,19 @@
+// Clock 27MHz thạch anh onboard
+IO_LOC "clk" 52;
+IO_PORT "clk" PULL_MODE=UP;
+
+// Nút Reset S2
+IO_LOC "rst_n" 3;
+IO_PORT "rst_n" PULL_MODE=UP;
+
+// Nút bấm S1
+IO_LOC "btn_in" 4;
+IO_PORT "btn_in" PULL_MODE=UP;
+
+// LED 1
+IO_LOC "led_out" 10;
+IO_PORT "led_out" PULL_MODE=UP DRIVE=8;
+
+// UART TX truyền lên máy tính
+IO_LOC "uart_tx_out" 17;
+IO_PORT "uart_tx_out" IO_TYPE=LVCMOS33 PULL_MODE=UP DRIVE=8;

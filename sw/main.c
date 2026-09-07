@@ -4,28 +4,23 @@
 #define LED_REG       (*((volatile unsigned int *) GPIO_BASE))
 #define UART_TX_REG   (*((volatile unsigned int *) UART_BASE))
 #define UART_STAT_REG (*((volatile unsigned int *) (UART_BASE + 4)))
+#define UART_RX_REG   (*((volatile unsigned int *) (UART_BASE + 8)))
 
-// Cấu trúc vòng lặp lồng nhau kép ép chạy trên thanh ghi lõi
-void delay_loop() {
-    register int i, j;
-    for (i = 0; i < 500; i++) {
-        for (j = 0; j < 500; j++) {
-            __asm__ volatile("nop");
-        }
-    }
-}
+#define UART_TX_BUSY  0x01
+#define UART_RX_VALID 0x02
 
 int main() {
-    while (1) {
-        // Kiểm tra cờ bận bằng thanh ghi raw
-        while (UART_STAT_REG & 0x01);
-        UART_TX_REG = 'H';
+  LED_REG = 0;
 
-        LED_REG = 1;
-        delay_loop();
+  while (1) {
+    if (UART_STAT_REG & UART_RX_VALID) {
+      unsigned int received = UART_RX_REG;
 
-        LED_REG = 0;
-        delay_loop();
+      while (UART_STAT_REG & UART_TX_BUSY) {
+      }
+
+      UART_TX_REG = received;
+      LED_REG = received & 1;
     }
-    return 0;
+  }
 }

@@ -17,3 +17,7 @@ IO_PORT "led_out" PULL_MODE=UP DRIVE=8;
 // UART TX truyền lên máy tính
 IO_LOC "uart_tx_out" 17;
 IO_PORT "uart_tx_out" IO_TYPE=LVCMOS33 PULL_MODE=UP DRIVE=8;
+
+// UART RX nhận dữ liệu từ máy tính
+IO_LOC "uart_rx_in" 18;
+IO_PORT "uart_rx_in" IO_TYPE=LVCMOS33 PULL_MODE=UP;

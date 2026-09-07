@@ -1,7 +1,7 @@
 `timescale 1ns/1ps
 
 module cpu_top_tb;
-  localparam int unsigned CLKS_PER_UART_BIT = 234;
+  localparam integer CLKS_PER_UART_BIT = 234;
 
   logic clk = 1'b0;
   logic rst_n = 1'b0;
@@ -151,12 +151,16 @@ module cpu_top_tb;
         dut.rf.x[3] !== 32'd13) $fatal(1, "forwarding result");
     if (dut.ram.ram[0] !== 32'd13 || dut.rf.x[6] !== 32'd14)
       $fatal(1, "load-use result");
-    if (dut.ram.ram[1] !== 32'hfffe_00ff ||
+    if (dut.ram.ram[1][7:0] !== 8'hff ||
+        dut.ram.ram[1][31:16] !== 16'hfffe ||
         dut.rf.x[15] !== 32'h0000_00ff ||
         dut.rf.x[16] !== 32'hffff_ffff ||
         dut.rf.x[18] !== 32'h0000_fffe ||
         dut.rf.x[19] !== 32'hffff_fffe)
-      $fatal(1, "subword load or store result");
+      $fatal(1,
+             "subword RAM=%h x15=%h x16=%h x18=%h x19=%h",
+             dut.ram.ram[1], dut.rf.x[15], dut.rf.x[16],
+             dut.rf.x[18], dut.rf.x[19]);
     if (stall_count !== 1) $fatal(1, "load-use stall count=%0d", stall_count);
     if (dut.rf.x[7] !== 32'd0) $fatal(1, "branch flush");
     if (dut.rf.x[10] !== 32'd84 || dut.rf.x[11] !== 32'd0)

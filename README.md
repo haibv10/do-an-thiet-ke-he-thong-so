@@ -61,6 +61,22 @@ UART dùng để giao tiếp serial giữa FPGA và laptop:
 Tốc độ baud rate, cách ánh xạ register và giao diện vật lý sẽ được xác định theo kit FPGA và mạch
 USB-UART được sử dụng.
 
+UART hiện dùng base address `0x50000000` với register map:
+
+| Offset | Access | Chức năng |
+|---|---|---|
+| `0x00` | Write | Ghi `data[7:0]` để bắt đầu UART TX khi `tx_busy` bằng 0. |
+| `0x04` | Read | Status: bit 0 `tx_busy`, bit 1 `rx_valid`. |
+| `0x08` | Read | RX data tại `data[7:0]`; thao tác đọc clear `rx_valid`. |
+
+Firmware hiện tại chờ `rx_valid`, đọc một byte, echo byte đó qua UART TX và đưa bit 0 của byte ra LED.
+
+Build firmware từ thư mục gốc của repository:
+
+```bash
+bash tools/build_firmware.sh
+```
+
 ### I2C và LCD
 
 I2C chỉ được sử dụng để demo điều khiển LCD. LCD có thể hiển thị thông báo khởi động, trạng thái input,
@@ -131,10 +147,10 @@ CPU module và integration test sử dụng Icarus Verilog có hỗ trợ System
 thư mục gốc của repository:
 
 ```bash
-bash tb/run_tests.sh
+bash tools/run_tests.sh
 ```
 
-Script compile từng testbench độc lập trong thư mục tạm. Integration test nạp một chương trình RV32I ngắn
+Script compile từng testbench độc lập vào `build/sim/`. Integration test nạp một chương trình RV32I ngắn
 để kiểm tra forwarding, load-use stall, branch và JAL flush, Data Memory, GPIO MMIO và UART TX.
 
 ## Gowin FPGA build
@@ -145,17 +161,17 @@ thư mục gốc của repository:
 
 ```bash
 export GOWIN_ROOT="$HOME/tools/Gowin_V1.9.12.03"
-bash build_fpga.sh
+bash tools/build_fpga.sh
 ```
 
 Trên Windows, dùng executable tương ứng:
 
 ```powershell
-gw_sh.exe build_gowin.tcl
+gw_sh.exe tools/build_gowin.tcl
 ```
 
-Flow thực hiện synthesis, placement/routing, timing analysis và tạo bitstream dưới `impl/pnr/`. Thư mục
-`impl/` là generated output và không được commit. Cần lưu lại synthesis log, timing summary và kết quả
+Flow thực hiện synthesis, placement/routing, timing analysis và tạo bitstream dưới `build/gowin/impl/pnr/`.
+Thư mục `build/` là generated output và không được commit. Cần lưu lại timing summary và kết quả
 program board làm verification evidence trước khi merge branch.
 
 Tang Nano 9K hiện tại sử dụng FT2232 với interface 0 cho JTAG và interface 1 cho UART. Gowin Programmer cần
@@ -163,7 +179,7 @@ quyền truy cập raw USB trên Linux. Kiểm tra FT2CH JTAG channel và progra
 
 ```bash
 sudo "$GOWIN_ROOT/Programmer/bin/programmer_cli" --scan --cable-index 1 --channel 0
-sudo env GOWIN_ROOT="$GOWIN_ROOT" bash program_fpga.sh
+sudo env GOWIN_ROOT="$GOWIN_ROOT" bash tools/program_fpga.sh
 ```
 
 Gowin Programmer có thể unload `ftdi_sio` khi chiếm FT2232 cho JTAG. Nạp lại driver sau khi program để khôi

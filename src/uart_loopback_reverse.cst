@@ -1,0 +1,17 @@
+IO_LOC "clk" 52;
+IO_PORT "clk" PULL_MODE=UP;
+
+IO_LOC "rst_n" 3;
+IO_PORT "rst_n" PULL_MODE=UP;
+
+IO_LOC "btn_in" 4;
+IO_PORT "btn_in" PULL_MODE=UP;
+
+IO_LOC "led_out" 10;
+IO_PORT "led_out" PULL_MODE=UP DRIVE=8;
+
+IO_LOC "uart_tx_out" 17;
+IO_PORT "uart_tx_out" IO_TYPE=LVCMOS33 PULL_MODE=UP;
+
+IO_LOC "uart_rx_in" 18;
+IO_PORT "uart_rx_in" IO_TYPE=LVCMOS33 PULL_MODE=UP DRIVE=8;

@@ -6,9 +6,11 @@ module cpu_top_tb;
   logic clk = 1'b0;
   logic rst_n = 1'b0;
   logic btn_in = 1'b0;
+  logic uart_rx_in = 1'b1;
   logic led_out;
   logic uart_tx_out;
   logic [7:0] uart_data;
+  logic [7:0] uart_echo_data;
   integer index;
   integer stall_count = 0;
 
@@ -19,6 +21,7 @@ module cpu_top_tb;
     .rst_n(rst_n),
     .led_out(led_out),
     .btn_in(btn_in),
+    .uart_rx_in(uart_rx_in),
     .uart_tx_out(uart_tx_out)
   );
 
@@ -87,6 +90,43 @@ module cpu_top_tb;
                 immediate[19:12], rd, opcode};
   endfunction
 
+  task automatic send_uart_byte(input logic [7:0] value);
+    integer send_index;
+    begin
+      @(negedge clk) uart_rx_in = 1'b0;
+      repeat (CLKS_PER_UART_BIT) @(negedge clk);
+      for (send_index = 0; send_index < 8; send_index = send_index + 1) begin
+        uart_rx_in = value[send_index];
+        repeat (CLKS_PER_UART_BIT) @(negedge clk);
+      end
+      uart_rx_in = 1'b1;
+      repeat (CLKS_PER_UART_BIT) @(negedge clk);
+    end
+  endtask
+
+  task automatic capture_uart_byte(output logic [7:0] value);
+    integer capture_index;
+    begin
+      capture_index = 0;
+      while ((uart_tx_out !== 1'b0) && (capture_index < 500)) begin
+        @(posedge clk);
+        capture_index = capture_index + 1;
+      end
+      if (uart_tx_out !== 1'b0)
+        $fatal(1, "timeout waiting for UART start bit");
+
+      repeat (CLKS_PER_UART_BIT / 2) @(posedge clk);
+      if (uart_tx_out !== 1'b0) $fatal(1, "UART start bit");
+      for (capture_index = 0; capture_index < 8;
+           capture_index = capture_index + 1) begin
+        repeat (CLKS_PER_UART_BIT) @(posedge clk);
+        value[capture_index] = uart_tx_out;
+      end
+      repeat (CLKS_PER_UART_BIT) @(posedge clk);
+      if (uart_tx_out !== 1'b1) $fatal(1, "UART stop bit");
+    end
+  endtask
+
   initial begin
     #1;
     for (index = 0; index < 1024; index = index + 1)
@@ -122,30 +162,22 @@ module cpu_top_tb;
                                7'b0010011);
     dut.rom.rom[24] = encode_s(12'd0, 5'd13, 5'd12, 3'b010,
                                7'b0100011);
-    dut.rom.rom[25] = encode_j(21'd0, 5'd0, 7'b1101111);
+    dut.rom.rom[25] = encode_i(12'd4, 5'd12, 3'b010, 5'd20,
+                               7'b0000011);
+    dut.rom.rom[26] = encode_i(12'd2, 5'd20, 3'b111, 5'd20,
+                               7'b0010011);
+    dut.rom.rom[27] = encode_b(13'h1ff8, 5'd0, 5'd20, 3'b000,
+                               7'b1100011);
+    dut.rom.rom[28] = encode_i(12'd8, 5'd12, 3'b010, 5'd21,
+                               7'b0000011);
+    dut.rom.rom[29] = encode_s(12'd0, 5'd21, 5'd12, 3'b010,
+                               7'b0100011);
+    dut.rom.rom[30] = encode_j(21'd0, 5'd0, 7'b1101111);
 
     repeat (2) @(posedge clk);
     @(negedge clk) rst_n = 1'b1;
 
-    fork : wait_for_uart
-      begin
-        @(negedge uart_tx_out);
-      end
-      begin
-        repeat (500) @(posedge clk);
-        $fatal(1, "timeout waiting for UART start bit");
-      end
-    join_any
-    disable wait_for_uart;
-
-    repeat (CLKS_PER_UART_BIT / 2) @(posedge clk);
-    if (uart_tx_out !== 1'b0) $fatal(1, "UART start bit");
-    for (index = 0; index < 8; index = index + 1) begin
-      repeat (CLKS_PER_UART_BIT) @(posedge clk);
-      uart_data[index] = uart_tx_out;
-    end
-    repeat (CLKS_PER_UART_BIT) @(posedge clk);
-    if (uart_tx_out !== 1'b1) $fatal(1, "UART stop bit");
+    capture_uart_byte(uart_data);
 
     if (dut.rf.x[1] !== 32'd5 || dut.rf.x[2] !== 32'd8 ||
         dut.rf.x[3] !== 32'd13) $fatal(1, "forwarding result");
@@ -161,12 +193,19 @@ module cpu_top_tb;
              "subword RAM=%h x15=%h x16=%h x18=%h x19=%h",
              dut.ram.ram[1], dut.rf.x[15], dut.rf.x[16],
              dut.rf.x[18], dut.rf.x[19]);
-    if (stall_count !== 1) $fatal(1, "load-use stall count=%0d", stall_count);
+    if (stall_count < 1) $fatal(1, "load-use stall was not observed");
     if (dut.rf.x[7] !== 32'd0) $fatal(1, "branch flush");
     if (dut.rf.x[10] !== 32'd84 || dut.rf.x[11] !== 32'd0)
       $fatal(1, "JAL link or flush");
     if (led_out !== 1'b1) $fatal(1, "GPIO MMIO write");
     if (uart_data !== 8'h48) $fatal(1, "UART data=%h", uart_data);
+
+    send_uart_byte(8'ha5);
+    capture_uart_byte(uart_echo_data);
+    if (uart_echo_data !== 8'ha5)
+      $fatal(1, "UART echo data=%h", uart_echo_data);
+    if (dut.serial_port.rx_inst.valid)
+      $fatal(1, "UART RX valid did not clear after CPU load");
 
     $display("cpu_top_tb: PASS");
     $finish;

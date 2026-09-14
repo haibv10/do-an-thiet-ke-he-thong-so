@@ -1,4 +1,6 @@
-module uart_tx (
+module uart_tx #(
+  parameter CLKS_PER_BIT = 234
+) (
   input  wire        clk,        // 27 MHz
   input  wire        rst_n,
   input  wire        we,         // Write Enable từ Address Decoder
@@ -7,8 +9,6 @@ module uart_tx (
   output wire [31:0] rd,         // Trả về cờ Status (rd[0] = busy)
   output reg         tx          // Chân UART TX vật lý bắn ra ngoài
 );
-
-  localparam CLKS_PER_BIT = 234; // 27_000_000 / 115200
 
   localparam STATE_IDLE  = 2'b00;
   localparam STATE_START = 2'b01;

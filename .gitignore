@@ -58,6 +58,12 @@ greybox_tmp/
 *.tmp
 *.dump
 
+# RISC-V firmware build output
+sw/*.asm
+sw/*.bin
+sw/*.elf
+sw/*.map
+
 # Gowin generated output and per-user project state
 impl/
 *.gprj.user

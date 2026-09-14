@@ -3,6 +3,7 @@ module cpu_top (
   input  wire rst_n,
   output wire led_out,
   input  wire btn_in,
+  input  wire uart_rx_in,
   output wire uart_tx_out
 );
 
@@ -251,9 +252,12 @@ module cpu_top (
     .wd(mem_store_data), .rd(gpio_rd), .led(led_out), .btn_in(btn_in)
   );
 
-  uart_tx serial_tx (
-    .clk(clk), .rst_n(rst_n), .we(we_uart), .a(mem_alu_result),
-    .wd(mem_store_data), .rd(uart_rd), .tx(uart_tx_out)
+  wire uart_read = mem_MemRead && (mem_alu_result[31:28] == 4'h5);
+
+  uart_mmio serial_port (
+    .clk(clk), .rst_n(rst_n), .we(we_uart), .re(uart_read),
+    .a(mem_alu_result), .wd(mem_store_data), .rx(uart_rx_in),
+    .rd(uart_rd), .tx(uart_tx_out)
   );
 
   // 2. CĂN CHỈNH ĐỌC (LB, LBU, LH, LHU, LW)

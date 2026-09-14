@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-repo_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+repo_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+build_dir="$repo_dir/build/uart_loopback"
 gowin_root=${GOWIN_ROOT:-}
 system_libstdcpp=${SYSTEM_LIBSTDCXX:-/usr/lib/x86_64-linux-gnu/libstdc++.so.6}
 
@@ -23,7 +24,8 @@ if [[ ! -f "$system_libstdcpp" ]]; then
   exit 1
 fi
 
-cd "$repo_dir"
+mkdir -p "$build_dir"
+cd "$build_dir"
 
 exec env -u DISPLAY \
   QT_QPA_PLATFORM=offscreen \
@@ -32,4 +34,4 @@ exec env -u DISPLAY \
   LIBGL_ALWAYS_SOFTWARE=1 \
   LD_LIBRARY_PATH="$gowin_lib_dir${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
   LD_PRELOAD="$system_libstdcpp${LD_PRELOAD:+:$LD_PRELOAD}" \
-  "$gw_sh_bin" build_gowin.tcl
+  "$gw_sh_bin" "$repo_dir/tools/build_uart_loopback.tcl"

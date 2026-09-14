@@ -1,61 +1,36 @@
 `timescale 1ns/1ps
-
 module lcd_display_tb;
-  logic clk_1MHz = 1'b0;
-  logic rst_n = 1'b0;
-  logic ena = 1'b0;
-  logic done_write = 1'b0;
-  logic [127:0] row1 = "HELLO, FPGA!    ";
-  logic [127:0] row2 = "I2C LCD TEST   ";
-  logic [7:0] data;
-  logic cmd_data;
-  logic ena_write;
-  logic [7:0] writes [0:6];
-  logic write_cmd_data [0:6];
-  integer write_count = 0;
-  integer index;
-
-  always #5 clk_1MHz = ~clk_1MHz;
-
+  logic clk_1MHz=0, rst_n=0, ena=0, done_write=0;
+  logic [159:0] row1="LCD 20x4 READY      ";
+  logic [159:0] row2="UART AND I2C MMIO   ";
+  logic [159:0] row3="LINE THREE          ";
+  logic [159:0] row4="LINE FOUR           ";
+  logic [7:0] data; logic cmd_data, ena_write;
+  logic [7:0] writes[0:88]; logic types[0:88]; integer count=0, i;
+  always #5 clk_1MHz=~clk_1MHz;
   lcd_display dut (.*);
-
-  // The lower-layer I2C/LCD writer completes each request one clock later.
-  always @(posedge clk_1MHz)
-    done_write <= ena_write;
-
-  always @(posedge clk_1MHz)
-    if (ena_write && write_count < 7) begin
-      writes[write_count] = data;
-      write_cmd_data[write_count] = cmd_data;
-      write_count = write_count + 1;
-    end
-
+  always @(posedge clk_1MHz) done_write <= ena_write;
+  always @(posedge clk_1MHz) if (ena_write && count < 89) begin
+    writes[count]=data; types[count]=cmd_data; count=count+1;
+  end
   initial begin
-    for (index = 0; index < 7; index = index + 1) begin
-      writes[index] = 8'h00;
-      write_cmd_data[index] = 1'b0;
-    end
-
-    repeat (3) @(posedge clk_1MHz);
-    rst_n = 1'b1;
-    @(negedge clk_1MHz);
-    ena = 1'b1;
-    @(negedge clk_1MHz);
-    ena = 1'b0;
-
-    wait (write_count == 7);
-    @(posedge clk_1MHz);
-
-    if (writes[0] !== 8'h02 || writes[1] !== 8'h28 ||
-        writes[2] !== 8'h0C || writes[3] !== 8'h06 ||
-        writes[4] !== 8'h01 || writes[5] !== 8'h80 ||
-        writes[6] !== "H")
-      $fatal(1, "unexpected LCD initialization sequence");
-    if (write_cmd_data[0] !== 1'b0 || write_cmd_data[5] !== 1'b0 ||
-        write_cmd_data[6] !== 1'b1)
-      $fatal(1, "unexpected command/data classification");
-
-    $display("lcd_display_tb: PASS");
-    $finish;
+    #1000000;
+    $fatal(1, "timeout count=%0d state=%0d ptr=%0d cnt=%0d", count,
+           dut.state, dut.ptr, dut.cnt);
+  end
+  initial begin
+    for (i=0;i<89;i=i+1) begin writes[i]=0; types[i]=0; end
+    repeat(3) @(posedge clk_1MHz); rst_n=1;
+    @(negedge clk_1MHz) ena=1; @(negedge clk_1MHz) ena=0;
+    wait(count==89); @(posedge clk_1MHz);
+    if (writes[0]!==8'h02 || writes[1]!==8'h28 || writes[5]!==8'h80 ||
+        writes[26]!==8'hC0 || writes[47]!==8'h94 || writes[68]!==8'hD4)
+      $fatal(1,"unexpected LCD 20x4 command sequence");
+    if (writes[6]!=="L" || writes[27]!=="U" || writes[48]!=="L" || writes[69]!=="L")
+      $fatal(1,"unexpected LCD row data");
+    if (types[5]!==0 || types[6]!==1 || types[26]!==0 || types[27]!==1 ||
+        types[47]!==0 || types[48]!==1 || types[68]!==0 || types[69]!==1)
+      $fatal(1,"unexpected command/data classification");
+    $display("lcd_display_tb: PASS"); $finish;
   end
 endmodule

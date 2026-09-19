@@ -1,5 +1,7 @@
 # RV32I SoC for Tang Nano 9K
 
+[![CI](https://github.com/haibv10/do-an-thiet-ke-he-thong-so/actions/workflows/ci.yml/badge.svg)](https://github.com/haibv10/do-an-thiet-ke-he-thong-so/actions/workflows/ci.yml)
+
 > A 32-bit RISC-V system-on-chip written from scratch in Verilog, running on a
 > Gowin GW1NR-9C FPGA.
 
@@ -100,6 +102,7 @@ Per-register details are in [docs/hardware/register_map.md](docs/hardware/regist
 | Tool | Used for |
 |---|---|
 | Icarus Verilog ≥ 11 (`iverilog`, `vvp`) | Running the testbenches |
+| — | Also run on every push by [CI](.github/workflows/ci.yml) |
 | `riscv64-unknown-elf-gcc` and binutils | Compiling the firmware |
 | Gowin EDA V1.9.12.03 | Synthesis, place and route, bitstream |
 | `picocom` | Reading UART output from the board |
@@ -122,7 +125,7 @@ export GOWIN_ROOT=/home/haihbv/tools/Gowin_V1.9.12.03
 bash tools/run_tests.sh
 ```
 
-Runs 24 self-checking testbenches, ending with `firmware_boot_tb`, which boots
+Runs 29 self-checking testbenches, ending with `firmware_boot_tb`, which boots
 the real `sw/firmware.hex` image on the full SoC and decodes its UART output.
 Each prints `<name>: PASS`; the script stops at the first failure.
 
@@ -214,7 +217,7 @@ FT2232 JTAG channel, are collected in [docs/bringup.md](docs/bringup.md).
 | `src/` | SoC RTL. `cpu_top.v` is the top module |
 | `constr/` | Pin (`.cst`) and timing (`.sdc`) constraints |
 | `sw/` | C firmware, startup code, linker script and the built `firmware.hex` |
-| `tb/` | Self-checking SystemVerilog testbenches; `tb/support/` holds helpers |
+| `tb/` | Self-checking SystemVerilog testbenches; `tb/support/` holds helpers and fixtures |
 | `tools/` | Scripts for firmware, bitstream, programming and tests |
 | `docs/` | Design report, register map, bring-up notes, verification results |
 | `logs/` | Curated verification evidence — see [logs/README.md](logs/README.md) |
@@ -228,7 +231,7 @@ FT2232 JTAG channel, are collected in [docs/bringup.md](docs/bringup.md).
 
 | Layer | Result |
 |---|---|
-| Simulation | 24 / 24 testbenches pass on Icarus Verilog 11.0 |
+| Simulation | 29 / 29 testbenches pass on Icarus Verilog 12.0 |
 | Timing | Fmax 28.912 MHz against a 27 MHz constraint, 0 setup and 0 hold violations |
 | Resources | Logic 3321 / 8640 (39%), registers 1594 / 6693 (24%), BSRAM 6 / 26 (24%) |
 | Hardware | Banner reads `BOOT 5A5A5A5A 00000000`, LCD displays `HELLO FPGA`, UART reports the PCF8574 at `0x27` |
@@ -264,3 +267,4 @@ Defects found and fixed, each with the evidence behind it, are recorded in
 | [docs/fix_log.md](docs/fix_log.md) | Defects found, fixes applied and the evidence for each |
 | [docs/verification/rv32i_pipeline.md](docs/verification/rv32i_pipeline.md) | Simulation, timing and hardware results |
 | [rules/](rules/) | Coding style, commit style, git flow |
+| [docs/images/README.md](docs/images/README.md) | What each figure shows, and which ones are not from this project |

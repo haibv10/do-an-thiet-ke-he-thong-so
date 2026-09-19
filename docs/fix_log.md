@@ -9,6 +9,11 @@ Entries are newest first.
 
 ## Contents
 
+- [2026-09-19 review follow-up](#2026-09-19-review-follow-up)
+  - [12. The coding style guide described a project that does not exist](#12-the-coding-style-guide-described-a-project-that-does-not-exist)
+  - [13. Five modules had no unit test](#13-five-modules-had-no-unit-test)
+  - [14. Three figures in `docs/images/` are from other projects](#14-three-figures-in-docsimages-are-from-other-projects)
+  - [15. Nothing ran the tests](#15-nothing-ran-the-tests)
 - [2026-09-19 asynchronous inputs](#2026-09-19-asynchronous-inputs)
   - [11. External inputs reached the clock domain unsynchronised](#11-external-inputs-reached-the-clock-domain-unsynchronised)
 - [2026-09-19 review](#2026-09-19-review)
@@ -22,6 +27,132 @@ Entries are newest first.
   - [8. The ROM image left words undefined past the end of the firmware](#8-the-rom-image-left-words-undefined-past-the-end-of-the-firmware)
   - [9. Documentation described the I2C defect incorrectly](#9-documentation-described-the-i2c-defect-incorrectly)
   - [10. The PCF8574 address was recorded as `0x21`](#10-the-pcf8574-address-was-recorded-as-0x21)
+
+---
+
+## 2026-09-19 review follow-up
+
+The four gaps the review left open, closed together. Item 14 turned up something
+worse than the gap it was meant to close.
+
+### 12. The coding style guide described a project that does not exist
+
+**Severity** — Low in effect, high in credibility. A rule nothing follows is
+worse than no rule, because it stops being read.
+
+**Symptom.** `rules/verilog_coding_style.md` mandated SystemVerilog-2017 with
+`logic`, `always_ff`, `always_comb`, and ports suffixed `_i`/`_o`/`_ni`. Not one
+of the 24 RTL files complied, and `tools/build_gowin.tcl` pins
+`-verilog_std v2001`, so the build actively contradicted the guide.
+
+**Fix.** The code is right and the guide was wrong, so the guide changed. The
+policy is now stated with its reason: synthesizable RTL is Verilog-2001 because
+that is GowinSynthesis's exercised path and the design sits near its timing
+limit, and testbenches are SystemVerilog-2017 because nothing synthesizes them.
+Sections 2, 6, 7, 8, 12, 13 and 44 were rewritten, the examples renamed to the
+convention actually in use, and a table of deliberate deviations added so the
+next reader knows which gaps are decisions rather than debt.
+
+Section 44 gained an exception it always needed: `initial` with `$readmemh` is
+how a block RAM gets its contents and is not a simulation-only construct.
+
+**Status** — Fixed.
+
+### 13. Five modules had no unit test
+
+**Symptom.** `address_decoder`, `dmem`, `imem`, `pc_reg` and `uart_tx` were
+exercised only through `cpu_top_tb`. The ROM window and the byte lanes, both
+recent, had no test that named them.
+
+**Fix.** Five testbenches, chosen to pin the behaviour that integration tests
+cannot isolate:
+
+- `address_decoder_tb` — each region selects one target, unmapped regions read
+  zero, the byte mask reaches RAM unchanged, and a store into the ROM window
+  reaches nothing
+- `dmem_tb` — each byte lane independently, a halfword mask, a zero mask as a
+  read, the 4 KB wrap, and that a read concurrent with a write returns the old
+  word
+- `imem_tb` — both ports reading independently and the same word at once, and
+  that the array past the end of the image reads zero rather than `x`
+- `pc_reg_tb` — advance, stall holding the address, and reset outranking stall
+- `uart_tx_tb` — a captured 8N1 frame sampled at bit centres, and that a write
+  arriving mid-frame is dropped rather than queued
+
+Every module in `src/` now has its own testbench. The suite is 29 tests.
+
+**Status** — Fixed.
+
+### 14. Three figures in `docs/images/` are from other projects
+
+**Severity** — High. One of them would misrepresent someone else's work as this
+project's result.
+
+**Symptom.** The review noted that all 15 files in `docs/images/` were
+unreferenced. Opening them showed why that mattered: because nothing cited them,
+nothing had ever checked what they contain.
+
+- `demo.jpg` is an Avnet Zynq board driving a 16x2 LCD that reads
+  **another person's name**. The project targets a Tang Nano 9K with a 20x4
+  display
+- `schematic_1.png` is a Vivado block design containing a Zynq UltraScale+
+  processing system
+- `pin_out.png` is a Quartus pin assignment table for a keypad lock on an Altera
+  part
+
+Three more are generic reference figures with no recorded source, one of them
+labelled in Vietnamese. Three are genuine captures of superseded revisions of
+this project.
+
+**Fix.** `docs/images/README.md` is now an inventory that states, for every file,
+which of the three groups it belongs to and why. Five figures were verified
+against the current RTL and are now cited from the text:
+
+| Figure | Checked against |
+|---|---|
+| `schematic_1frame_FSM.png` | The state list in `i2c_writeframe.v`, and the nine SCL pulses finding 2 restored |
+| `FSM_i2c_writeframe.png` | The same state list; the drawing's `WaitACK` exit condition is noted as wrong in the caption |
+| `FSM_lcd_write_cmd_data.png` | The state list in `lcd_write_cmd_data.v` |
+| `schematic_lcd_i2c_pcf8574.png` | The P0-P7 mapping in the RTL comment, and the address straps |
+| `waveform_lcd_write_cmd_data.png` | `4e dc d8 4c 48` recomputed by hand from `data = 0xd4` |
+
+The backpack schematic independently confirms finding 10: A0, A1 and A2 sit on
+pull-ups with the jumpers open, so `0x27` is the address the hardware was always
+going to answer at.
+
+`demo.jpg`, `schematic_1.png` and `pin_out.png` were deleted. Four generic I2C
+reference figures remain, unused and uncited, because none of them has a
+recorded source; `docs/images/README.md` says so rather than leaving a reader to
+assume they are ours.
+
+**Status** — Fixed.
+
+### 15. Nothing ran the tests
+
+**Symptom.** 29 self-checking testbenches and no automation. A commit that broke
+one would be found by whoever next ran the suite by hand.
+
+**Fix.** `.github/workflows/ci.yml`, on every push to a long-lived or topic
+branch and every pull request into `main` or `develop`:
+
+- **Simulation** installs Icarus Verilog and runs `tools/run_tests.sh`, which
+  stops at the first failure, so a red job names the testbench that broke
+- **Firmware** installs the RISC-V toolchain, builds, and checks the image fills
+  the ROM exactly and that `_start` is at the reset vector. Both fail silently
+  otherwise: an oversized image wraps inside `rom[a[11:2]]`, and a misplaced
+  `_start` runs whatever is at address zero
+
+The rebuild is deliberately **not** compared byte for byte with the committed
+image. A different GCC release generates different code, and a red build on a
+toolchain bump is noise; `firmware_boot_tb` in the simulation job already runs
+the committed image on the SoC and checks what it prints.
+
+**Status** — Fixed.
+
+### Also corrected
+
+The documentation claimed the suite runs on Icarus Verilog 11.0. It runs on
+12.0.
 
 ---
 

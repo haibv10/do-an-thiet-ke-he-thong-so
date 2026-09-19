@@ -8,7 +8,8 @@ module dmem (
   reg [31:0] ram [0:1023];
   wire [9:0] word_addr = a[11:2];
 
-  // Synchronous read and write on the falling edge
+  // Falling edge, so a load result is settled before the rising edge that
+  // captures it into MEM/WB.
   always @(negedge clk) begin
     if (we[0]) ram[word_addr][7:0]   <= wd[7:0];
     if (we[1]) ram[word_addr][15:8]  <= wd[15:8];

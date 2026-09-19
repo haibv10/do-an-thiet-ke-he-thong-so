@@ -9,9 +9,8 @@ module gpio (
   input  wire        btn_in
 );
 
-  // Only the low 8 address bits are decoded as a register offset:
-  //   a[7:0] == 8'h00 -> 0x40000000, LED
-  //   a[7:0] == 8'h04 -> 0x40000004, button
+  // The decoder has already matched the region, so only the offset matters:
+  //   0x00 -> LED, 0x04 -> button
 
   always @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin

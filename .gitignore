@@ -26,7 +26,7 @@ vsim.wlf
 *.ghw
 *.log
 
-# Log verification duoc chon loc thi van theo doi (xem logs/README.md)
+# Curated verification logs are tracked on purpose, see logs/README.md
 !logs/*.log
 
 # Intel Quartus generated output

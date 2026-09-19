@@ -8,7 +8,7 @@ module pc_reg (
   always @(posedge clk or negedge rst_n) begin
     if (!rst_n)
       pc <= 32'h00000000;
-    else if (!stall)        // hold the PC while the pipeline is stalled
+    else if (!stall)
       pc <= pc_next;
   end
 endmodule

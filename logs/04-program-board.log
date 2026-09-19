@@ -3,8 +3,7 @@
  Operation "SRAM Program" for device#1...
 
 Programming...: [#########################] 100%                 
- User Code is: 0x0000AC7C
+ User Code is: 0x000003D3
  Status Code is: 0x0003F020
  Finished.
  Cost 4.12 second(s)
-  

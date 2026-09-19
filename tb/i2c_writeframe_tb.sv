@@ -18,10 +18,13 @@ module i2c_writeframe_tb;
   logic sda_en;
   logic [7:0] received_data = 8'h00;
   logic frame_active = 1'b0;
+  logic scl_high_seen = 1'b0;
   integer received_bits = 0;
   integer start_count = 0;
   integer stop_count = 0;
   integer ack_count = 0;
+  integer clock_pulses = 0;
+  integer pulses_at_stop = -1;
 
   always #5 clk = ~clk;
 
@@ -52,16 +55,33 @@ module i2c_writeframe_tb;
     .sda_en
   );
 
+  // START: SDA falls while SCL is high. STOP: SDA rises while SCL is high, and
+  // only counts inside a frame - a transition before the START is not a STOP.
   always @(negedge sda)
     if (scl === 1'b1) begin
       start_count = start_count + 1;
       frame_active = 1'b1;
+      clock_pulses = 0;
+      scl_high_seen = 1'b0;
     end
 
   always @(posedge sda)
-    if (scl === 1'b1) begin
+    if (scl === 1'b1 && frame_active) begin
       stop_count = stop_count + 1;
+      pulses_at_stop = clock_pulses;
       frame_active = 1'b0;
+    end
+
+  // A clock pulse is a rising edge followed by a falling edge inside the frame.
+  // The SCL fall that ends the START condition has no preceding rise, so it is
+  // not counted; the SCL rise that sets up the STOP has no following fall.
+  always @(posedge scl)
+    if (frame_active) scl_high_seen = 1'b1;
+
+  always @(negedge scl)
+    if (frame_active && scl_high_seen) begin
+      clock_pulses = clock_pulses + 1;
+      scl_high_seen = 1'b0;
     end
 
   always @(posedge scl) begin
@@ -90,9 +110,29 @@ module i2c_writeframe_tb;
       ack_clock_seen = 1'b0;
     end
 
+  task automatic check_frame(input string label);
+    begin
+      if (start_count != 1)
+        $fatal(1, "%s: expected one START, got %0d", label, start_count);
+      if (stop_count != 1)
+        $fatal(1, "%s: expected one STOP after the START, got %0d",
+               label, stop_count);
+      if (pulses_at_stop != 9)
+        $fatal(1, "%s: expected 9 SCL pulses before the STOP, got %0d",
+               label, pulses_at_stop);
+      if (scl !== 1'b1 || sda !== 1'b1)
+        $fatal(1, "%s: bus not idle after STOP, scl=%b sda=%b", label, scl, sda);
+    end
+  endtask
+
   initial begin
     repeat (3) @(posedge clk);
     rst_n = 1'b1;
+
+    // SDA must be released from reset, not driven low, or the bus is held busy
+    // from power-up until the first frame starts.
+    if (sda !== 1'b1)
+      $fatal(1, "SDA = %b after reset, expected the line to be released", sda);
 
     @(negedge clk);
     data = 8'hA5;
@@ -109,18 +149,18 @@ module i2c_writeframe_tb;
       $fatal(1, "expected 8 data bits, got %0d", received_bits);
     if (received_data !== 8'hA5)
       $fatal(1, "expected data A5, got %h", received_data);
-    if (start_count != 1)
-      $fatal(1, "expected one START, got %0d", start_count);
-    if (stop_count != 1)
-      $fatal(1, "expected one STOP, got %0d", stop_count);
     if (ack_count != 1)
       $fatal(1, "expected one ACK cycle, got %0d", ack_count);
     if (ack !== 1'b1)
       $fatal(1, "expected ACK result");
+    check_frame("ACK frame");
 
     wait (done === 1'b0);
     @(negedge clk);
     provide_ack = 1'b0;
+    start_count = 0;
+    stop_count = 0;
+    pulses_at_stop = -1;
     data = 8'h5A;
     start_frame = 1'b1;
     stop_frame = 1'b1;
@@ -134,6 +174,8 @@ module i2c_writeframe_tb;
       $fatal(1, "expected NACK result");
     if (ack_count != 1)
       $fatal(1, "unexpected ACK during NACK transfer");
+    // A NACK still owes the slave its ninth clock and a clean STOP.
+    check_frame("NACK frame");
 
     $display("i2c_writeframe_tb: PASS");
     $finish;

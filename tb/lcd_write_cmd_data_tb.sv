@@ -41,6 +41,9 @@ module lcd_write_cmd_data_tb;
 
   lcd_write_cmd_data dut (.*);
 
+  // START: SDA falls while SCL is high. STOP: SDA rises while SCL is high, and
+  // only inside a frame - a transition before the START is not a STOP. All five
+  // PCF8574 frames sit between one START and one STOP.
   always @(negedge sda)
     if (scl === 1'b1) begin
       start_count = start_count + 1;
@@ -48,7 +51,7 @@ module lcd_write_cmd_data_tb;
     end
 
   always @(posedge sda)
-    if (scl === 1'b1) begin
+    if (scl === 1'b1 && frame_active) begin
       stop_count = stop_count + 1;
       frame_active = 1'b0;
     end
@@ -110,6 +113,8 @@ module lcd_write_cmd_data_tb;
       $fatal(1, "expected 5 ACK cycles, got %0d", ack_count);
     if (ack !== 1'b1)
       $fatal(1, "expected final PCF8574 ACK");
+    if (scl !== 1'b1 || sda !== 1'b1)
+      $fatal(1, "bus not idle after STOP, scl=%b sda=%b", scl, sda);
 
     $display("lcd_write_cmd_data_tb: PASS");
     $finish;

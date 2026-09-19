@@ -59,7 +59,7 @@ Post-route summary:
 | I/O ports | 8 / 71 (12%) |
 
 These figures are from the current tree. Zero registers are inferred as latches, confirming the two I2C
-FSMs have explicit default states. Raw log: `logs/02-fpga-build.log`.
+FSMs have explicit default states. Raw log: `logs/10-source-layout-fpga-build.log`.
 
 The board measurements further down are from a build carrying the fixes in [docs/fix_log.md](../fix_log.md),
 except where a row is explicitly labelled as a fault capture.
@@ -68,8 +68,10 @@ The generated SRAM bitstream is `build/gowin/impl/pnr/fpga_project.fs`.
 
 ## Hardware
 
-Gowin Programmer detects the Tang Nano 9K as `GW1NR-9C` with ID `0x1100481B`. SRAM programming reaches
-100% using the FT2CH JTAG channel. The FT2232 UART interface 1 enumerates as `/dev/ttyUSB1`.
+Gowin Programmer detects the Tang Nano 9K as `GW1NR-9C` with ID `0x1100481B`. The refactored tree was
+programmed into SRAM at 100% through the FT2CH JTAG channel; see `logs/11-source-layout-program-board.log`.
+The FT2232 UART interface 1 enumerates as `/dev/ttyUSB1`. No new UART/LCD capture was taken after that
+programming step, so the functional measurements below remain the prior board evidence.
 
 ### UART TX
 
@@ -121,7 +123,7 @@ formatter.
 *One LCD byte on the bus. `i2c_addr` reads `27`, and for `data = 0xd4` as a
 command the five frames are `4e`, `dc`, `d8`, `4c`, `48` — the address with the
 write bit, then the high nibble with EN high and low, then the low nibble the
-same way. Each matches what `lcd_write_cmd_data.v` computes. The capture
+same way. Each matches what `i2c_pcf8574_lcd_write.v` computes. The capture
 predates the move to a 1 MHz clock enable, so it shows a `clk_1MHz` input where
 the current module takes `clk` and `tick`.*
 

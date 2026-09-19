@@ -26,8 +26,8 @@ This repository uses two language standards, split by role.
 
 | Role | Files | Standard |
 |---|---|---|
-| Synthesizable RTL | `src/*.v` | Verilog-2001 |
-| Verification | `tb/*.sv` | SystemVerilog-2017 |
+| Synthesizable RTL | `source/**/*.v`, `libs/**/*.v` | Verilog-2001 |
+| Verification | `sim/**/*.sv`, `libs/**/*_tb.sv` | SystemVerilog-2017 |
 
 **Synthesizable RTL is Verilog-2001.** The target is a Gowin GW1NR-9C built with
 GowinSynthesis, whose Verilog-2001 path is the one this design is closed on;
@@ -37,7 +37,7 @@ a free refactor: it can change inference and therefore placement. RTL therefore
 uses `reg`, `wire`, `always @(posedge clk ...)` and `always @(*)`.
 
 ```verilog
-module pc_reg (
+module core_pc (
   input  wire        clk,
   input  wire        rst_n,
   input  wire        stall,
@@ -96,7 +96,7 @@ The deviations below are deliberate and are not to be "fixed":
 |---|---|---|
 | `logic`, `always_ff`, `always_comb` in RTL | `reg`/`wire`, `always @` | Verilog-2001 synthesis path, see 2.1 |
 | Ports suffixed `_i`, `_o`, `_ni` | Plain functional names | `constr/fpga_project.cst` binds pins to these exact names |
-| No `initial` in synthesizable modules | `initial` with `$readmemh` in `imem.v` | The standard way to give an FPGA block RAM its contents |
+| No `initial` in synthesizable modules | `initial` with `$readmemh` in `mem_instruction_rom.v` | The standard way to give an FPGA block RAM its contents |
 
 ---
 
@@ -277,7 +277,7 @@ input wire clk_uart;
 
 This design has a single 27 MHz domain. Slower rates are derived as **clock
 enables**, never as separately divided clocks, so that everything stays on one
-clock tree: see `clock_enable_divider.v` and the `tick` input on the I2C
+clock tree: see `clock_enable.v` and the `tick` input on the I2C
 modules. A divided clock would create a second domain and with it a crossing to
 get wrong.
 

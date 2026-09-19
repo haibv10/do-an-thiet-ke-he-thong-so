@@ -25,6 +25,9 @@ the evidence in [../docs/fix_log.md](../docs/fix_log.md).
 | `06-fault-i2c-nack.log` | as above | Before the ACK sampling phase was fixed, every address returned NACK |
 | `07-fault-rodata-null.log` | as above | Before the ROM data window existed, `.rodata` read back as zero: both address bytes arrived as `0x00` |
 | `08-fault-hex-branch.log` | as above | Before the register file bypass, the hex formatter's branch was mis-executed and `0x27` printed as `2>` |
+| `09-source-layout-refactor.log` | `bash tools/run_tests.sh` | The renamed CPU, peripheral and library tree preserves all 29 testbench contracts |
+| `10-source-layout-fpga-build.log` | `bash tools/build_fpga.sh` | The refactored source tree completes P&R, timing analysis and bitstream generation at the existing timing/resource figures |
+| `11-source-layout-program-board.log` | `bash tools/program_fpga.sh` | The refactored bitstream reaches 100% SRAM programming and reports `Finished.` |
 
 `05-board-uart.log` previously read `I2C 21` and was cited as proof the backpack
 answers at `0x21`. That reading was corrupted by the same register file defect;

@@ -1,0 +1,73 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop, 'feat/**', 'fix/**', 'chore/**', 'release/**']
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  simulation:
+    name: Simulation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Icarus Verilog
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y iverilog
+
+      - name: Report the simulator version
+        run: iverilog -V | head -1
+
+      # run_tests.sh stops at the first failure, so a red job names the
+      # testbench that broke as the last line of output.
+      - name: Run the testbenches
+        run: bash tools/run_tests.sh
+
+  firmware:
+    name: Firmware
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install the RISC-V toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-riscv64-unknown-elf
+
+      - name: Report the compiler version
+        run: riscv64-unknown-elf-gcc --version | head -1
+
+      - name: Build the firmware
+        run: bash tools/build_firmware.sh
+
+      # The image has to fill the ROM exactly, and _start has to sit at the
+      # reset vector. Both break silently otherwise: an oversized image wraps
+      # inside rom[a[11:2]], and a misplaced _start runs whatever is at zero.
+      - name: Check the image fits the ROM and starts at the reset vector
+        run: |
+          words=$(wc -l < build/firmware/firmware.hex)
+          if [ "$words" -ne 1024 ]; then
+            echo "firmware.hex is $words words, expected 1024" >&2
+            exit 1
+          fi
+          start=$(riscv64-unknown-elf-nm build/firmware/firmware.elf \
+                  | awk '$3 == "_start" { print $1 }')
+          if [ "$start" != "00000000" ]; then
+            echo "_start is at 0x$start, expected 0x00000000" >&2
+            exit 1
+          fi
+
+      # Deliberately not compared byte for byte against the committed image:
+      # a different GCC release generates different code, and a red build on a
+      # toolchain bump is noise. firmware_boot_tb in the simulation job already
+      # runs the committed image on the SoC and checks what it prints.
+      - name: Report whether the rebuild matches the committed image
+        run: |
+          if git diff --quiet -- sw/firmware.hex; then
+            echo "sw/firmware.hex reproduces with $(riscv64-unknown-elf-gcc -dumpversion)"
+          else
+            echo "sw/firmware.hex differs from a rebuild with $(riscv64-unknown-elf-gcc -dumpversion)"
+          fi

@@ -2,11 +2,12 @@
 
 ## Simulation
 
-Icarus Verilog 11.0 passes twelve self-checking tests. Coverage includes ALU and decode operations, immediate
+Icarus Verilog 11.0 passes eighteen self-checking tests. Coverage includes ALU and decode operations, immediate
 generation, forwarding priority, load-use hazard detection, pipeline register reset/stall/flush behavior,
 branch and JAL flushing, subword memory accesses, GPIO MMIO, an UART TX frame containing `0x48`, UART RX
 framing with start/stop validation and LSB-first assembly, UART MMIO status and read-clear semantics, and a
-CPU-level echo that drives `0xA5` into the RX pin and checks that the CPU transmits the same byte back.
+CPU-level echo that drives `0xA5` into the RX pin and checks that the CPU transmits the same byte back, plus
+the I2C frame FSM, the PCF8574 LCD write sequence and the I2C MMIO handshake.
 
 Command:
 
@@ -17,22 +18,29 @@ bash tools/run_tests.sh
 ## FPGA build
 
 Gowin V1.9.12.03 completes synthesis, placement/routing, timing analysis, and bitstream generation for
-`GW1NR-LV9QN88PC6/I5` using the 27 MHz constraint in `src/fpga_project.sdc`.
+`GW1NR-LV9QN88PC6/I5` using the 27 MHz constraint in `constr/fpga_project.sdc`.
 
 Post-route summary:
 
 | Metric | Result |
 |---|---:|
 | Constraint | 27.000 MHz |
-| Actual Fmax | 33.825 MHz |
+| Actual Fmax | 34.937 MHz |
 | Logic levels | 12 |
 | Setup violated endpoints | 0 |
 | Hold violated endpoints | 0 |
 | Setup TNS | 0.000 ns |
 | Hold TNS | 0.000 ns |
-| Logic | 2949 / 8640 (35%) |
-| Registers | 1463 / 6693 (22%) |
+| Logic | 3167 / 8640 (37%) |
+| Registers | 1587 / 6693 (24%) |
+| Registers inferred as latch | 0 / 6480 (0%) |
+| CLS | 2615 / 4320 (61%) |
 | BSRAM | 5 / 26 (20%) |
+| I/O ports | 8 / 71 (12%) |
+
+These figures are from the build that produced the bitstream currently validated on the board, with the
+I2C peripheral included. Zero registers are inferred as latches, confirming the two I2C FSMs now have
+explicit default states. Raw log: `logs/02-fpga-build.log`.
 
 The generated SRAM bitstream is `build/gowin/impl/pnr/fpga_project.fs`.
 
@@ -44,7 +52,7 @@ Gowin Programmer detects the Tang Nano 9K as `GW1NR-9C` with ID `0x1100481B`. SR
 ### UART TX
 
 A 115200 baud, 8N1 raw capture of the transmit-only firmware contains an initial `0xff` sample followed by
-repeated `0x48` bytes, confirming the UART TX path from CPU MMIO through FPGA pin 17 to the onboard debugger.
+repeated `0x48` bytes, confirming the UART TX path from CPU MMIO through FPGA pin 34 to the external USB-UART module.
 
 ### UART RX
 
@@ -74,29 +82,25 @@ against a host sending continuously, so the design slips and drops bytes on sust
 256 bytes are lossless; a 1024 byte burst loses roughly 0.3% of the stream. Lossless sustained streaming
 requires an RX FIFO, which this feature deliberately does not implement.
 
+### I2C and LCD
+
+The scan firmware sweeps `0x20-0x27` and `0x38-0x3f`, reports the acknowledging address over UART and writes
+`HELLO FPGA` to the display. After the ACK sampling phase was corrected, the capture repeats `I2C 21` byte for
+byte and the 20x4 LCD shows the string, so `0x21` is the real PCF8574 address on this backpack rather than the
+more common `0x27`.
+
+| Stimulus | Result | Evidence |
+|---|---|---|
+| Reset with no device wired | repeated `I2C NACK` | `logs/06-fault-i2c-nack.log` |
+| Reset, firmware reading `.rodata` | `I2C ` followed by two `0x00` bytes | `logs/07-fault-rodata-null.log` |
+| Reset, hex formatter using the A-F branch | `I2C 2>` instead of `I2C 27` | `logs/08-fault-hex-branch.log` |
+| Reset, current firmware | `I2C 21` repeated, LCD shows `HELLO FPGA` | `logs/05-board-uart.log` |
+
+The third row is a CPU fault, not a UART fault. `'0' + 14` is `0x3e`, and `'A' - 10 + 7` is also `0x3e`, so the
+low nibble took the A-F branch while the high nibble of the same call took the correct one. The firmware now
+avoids that branch; the pipeline defect itself is still open.
+
 ### Bring-up procedure
 
-The device can be left in a corrupted configuration state, so **always reprogram immediately before
-measuring**. During bring-up the board emitted a repeated `0x56` at roughly 2.6 Hz with the RX pin idle,
-which looked exactly like an RTL fault; reprogramming a byte-identical bitstream made it disappear. The two
-`.fs` files differed only in their timestamp comment.
-
-`ftdi_sio` binds FTDI interface 0, the JTAG channel, as `/dev/ttyUSB0`. Opening or writing that node drives
-the FPGA JTAG pins and can disturb the SRAM configuration. Never touch `/dev/ttyUSB0`; the UART is always
-interface 1.
-
-`programmer_cli` unloads `ftdi_sio`, so restore the serial port after every programming run:
-
-```bash
-sudo modprobe ftdi_sio
-ls -l /dev/ttyUSB1
-```
-
-The listing must start with `c`. If `/dev/ttyUSB1` is missing, any command containing `>` or `exec 3<>` on
-that path creates a regular file that shadows the device node and silently invalidates every later
-measurement.
-
-Two throwaway bitstreams isolate a suspected RX fault without involving the CPU. A pure wire,
-`assign uart_tx_out = uart_rx_in;`, proves the pin assignment and the host link. A second top module wiring
-`uart_rx` straight into `uart_tx` proves the serial RTL. Both target pins 17 and 18 and neither belongs in
-the repository.
+Recorded separately in [docs/bringup.md](../bringup.md): always reprogram before measuring, how to tell the
+external USB-UART node from the FT2232 JTAG channel, restoring `ftdi_sio`, and the I2C voltage constraint.

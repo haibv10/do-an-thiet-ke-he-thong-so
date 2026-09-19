@@ -1,194 +1,247 @@
-# RISC-V SoC trên FPGA
+# RV32I SoC for Tang Nano 9K
 
-## Mục tiêu project
+> A 32-bit RISC-V system-on-chip written from scratch in Verilog, running on a
+> Gowin GW1NR-9C FPGA.
 
-Project hướng tới thiết kế một **System-on-Chip (SoC)** bằng Verilog/SystemVerilog và triển khai trên kit FPGA.
-SoC sử dụng CPU RISC-V RV32I 32-bit làm trung tâm xử lý. CPU sẽ chạy chương trình trong Instruction Memory,
-truy cập Data Memory và điều khiển các peripheral thông qua cơ chế **Memory-Mapped I/O**.
+The core is a five-stage RV32I pipeline with full forwarding, load-use
+interlocking and branch flushing. Around it sit on-chip instruction and data
+memory plus three peripherals — GPIO, UART and I2C — all reachable through a
+single memory-mapped bus. The CPU has no special instructions for hardware: an
+address decoder turns ordinary `lw` and `sw` into peripheral access.
 
-Mục tiêu của project là xây dựng một hệ thống có cách hoạt động tương tự một vi điều khiển đơn giản:
-software chạy trên CPU sẽ đọc input, xử lý dữ liệu và điều khiển các thiết bị bên ngoài thông qua các địa chỉ
-được ánh xạ trong không gian memory.
+Firmware is written in C, compiled with the standard RISC-V toolchain and linked
+into the bitstream as ROM contents.
 
-## Kiến trúc dự kiến
+```c
+/* Blink the LED from software. That is the whole driver. */
+*(volatile unsigned int *)0x40000000 = 1;
+```
+
+---
+
+## Contents
+
+- [Features](#features)
+- [Architecture](#architecture)
+- [Memory map](#memory-map)
+- [Getting started](#getting-started)
+- [Hardware setup](#hardware-setup)
+- [Repository layout](#repository-layout)
+- [Verification](#verification)
+- [Known limitations](#known-limitations)
+- [Documentation](#documentation)
+
+## Features
+
+- **RV32I core** — 36 of the 40 base instructions, five-stage pipeline
+- **Hazard handling** — EX/MEM and MEM/WB forwarding, one-cycle load-use stall,
+  two-cycle branch flush
+- **Sub-word memory access** — `LB`, `LBU`, `LH`, `LHU`, `LW`, `SB`, `SH`, `SW`
+  through a byte-alignment stage
+- **Memory-mapped I/O** — one address decoder, four regions, no peripheral-specific
+  CPU instructions
+- **UART** — 115200 8N1, transmit and receive, both memory mapped
+- **I2C** — bit-banged master driving a 20x4 HD44780 LCD over a PCF8574 backpack
+- **Headless toolflow** — simulation, synthesis, place and route and programming
+  all run from the command line
+
+## Architecture
 
 ```text
-                         RISC-V RV32I CPU
-                                  │
-                ┌─────────────────┴─────────────────┐
-                │                                   │
-        Instruction bus                       Data/MMIO bus
-                │                                   │
-       Instruction Memory                  Address Decoder
-                                                    │
-                                  ┌─────────────────┼─────────────────┐
-                                  │                 │                 │
-                             Data Memory         GPIO              UART
-                                  │                 │                 │
-                                  │           LED/Switch       Laptop terminal
-                                  │
-                                  └────────────── I2C ────────────────┐
-                                                                         │
-                                                                        LCD
+   ┌──────────────┐          ┌────────────────────────────────┐
+   │    IMEM      │  instr   │   RV32I CPU — 5-stage pipeline  │
+   │  ROM 4 KB    │ ───────► │      IF · ID · EX · MEM · WB    │
+   └──────────────┘          └────────────────┬───────────────┘
+                                              │ addr · wdata · we_mask
+                                              ▼
+                              ┌───────────────────────────────┐
+                              │        ADDRESS DECODER        │
+                              │     selects on addr[31:28]    │
+                              └──┬────────┬────────┬───────┬──┘
+                                0x2      0x4      0x5     0x6
+                                 ▼        ▼        ▼       ▼
+                            ┌────────┐┌──────┐┌──────┐┌────────┐
+                            │  DMEM  ││ GPIO ││ UART ││  I2C   │
+                            │ RAM 4K ││      ││ 8N1  ││        │
+                            └────────┘└──┬───┘└──┬───┘└───┬────┘
+                                         ▼       ▼        ▼
+                                    LED, button laptop  20x4 LCD
+                                                        (PCF8574)
 ```
 
-CPU được tổ chức theo pipeline 5 tầng:
+Branches resolve in EX, so a taken branch costs two cycles. There is no branch
+predictor; the design trades those cycles for a simpler control path.
 
-1. **IF — Instruction Fetch:** lấy instruction từ Instruction Memory.
-2. **ID — Instruction Decode:** giải mã instruction và đọc Register File.
-3. **EX — Execute:** thực hiện phép toán hoặc tính địa chỉ.
-4. **MEM — Memory Access:** truy cập memory hoặc peripheral.
-5. **WB — Write Back:** ghi kết quả về Register File.
+## Memory map
 
-Các khối chính cần hoàn thiện gồm PC, ALU, Register File, Decoder, Control Unit, Immediate Generator,
-datapath pipeline, hazard handling, Instruction Memory, Data Memory và address decoder.
+| `addr[31:28]` | Base | Device | Notes |
+|---|---|---|---|
+| `0x0` | `0x00000000` | Instruction memory | Fetch stage only — not readable over the data bus |
+| `0x2` | `0x20000000` | Data memory, 4 KB | Globals and stack |
+| `0x4` | `0x40000000` | GPIO | LED output, button input |
+| `0x5` | `0x50000000` | UART | 115200 8N1, TX and RX |
+| `0x6` | `0x60000000` | I2C | 20x4 LCD through a PCF8574 |
 
-## Peripheral và chức năng demo
+Per-register details are in [docs/hardware/register_map.md](docs/hardware/register_map.md).
 
-### GPIO
+## Getting started
 
-GPIO dùng để đọc các input vật lý như switch hoặc button và điều khiển LED trên kit FPGA.
-Ví dụ demo: CPU đọc trạng thái switch rồi bật/tắt LED tương ứng. GPIO được truy cập thông qua các
-register Memory-Mapped I/O.
+### Prerequisites
 
-### UART
+| Tool | Used for |
+|---|---|
+| Icarus Verilog ≥ 11 (`iverilog`, `vvp`) | Running the testbenches |
+| `riscv64-unknown-elf-gcc` and binutils | Compiling the firmware |
+| Gowin EDA V1.9.12.03 | Synthesis, place and route, bitstream |
+| `picocom` | Reading UART output from the board |
 
-UART dùng để giao tiếp serial giữa FPGA và laptop:
-
-- `TX`: FPGA gửi thông báo khởi động, log debug hoặc kết quả xử lý tới terminal trên laptop.
-- `RX`: FPGA nhận lệnh hoặc dữ liệu từ laptop.
-
-Tốc độ baud rate, cách ánh xạ register và giao diện vật lý sẽ được xác định theo kit FPGA và mạch
-USB-UART được sử dụng.
-
-UART hiện dùng base address `0x50000000` với register map:
-
-| Offset | Access | Chức năng |
-|---|---|---|
-| `0x00` | Write | Ghi `data[7:0]` để bắt đầu UART TX khi `tx_busy` bằng 0. |
-| `0x04` | Read | Status: bit 0 `tx_busy`, bit 1 `rx_valid`. |
-| `0x08` | Read | RX data tại `data[7:0]`; thao tác đọc clear `rx_valid`. |
-
-Firmware hiện tại chờ `rx_valid`, đọc một byte, echo byte đó qua UART TX và đưa bit 0 của byte ra LED.
-
-Build firmware từ thư mục gốc của repository:
+Every command below is run from the repository root:
 
 ```bash
-bash tools/build_firmware.sh
+cd /home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so
 ```
 
-### I2C và LCD
+The Gowin flow needs `GOWIN_ROOT` exported first:
 
-I2C chỉ được sử dụng để demo điều khiển LCD. LCD có thể hiển thị thông báo khởi động, trạng thái input,
-kết quả xử lý hoặc dữ liệu nhận từ UART.
+```bash
+export GOWIN_ROOT=/home/haihbv/tools/Gowin_V1.9.12.03
+```
 
-Về kiến trúc SoC, I2C nên được tích hợp như một peripheral có các register Memory-Mapped I/O để software
-trên CPU điều khiển việc truyền dữ liệu tới LCD.
-
-## Demo cuối cùng dự kiến
-
-Chương trình RISC-V chạy trên CPU sẽ thực hiện một chu trình đơn giản:
-
-1. Khởi động và gửi thông báo tới laptop qua UART TX.
-2. Đọc switch hoặc button thông qua GPIO.
-3. Xử lý input và điều khiển LED.
-4. Hiển thị trạng thái hoặc kết quả lên LCD thông qua I2C.
-5. Có thể nhận lệnh điều khiển từ laptop qua UART RX.
-
-Demo cần chứng minh rằng CPU có thể điều khiển GPIO, UART và I2C thông qua Memory-Mapped I/O.
-
-## Trạng thái hiện tại
-
-Project đang được phát triển theo từng lớp, từ các module cơ bản đến hệ thống SoC hoàn chỉnh.
-Phần I2C-LCD được xem là nền tảng cho peripheral hiển thị, nhưng chưa được kết nối với CPU thông qua
-Memory-Mapped I/O.
-
-Các phần còn cần triển khai cho mục tiêu SoC gồm:
-
-- CPU RISC-V RV32I và pipeline 5 tầng.
-- Instruction Memory, Data Memory và address decoder.
-- UART TX/RX dạng Memory-Mapped peripheral.
-- GPIO dạng Memory-Mapped peripheral cho LED, switch và button.
-- I2C peripheral dạng Memory-Mapped để điều khiển LCD.
-- Chương trình firmware RISC-V dùng để chạy demo.
-- Simulation, verification, synthesis, timing analysis và triển khai trên FPGA.
-
-## Phạm vi project
-
-Project tập trung vào:
-
-- CPU RISC-V RV32I 32-bit.
-- Pipeline 5 tầng và xử lý hazard cần thiết.
-- Instruction Memory và Data Memory.
-- Memory-Mapped I/O.
-- UART TX/RX với laptop.
-- GPIO cho LED, switch và button.
-- I2C cho LCD.
-- Simulation, verification và triển khai trên kit FPGA.
-
-Các thành phần không thuộc phạm vi hiện tại:
-
-- Cache và MMU.
-- DDR và AXI.
-- Linux.
-- Multi-core.
-- FPU.
-- Out-of-Order Execution.
-
-## Công cụ và phần cứng
-
-RTL baseline hiện tại sử dụng FPGA Gowin `GW1NR-LV9QN88PC6/I5` với clock onboard 27 MHz. Pin assignment
-cho clock, reset, button, LED và UART TX được định nghĩa trong `src/fpga_project.cst`. Gowin EDA project và
-command synthesis/programming sẽ được bổ sung sau khi build được tái tạo trong repository này.
-
-## Simulation
-
-CPU module và integration test sử dụng Icarus Verilog có hỗ trợ SystemVerilog-2012. Chạy toàn bộ test từ
-thư mục gốc của repository:
+### Run the test suite
 
 ```bash
 bash tools/run_tests.sh
 ```
 
-Script compile từng testbench độc lập vào `build/sim/`. Integration test nạp một chương trình RV32I ngắn
-để kiểm tra forwarding, load-use stall, branch và JAL flush, Data Memory, GPIO MMIO và UART TX.
+Runs 18 self-checking testbenches. Each prints `<name>: PASS`; the script stops
+at the first failure.
 
-## Gowin FPGA build
-
-Gowin project sử dụng device `GW1NR-LV9QN88PC6/I5`, top module `cpu_top`, Verilog-2001 và timing constraint
-27 MHz trong `src/fpga_project.sdc`. Có thể mở `fpga_project.gprj` bằng Gowin EDA hoặc chạy toàn bộ flow từ
-thư mục gốc của repository:
+### Build the firmware
 
 ```bash
-export GOWIN_ROOT="$HOME/tools/Gowin_V1.9.12.03"
+bash tools/build_firmware.sh
+```
+
+Compiles `sw/main.c` and `sw/startup.s` into `sw/firmware.hex`. `imem.v` reads
+that file with `$readmemh` at elaboration time, so rebuild the firmware before
+building a bitstream whenever the software changes.
+
+### Build the bitstream
+
+```bash
 bash tools/build_fpga.sh
 ```
 
-Trên Windows, dùng executable tương ứng:
+Runs synthesis, place and route, timing analysis and bitstream generation,
+producing `build/gowin/impl/pnr/fpga_project.fs`. The build passes when the
+output contains `Timing analysis completed` and `Bitstream generation completed`
+with no `ERROR`.
 
-```powershell
-gw_sh.exe tools/build_gowin.tcl
-```
+### Program the board
 
-Flow thực hiện synthesis, placement/routing, timing analysis và tạo bitstream dưới `build/gowin/impl/pnr/`.
-Thư mục `build/` là generated output và không được commit. Cần lưu lại timing summary và kết quả
-program board làm verification evidence trước khi merge branch.
-
-Tang Nano 9K hiện tại sử dụng FT2232 với interface 0 cho JTAG và interface 1 cho UART. Gowin Programmer cần
-quyền truy cập raw USB trên Linux. Kiểm tra FT2CH JTAG channel và program SRAM bằng:
+Confirm the JTAG cable sees the device:
 
 ```bash
-sudo "$GOWIN_ROOT/Programmer/bin/programmer_cli" --scan --cable-index 1 --channel 0
-sudo env GOWIN_ROOT="$GOWIN_ROOT" bash tools/program_fpga.sh
+sudo /home/haihbv/tools/Gowin_V1.9.12.03/Programmer/bin/programmer_cli \
+  --scan --cable-index 1 --channel 0
 ```
 
-Gowin Programmer có thể unload `ftdi_sio` khi chiếm FT2232 cho JTAG. Nạp lại driver sau khi program để khôi
-phục UART device node mà không rút nguồn board:
+Write the bitstream into SRAM:
 
 ```bash
-sudo modprobe ftdi_sio
-ls -l /dev/ttyUSB*
+sudo env GOWIN_ROOT=/home/haihbv/tools/Gowin_V1.9.12.03 bash tools/program_fpga.sh
 ```
 
-SRAM programming là volatile; bitstream mất khi board mất nguồn. Kết quả simulation và FPGA build hiện tại
-được ghi trong `docs/verification/rv32i_pipeline.md`.
+Programming succeeds when the output shows `Programming... 100%` and `Finished.`
+SRAM is volatile — the bitstream is lost when the board loses power.
+
+### Watch the UART output
+
+```bash
+picocom -b 115200 --flow n /dev/ttyUSB0
+```
+
+Press the **S2** reset button on the board to catch the `BOOT` line. Exit with
+`Ctrl-A` then `Ctrl-X`.
+
+The shipped firmware sends `BOOT`, scans `0x20-0x27` and `0x38-0x3f` for a
+PCF8574, prints the address it finds and writes `HELLO FPGA` to the LCD:
+
+```text
+BOOT
+I2C 21
+I2C 21
+```
+
+## Hardware setup
+
+| FPGA pin | Signal | Connects to |
+|---|---|---|
+| 52 | `clk` | 27 MHz onboard oscillator |
+| 3 | `rst_n` | Button S2 |
+| 4 | `btn_in` | Button S1 |
+| 10 | `led_out` | Onboard LED (active low) |
+| 34 | `uart_tx_out` | RXD on the external USB-UART module |
+| 33 | `uart_rx_in` | TXD on the external USB-UART module |
+| 31 | `i2c_sda` | SDA on the PCF8574 backpack |
+| 32 | `i2c_scl` | SCL on the PCF8574 backpack |
+
+Cross UART TX and RX, and share a ground. The I2C bus runs at 3.3 V — do not
+pull SDA or SCL up to 5 V even if the LCD itself is powered from 5 V.
+
+Board-specific pitfalls, including how to tell the external UART node from the
+FT2232 JTAG channel, are collected in [docs/bringup.md](docs/bringup.md).
+
+## Repository layout
+
+| Path | Contents |
+|---|---|
+| `src/` | SoC RTL. `cpu_top.v` is the top module |
+| `constr/` | Pin (`.cst`) and timing (`.sdc`) constraints |
+| `sw/` | C firmware, startup code, linker script and the built `firmware.hex` |
+| `tb/` | Self-checking SystemVerilog testbenches; `tb/support/` holds helpers |
+| `tools/` | Scripts for firmware, bitstream, programming and tests |
+| `docs/` | Design report, register map, bring-up notes, verification results |
+| `logs/` | Curated verification evidence — see [logs/README.md](logs/README.md) |
+| `rules/` | Coding style, commit and branching conventions |
+| `build/` | Generated output, not committed |
+
+`src/lcd_display.v` is a standalone 20x4 LCD sequencer kept for reference. It is
+**not** instantiated by `cpu_top` and is not synthesized.
+
+## Verification
+
+| Layer | Result |
+|---|---|
+| Simulation | 18 / 18 testbenches pass on Icarus Verilog 11.0 |
+| Timing | Fmax 34.937 MHz against a 27 MHz constraint, 0 setup and 0 hold violations |
+| Resources | Logic 3167 / 8640 (37%), registers 1587 / 6693 (24%), BSRAM 5 / 26 (20%) |
+| Hardware | LCD displays `HELLO FPGA`, UART reports the PCF8574 at `0x21` |
+
+Measurements and the logs behind them are in
+[docs/verification/rv32i_pipeline.md](docs/verification/rv32i_pipeline.md).
+
+## Known limitations
+
+- **AUIPC is not implemented.** Opcode `0010111` decodes silently to a NOP.
+- **ROM is not readable over the data bus.** `.rodata` — string literals and
+  lookup tables — reads back as zero.
+- **`.data` and `.bss` are not initialised.** `startup.s` sets the stack pointer
+  and jumps to `main` without copying or zeroing.
+- **UART RX holds a single byte.** There is no FIFO and no overrun flag; a new
+  byte overwrites the previous one if software has not read it.
+- **A RAW hazard three instructions apart reads a stale register.** The register
+  file has no WB-to-ID bypass and the forwarding unit only covers distances one
+  and two.
+- **I2C does not emit a compliant STOP condition,** and the NACK path skips the
+  ninth SCL pulse.
+
+## Documentation
+
+| Document | Contents |
+|---|---|
+| [docs/design_report.md](docs/design_report.md) | Full design report |
+| [docs/hardware/register_map.md](docs/hardware/register_map.md) | MMIO register reference |
+| [docs/bringup.md](docs/bringup.md) | Board bring-up procedure and pitfalls |
+| [docs/verification/rv32i_pipeline.md](docs/verification/rv32i_pipeline.md) | Simulation, timing and hardware results |
+| [rules/](rules/) | Coding style, commit style, git flow |

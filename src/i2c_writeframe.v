@@ -1,11 +1,12 @@
 /*
-* file: i2c_writeframe
-* brief: tao start condition
-			gui 8 bit data
-			doc ACK tu slave
-			(option) stop condition
-			bao done khi hoan thanh
-*/
+ * file: i2c_writeframe
+ * brief: drives one I2C write frame:
+ *          - generate the START condition
+ *          - shift out 8 data bits, MSB first
+ *          - release SDA and read the slave ACK
+ *          - optionally generate the STOP condition
+ *          - raise done when the frame is complete
+ */
 module i2c_writeframe(
     input       clk,
     input       tick,
@@ -21,7 +22,7 @@ module i2c_writeframe(
     output reg  sda_en                  // sda write enable
 );
 
-    localparam  DELAY       = 10;       // 10us delay - moi buoc FSM giu trong 10us
+    localparam  DELAY       = 10;       // each FSM step is held for 10 us
     reg [20:0]  cnt;                    // counter
     reg         cnt_clr;                // counter clear flag
 

@@ -1,6 +1,6 @@
 module address_decoder (
   input  wire [31:0] addr,
-  input  wire [3:0]  we_mask,  // CPU đẩy xuống 4-bit mask
+  input  wire [3:0]  we_mask,  // 4-bit byte mask from the CPU
   output wire [3:0]  we_dmem,
   output wire        we_gpio,
   output wire        we_uart,
@@ -11,7 +11,7 @@ module address_decoder (
   input  wire [31:0] rd_i2c,
   output reg  [31:0] rd_out
 );
-  // RAM nhận đủ 4 bit. Ngoại vi chỉ cần bit 0 làm cờ kích hoạt
+  // RAM takes the full 4-bit mask; peripherals only need bit 0 as an enable
   assign we_dmem = (addr[31:28] == 4'h2) ? we_mask : 4'b0000;
   assign we_gpio = (addr[31:28] == 4'h4) ? we_mask[0] : 1'b0;
   assign we_uart = (addr[31:28] == 4'h5) ? we_mask[0] : 1'b0;

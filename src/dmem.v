@@ -3,12 +3,12 @@ module dmem (
   input  wire [3:0]  we,
   input  wire [31:0] a,
   input  wire [31:0] wd,
-  output reg  [31:0] rd   // Đổi thành reg
+  output reg  [31:0] rd
 );
   reg [31:0] ram [0:1023];
   wire [9:0] word_addr = a[11:2];
 
-  // Đọc/Ghi đồng bộ ở cạnh xuống
+  // Synchronous read and write on the falling edge
   always @(negedge clk) begin
     if (we[0]) ram[word_addr][7:0]   <= wd[7:0];
     if (we[1]) ram[word_addr][15:8]  <= wd[15:8];

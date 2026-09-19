@@ -7,7 +7,8 @@ module control_unit (
   output reg        MemRead,
   output reg        MemtoReg,
   output reg        MemWrite,
-  output reg        ALUSrc,
+  output reg        ALUSrc,   // 0 = register rs2, 1 = immediate, for the B input
+  output reg        ALUSrcA,  // 0 = register rs1, 1 = program counter, for the A input
   output reg        RegWrite,
   output reg [3:0]  alu_ctrl
 );
@@ -18,6 +19,7 @@ module control_unit (
     MemtoReg = 1'b0;
     MemWrite = 1'b0;
     ALUSrc   = 1'b0;
+    ALUSrcA  = 1'b0;
     RegWrite = 1'b0;
     alu_ctrl = 4'b0000;
 
@@ -57,6 +59,13 @@ module control_unit (
         alu_ctrl = 4'b1111;
       end
 
+      7'b0010111: begin // AUIPC
+        ALUSrc   = 1'b1;
+        ALUSrcA  = 1'b1;
+        RegWrite = 1'b1;
+        alu_ctrl = 4'b0000;
+      end
+
       7'b0000011: begin // Load
         ALUSrc   = 1'b1;
         MemtoReg = 1'b1;
@@ -74,16 +83,16 @@ module control_unit (
         alu_ctrl = 4'b1000;
       end
 
-      7'b1101111: begin // JAL: PC + immediate
+      7'b1101111: begin // JAL
         Jump     = 2'b01;
-        RegWrite = 1'b1; // link register receives PC+4
+        RegWrite = 1'b1; // the link register, written in EX from pc + 4
       end
 
-      7'b1100111: begin // JALR: rs1 + immediate
+      7'b1100111: begin // JALR
         Jump     = 2'b10;
         RegWrite = 1'b1;
         ALUSrc   = 1'b1;
-        alu_ctrl = 4'b0000; // ALU adds rs1 + immediate
+        alu_ctrl = 4'b0000;
       end
     endcase
   end

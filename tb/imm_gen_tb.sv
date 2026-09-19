@@ -17,7 +17,8 @@ module imm_gen_tb;
     check(32'hfff0_0093, 32'hffff_ffff);
     check(32'h0031_2423, 32'd8);
     check(32'hfe20_8ee3, 32'hffff_fffc);
-    check(32'h1234_52b7, 32'h1234_5000);
+    check(32'h1234_52b7, 32'h1234_5000); // LUI
+    check(32'h1234_5297, 32'h1234_5000); // AUIPC
     check(32'h0080_006f, 32'd8);
     check(32'h0041_00e7, 32'd4);
     check(32'h0000_0013, 32'd0);

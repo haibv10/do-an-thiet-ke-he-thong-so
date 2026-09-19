@@ -10,6 +10,7 @@ module control_unit_tb;
   logic MemtoReg;
   logic MemWrite;
   logic ALUSrc;
+  logic ALUSrcA;
   logic RegWrite;
   logic [3:0] alu_ctrl;
 
@@ -33,6 +34,12 @@ module control_unit_tb;
     if (alu_ctrl != 4'b1000) $fatal(1, "SUB decode");
     decode(7'b0010011, 3'b101, 1'b1);
     if (!RegWrite || !ALUSrc || alu_ctrl != 4'b1101) $fatal(1, "SRAI decode");
+    decode(7'b0110111, 3'b000, 1'b0);
+    if (!RegWrite || !ALUSrc || ALUSrcA || alu_ctrl != 4'b1111)
+      $fatal(1, "LUI decode");
+    decode(7'b0010111, 3'b000, 1'b0);
+    if (!RegWrite || !ALUSrc || !ALUSrcA || alu_ctrl != 4'b0000)
+      $fatal(1, "AUIPC decode");
     decode(7'b0000011, 3'b010, 1'b0);
     if (!MemRead || !MemtoReg || !RegWrite || !ALUSrc) $fatal(1, "load decode");
     decode(7'b0100011, 3'b010, 1'b0);
@@ -44,7 +51,7 @@ module control_unit_tb;
     decode(7'b1100111, 3'b000, 1'b0);
     if (Jump != 2'b10 || !RegWrite || !ALUSrc) $fatal(1, "JALR decode");
     decode(7'b1111111, 3'b111, 1'b1);
-    if ({Branch, Jump, MemRead, MemtoReg, MemWrite, ALUSrc, RegWrite} != '0)
+    if ({Branch, Jump, MemRead, MemtoReg, MemWrite, ALUSrc, ALUSrcA, RegWrite} != '0)
       $fatal(1, "illegal opcode defaults");
     $display("control_unit_tb: PASS");
     $finish;

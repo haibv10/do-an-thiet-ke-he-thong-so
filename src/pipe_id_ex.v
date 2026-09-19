@@ -10,6 +10,7 @@ module pipe_id_ex (
   input  wire        id_Branch,
   input  wire [1:0]  id_Jump,
   input  wire        id_ALUSrc,
+  input  wire        id_ALUSrcA,
   input  wire [3:0]  id_alu_ctrl,
   input  wire [2:0]  id_funct3,
 
@@ -28,6 +29,7 @@ module pipe_id_ex (
   output reg         ex_Branch,
   output reg  [1:0]  ex_Jump,
   output reg         ex_ALUSrc,
+  output reg         ex_ALUSrcA,
   output reg  [3:0]  ex_alu_ctrl,
   output reg  [2:0]  ex_funct3,
 
@@ -41,7 +43,8 @@ module pipe_id_ex (
 );
   always @(posedge clk or negedge rst_n) begin
     if (!rst_n || flush) begin
-      {ex_RegWrite, ex_MemtoReg, ex_MemWrite, ex_MemRead, ex_Branch, ex_ALUSrc} <= 6'b0;
+      {ex_RegWrite, ex_MemtoReg, ex_MemWrite, ex_MemRead, ex_Branch,
+       ex_ALUSrc, ex_ALUSrcA} <= 7'b0;
       ex_Jump <= 2'b0;
       ex_alu_ctrl <= 4'b0;
       ex_funct3   <= 3'b0;
@@ -55,6 +58,7 @@ module pipe_id_ex (
       ex_Branch   <= id_Branch;
       ex_Jump     <= id_Jump;
       ex_ALUSrc   <= id_ALUSrc;
+      ex_ALUSrcA  <= id_ALUSrcA;
       ex_alu_ctrl <= id_alu_ctrl;
       ex_funct3   <= id_funct3;
       ex_pc       <= id_pc;

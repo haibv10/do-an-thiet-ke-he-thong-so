@@ -9,38 +9,39 @@ module cpu_top (
   inout wire i2c_scl
 );
 
-  // ===========================================================================
-  // 0. HAZARD AND FLUSH SIGNALS
-  // ===========================================================================
+  // --- Hazard and flush ---
   wire stall;
   wire branch_taken;
   wire jump_taken;
   wire pc_change_taken = branch_taken | jump_taken;
 
-  // Branch taken: kill the instruction currently in IF.
+  // Branches resolve in EX, so the two instructions already fetched behind one
+  // have to be discarded. A load-use stall reuses the same bubble.
   wire if_id_flush = pc_change_taken;
-  // Branch taken or load-use stall: clear the control bits in ID to insert a bubble.
   wire id_ex_flush = pc_change_taken | stall;
 
-  // ===========================================================================
-  // STAGE 1: IF (Instruction Fetch)
-  // ===========================================================================
+  // --- IF: instruction fetch ---
   wire [31:0] if_pc, if_next_pc, if_instr;
   wire [31:0] ex_branch_target, jump_target;
+  wire [31:0] mem_alu_result;  // MEM stage address, also drives the ROM data port
+  wire [31:0] rom_rd;          // ROM word read over the data bus
   pc_reg pc_register (
     .clk(clk), .rst_n(rst_n), .stall(stall),
     .pc_next(if_next_pc), .pc(if_pc)
   );
 
-  // PC source mux; the branch and jump decisions both come from EX
   assign if_next_pc = (jump_taken)   ? jump_target :
             (branch_taken) ? ex_branch_target :
                     (if_pc + 32'd4);
 
+  // The second port lets loads reach .rodata and the load image of .data, both
+  // of which the linker puts in ROM.
   imem rom (
     .clk(clk),
     .a(if_pc),
-    .rd(if_instr)
+    .rd(if_instr),
+    .a_data(mem_alu_result),
+    .rd_data(rom_rd)
   );
 
   wire [31:0] id_pc, id_instr;
@@ -50,10 +51,8 @@ module cpu_top (
     .id_pc(id_pc), .id_instr(id_instr)
   );
 
-  // ===========================================================================
-  // STAGE 2: ID (Instruction Decode)
-  // ===========================================================================
-  wire id_Branch, id_MemRead, id_MemtoReg, id_MemWrite, id_ALUSrc, id_RegWrite;
+  // --- ID: instruction decode ---
+  wire id_Branch, id_MemRead, id_MemtoReg, id_MemWrite, id_ALUSrc, id_ALUSrcA, id_RegWrite;
   wire [1:0]  id_Jump;
   wire [3:0]  id_alu_ctrl;
   wire [31:0] id_imm, id_rd1, id_rd2;
@@ -66,7 +65,6 @@ module cpu_top (
   wire        ex_MemRead;
   wire [4:0]  ex_rd_idx;
 
-  // Load-use hazard detection: a load in EX feeding an instruction in ID
   hazard_detection_unit hdu (
     .if_id_rs1(id_rs1_idx), .if_id_rs2(id_rs2_idx),
     .id_ex_MemRead(ex_MemRead), .id_ex_rd(ex_rd_idx),
@@ -80,7 +78,8 @@ module cpu_top (
     .Branch(id_Branch),
     .Jump(id_Jump),
     .MemRead(id_MemRead), .MemtoReg(id_MemtoReg),
-    .MemWrite(id_MemWrite), .ALUSrc(id_ALUSrc), .RegWrite(id_RegWrite),
+    .MemWrite(id_MemWrite), .ALUSrc(id_ALUSrc), .ALUSrcA(id_ALUSrcA),
+    .RegWrite(id_RegWrite),
     .alu_ctrl(id_alu_ctrl)
   );
 
@@ -99,8 +98,7 @@ module cpu_top (
     .rd1(id_rd1), .rd2(id_rd2)
   );
 
-  // --- ID/EX pipeline register ---
-  wire ex_Branch, ex_MemtoReg, ex_MemWrite, ex_ALUSrc, ex_RegWrite;
+  wire ex_Branch, ex_MemtoReg, ex_MemWrite, ex_ALUSrc, ex_ALUSrcA, ex_RegWrite;
   wire [1:0]  ex_Jump;
   wire [3:0]  ex_alu_ctrl;
   wire [2:0]  ex_funct3;
@@ -110,29 +108,28 @@ module cpu_top (
   pipe_id_ex reg_id_ex (
     .clk(clk), .rst_n(rst_n), .flush(id_ex_flush),
     .id_RegWrite(id_RegWrite), .id_MemtoReg(id_MemtoReg), .id_MemWrite(id_MemWrite),
-    .id_MemRead(id_MemRead), .id_Branch(id_Branch), .id_Jump(id_Jump), .id_ALUSrc(id_ALUSrc),
+    .id_MemRead(id_MemRead), .id_Branch(id_Branch), .id_Jump(id_Jump),
+    .id_ALUSrc(id_ALUSrc), .id_ALUSrcA(id_ALUSrcA),
     .id_alu_ctrl(id_alu_ctrl), .id_funct3(id_funct3),
     .id_pc(id_pc), .id_rd1(id_rd1), .id_rd2(id_rd2), .id_imm(id_imm),
     .id_rs1_idx(id_rs1_idx), .id_rs2_idx(id_rs2_idx), .id_rd_idx(id_rd_idx),
 
     .ex_RegWrite(ex_RegWrite), .ex_MemtoReg(ex_MemtoReg), .ex_MemWrite(ex_MemWrite),
-    .ex_MemRead(ex_MemRead), .ex_Branch(ex_Branch), .ex_Jump(ex_Jump), .ex_ALUSrc(ex_ALUSrc),
+    .ex_MemRead(ex_MemRead), .ex_Branch(ex_Branch), .ex_Jump(ex_Jump),
+    .ex_ALUSrc(ex_ALUSrc), .ex_ALUSrcA(ex_ALUSrcA),
     .ex_alu_ctrl(ex_alu_ctrl), .ex_funct3(ex_funct3),
     .ex_pc(ex_pc), .ex_rd1(ex_rd1), .ex_rd2(ex_rd2), .ex_imm(ex_imm),
     .ex_rs1_idx(ex_rs1_idx), .ex_rs2_idx(ex_rs2_idx), .ex_rd_idx(ex_rd_idx)
   );
 
-  // ===========================================================================
-  // STAGE 3: EX (Execute) and operand forwarding
-  // ===========================================================================
+  // --- EX: execute and operand forwarding ---
   wire [31:0] ex_alu_result;
   wire        ex_zero;
   wire [1:0]  forward_a, forward_b;
-  wire [31:0] alu_mux_a, alu_mux_b, alu_src_b;
+  wire [31:0] alu_mux_a, alu_mux_b, alu_src_a, alu_src_b;
 
   wire        mem_RegWrite;
   wire [4:0]  mem_rd_idx;
-  wire [31:0] mem_alu_result;
 
   forwarding_unit fwd_unit (
     .id_ex_rs1(ex_rs1_idx), .id_ex_rs2(ex_rs2_idx),
@@ -147,17 +144,20 @@ module cpu_top (
   assign alu_mux_b = (forward_b == 2'b10) ? mem_alu_result :
            (forward_b == 2'b01) ? wb_reg_wd      : ex_rd2;
 
-  assign alu_src_b = (ex_ALUSrc) ? ex_imm : alu_mux_b;
+  // AUIPC is the only instruction whose first operand is its own PC.
+  assign alu_src_a = (ex_ALUSrcA) ? ex_pc : alu_mux_a;
+  assign alu_src_b = (ex_ALUSrc)  ? ex_imm : alu_mux_b;
 
   alu alu_inst (
-    .a(alu_mux_a),
+    .a(alu_src_a),
     .b(alu_src_b),
     .alu_ctrl(ex_alu_ctrl),
     .result(ex_alu_result),
     .zero(ex_zero)
   );
 
-  // Branch condition evaluation, on forwarded operands
+  // Comparing the forwarded operands, not ex_rd1/ex_rd2, keeps a branch that
+  // depends on the instruction right before it from reading stale registers.
   reg branch_cond;
   always @(*) begin
     case (ex_funct3)
@@ -171,18 +171,15 @@ module cpu_top (
     endcase
   end
 
-  // Branch and jump target computation
   assign ex_branch_target = ex_pc + ex_imm;
   assign branch_taken     = ex_Branch & branch_cond;
 
-  wire [31:0] jalr_target = (ex_alu_result & ~32'd1); // JALR forces the low bit to zero
+  wire [31:0] jalr_target = (ex_alu_result & ~32'd1); // the spec mandates clearing bit 0
   assign jump_target = (ex_Jump == 2'b10) ? jalr_target : ex_branch_target;
   assign jump_taken  = (ex_Jump != 2'b00);
 
-  // JAL and JALR write the return address instead of the ALU result
   wire [31:0] ex_result_to_mem = (ex_Jump != 2'b00) ? (ex_pc + 32'd4) : ex_alu_result;
 
-  // --- EX/MEM pipeline register ---
   wire mem_Branch, mem_MemRead, mem_MemtoReg, mem_MemWrite, mem_zero;
   wire [2:0]  mem_funct3;
   wire [31:0] mem_branch_target, mem_rd2;
@@ -200,30 +197,29 @@ module cpu_top (
     .mem_funct3(mem_funct3)
   );
 
-  // ===========================================================================
-  // STAGE 4: MEM (Memory) with byte alignment and MMIO
-  // ===========================================================================
+  // --- MEM: memory, byte alignment and MMIO ---
   wire we_gpio, we_uart, we_i2c;
   wire [3:0]  we_dmem;
   wire [31:0] dmem_rd, gpio_rd, uart_rd, i2c_rd, mem_read_data;
 
   wire i2c_tick;
 
-  // 1. STORE ALIGNMENT (SB, SH, SW)
+  // Sub-word stores replicate the payload across the bus and pick the target
+  // byte lanes with the write mask, so the RAM needs no read-modify-write.
   reg [3:0]  mem_we_mask;
   reg [31:0] mem_store_data;
   always @(*) begin
     if (mem_MemWrite) begin
       case (mem_funct3[1:0])
-        2'b00: begin // SB (Store Byte)
+        2'b00: begin // SB
           mem_store_data = {4{mem_rd2[7:0]}};
           mem_we_mask    = 4'b0001 << mem_alu_result[1:0];
         end
-        2'b01: begin // SH (Store Halfword)
+        2'b01: begin // SH
           mem_store_data = {2{mem_rd2[15:0]}};
           mem_we_mask    = 4'b0011 << {mem_alu_result[1], 1'b0};
         end
-        default: begin // SW (Store Word)
+        default: begin // SW
           mem_store_data = mem_rd2;
           mem_we_mask    = 4'b1111;
         end
@@ -237,7 +233,8 @@ module cpu_top (
   address_decoder bus_matrix (
     .addr(mem_alu_result), .we_mask(mem_we_mask),
     .we_dmem(we_dmem), .we_gpio(we_gpio), .we_uart(we_uart), .we_i2c(we_i2c),
-    .rd_dmem(dmem_rd), .rd_gpio(gpio_rd), .rd_uart(uart_rd), .rd_i2c(i2c_rd), .rd_out(mem_read_data)
+    .rd_rom(rom_rd), .rd_dmem(dmem_rd), .rd_gpio(gpio_rd), .rd_uart(uart_rd),
+    .rd_i2c(i2c_rd), .rd_out(mem_read_data)
   );
 
   dmem ram (
@@ -267,21 +264,20 @@ module cpu_top (
     .wd(mem_store_data), .rd(i2c_rd), .sda(i2c_sda), .scl(i2c_scl)
   );
 
-  // 2. LOAD ALIGNMENT (LB, LBU, LH, LHU, LW)
+  // Loads come back as a full word and are shifted down to the addressed byte.
   reg  [31:0] mem_load_formatted;
   wire [31:0] shifted_read = mem_read_data >> {mem_alu_result[1:0], 3'b000};
 
   always @(*) begin
     case (mem_funct3)
-      3'b000: mem_load_formatted = {{24{shifted_read[7]}},  shifted_read[7:0]};  // LB  (sign extend)
-      3'b100: mem_load_formatted = { 24'd0,                 shifted_read[7:0]};  // LBU (zero extend)
-      3'b001: mem_load_formatted = {{16{shifted_read[15]}}, shifted_read[15:0]}; // LH  (sign extend)
-      3'b101: mem_load_formatted = { 16'd0,                 shifted_read[15:0]}; // LHU (zero extend)
+      3'b000: mem_load_formatted = {{24{shifted_read[7]}},  shifted_read[7:0]}; // LB
+      3'b100: mem_load_formatted = { 24'd0,                 shifted_read[7:0]}; // LBU
+      3'b001: mem_load_formatted = {{16{shifted_read[15]}}, shifted_read[15:0]}; // LH
+      3'b101: mem_load_formatted = { 16'd0,                 shifted_read[15:0]}; // LHU
       default: mem_load_formatted = mem_read_data;                               // LW
     endcase
   end
 
-  // --- MEM/WB pipeline register ---
   wire wb_MemtoReg;
   wire [31:0] wb_read_data, wb_alu_result;
 
@@ -295,9 +291,7 @@ module cpu_top (
     .wb_read_data(wb_read_data), .wb_alu_result(wb_alu_result), .wb_rd_idx(wb_rd_idx)
   );
 
-  // ===========================================================================
-  // STAGE 5: WB (Write Back)
-  // ===========================================================================
+  // --- WB: write back ---
   assign wb_reg_wd = (wb_MemtoReg) ? wb_read_data : wb_alu_result;
 
 endmodule

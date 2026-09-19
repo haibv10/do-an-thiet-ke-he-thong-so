@@ -34,4 +34,3 @@ cd "$build_dir"
 "$objdump_bin" -d firmware.elf > firmware.asm
 python3 "$repo_dir/tools/make_hex.py" firmware.bin firmware.hex
 cp firmware.hex "$sw_dir/firmware.hex"
-cp firmware.hex "$repo_dir/src/firmware.hex"

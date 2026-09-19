@@ -2,16 +2,16 @@ module pipe_mem_wb (
   input  wire        clk,
   input  wire        rst_n,
 
-  // --- CÁC TÍN HIỆU ĐIỀU KHIỂN ---
+  // --- Control signals ---
   input  wire        mem_RegWrite,
   input  wire        mem_MemtoReg,
 
-  // --- DỮ LIỆU ĐẦU VÀO (Từ trạm MEM) ---
-  input  wire [31:0] mem_read_data,   // Hàng vừa lấy ra từ tủ RAM (hoặc GPIO)
-  input  wire [31:0] mem_alu_result,  // Kết quả tính toán (truyền xuyên qua)
-  input  wire [4:0]  mem_rd_idx,      // Đích đến
+  // --- Inputs from the MEM stage ---
+  input  wire [31:0] mem_read_data,   // data read from RAM or a peripheral
+  input  wire [31:0] mem_alu_result,  // ALU result, passed through
+  input  wire [4:0]  mem_rd_idx,      // destination register index
 
-  // --- DỮ LIỆU ĐẦU RA (Tới trạm WB) ---
+  // --- Outputs to the WB stage ---
   output reg         wb_RegWrite,
   output reg         wb_MemtoReg,
 

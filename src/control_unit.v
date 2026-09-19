@@ -3,7 +3,7 @@ module control_unit (
   input  wire [2:0] funct3,
   input  wire       funct7_5,
   output reg        Branch,
-  output reg [1:0]  Jump,      // <-- Thêm tín hiệu Jump 2 bit
+  output reg [1:0]  Jump,      // 00 = none, 01 = JAL, 10 = JALR
   output reg        MemRead,
   output reg        MemtoReg,
   output reg        MemWrite,
@@ -13,7 +13,7 @@ module control_unit (
 );
   always @(*) begin
     Branch   = 1'b0;
-    Jump     = 2'b00; // Mặc định không nhảy
+    Jump     = 2'b00;
     MemRead  = 1'b0;
     MemtoReg = 1'b0;
     MemWrite = 1'b0;
@@ -74,17 +74,16 @@ module control_unit (
         alu_ctrl = 4'b1000;
       end
 
-      // <-- 2 LỆNH MỚI CHO GỌI HÀM VÀ THOÁT HÀM -->
-      7'b1101111: begin // JAL (Góp mặt hằng số PC + offset)
+      7'b1101111: begin // JAL: PC + immediate
         Jump     = 2'b01;
-        RegWrite = 1'b1; // Cần lưu PC+4 vào thanh ghi ra
+        RegWrite = 1'b1; // link register receives PC+4
       end
 
-      7'b1100111: begin // JALR (Nhảy qua con trỏ thanh ghi rs1 + offset)
+      7'b1100111: begin // JALR: rs1 + immediate
         Jump     = 2'b10;
         RegWrite = 1'b1;
         ALUSrc   = 1'b1;
-        alu_ctrl = 4'b0000; // Cho ALU cộng (rs1 + offset)
+        alu_ctrl = 4'b0000; // ALU adds rs1 + immediate
       end
     endcase
   end

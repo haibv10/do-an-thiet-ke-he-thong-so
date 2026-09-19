@@ -10,20 +10,20 @@ module cpu_top (
 );
 
   // ===========================================================================
-  // 0. KHAI BÁO CÁC TÍN HIỆU HAZARD & FLUSH (CHỐNG KẸT & RẼ NHÁNH)
+  // 0. HAZARD AND FLUSH SIGNALS
   // ===========================================================================
   wire stall;
   wire branch_taken;
   wire jump_taken;
   wire pc_change_taken = branch_taken | jump_taken;
 
-  // Nếu rẽ nhánh: Xóa lệnh đang nạp ở IF.
+  // Branch taken: kill the instruction currently in IF.
   wire if_id_flush = pc_change_taken;
-  // Nếu rẽ nhánh hoặc dính kẹt dữ liệu (stall): Xóa cờ điều khiển ở ID để tạo "bong bóng"
+  // Branch taken or load-use stall: clear the control bits in ID to insert a bubble.
   wire id_ex_flush = pc_change_taken | stall;
 
   // ===========================================================================
-  // TRẠM 1: IF (Instruction Fetch) - LẤY LỆNH
+  // STAGE 1: IF (Instruction Fetch)
   // ===========================================================================
   wire [31:0] if_pc, if_next_pc, if_instr;
   wire [31:0] ex_branch_target, jump_target;
@@ -32,13 +32,13 @@ module cpu_top (
     .pc_next(if_next_pc), .pc(if_pc)
   );
 
-  // Đa hợp quyết định hướng đi của PC (Được quyết định ở tầng EX)
+  // PC source mux; the branch and jump decisions both come from EX
   assign if_next_pc = (jump_taken)   ? jump_target :
             (branch_taken) ? ex_branch_target :
                     (if_pc + 32'd4);
 
   imem rom (
-    .clk(clk), // <-- BỔ SUNG CLOCK ĐỂ SUY DIỄN BLOCK RAM
+    .clk(clk),
     .a(if_pc),
     .rd(if_instr)
   );
@@ -51,7 +51,7 @@ module cpu_top (
   );
 
   // ===========================================================================
-  // TRẠM 2: ID (Instruction Decode) - GIẢI MÃ LỆNH
+  // STAGE 2: ID (Instruction Decode)
   // ===========================================================================
   wire id_Branch, id_MemRead, id_MemtoReg, id_MemWrite, id_ALUSrc, id_RegWrite;
   wire [1:0]  id_Jump;
@@ -66,7 +66,7 @@ module cpu_top (
   wire        ex_MemRead;
   wire [4:0]  ex_rd_idx;
 
-  // Khối phát hiện kẹt dữ liệu Load-Use (Bảo vệ thanh ghi đọc từ ngoại vi)
+  // Load-use hazard detection: a load in EX feeding an instruction in ID
   hazard_detection_unit hdu (
     .if_id_rs1(id_rs1_idx), .if_id_rs2(id_rs2_idx),
     .id_ex_MemRead(ex_MemRead), .id_ex_rd(ex_rd_idx),
@@ -99,7 +99,7 @@ module cpu_top (
     .rd1(id_rd1), .rd2(id_rd2)
   );
 
-  // --- BĂNG CHUYỀN ID/EX ---
+  // --- ID/EX pipeline register ---
   wire ex_Branch, ex_MemtoReg, ex_MemWrite, ex_ALUSrc, ex_RegWrite;
   wire [1:0]  ex_Jump;
   wire [3:0]  ex_alu_ctrl;
@@ -123,7 +123,7 @@ module cpu_top (
   );
 
   // ===========================================================================
-  // TRẠM 3: EX (Execute) - THỰC THI & CHUYỂN TIẾP (FORWARDING)
+  // STAGE 3: EX (Execute) and operand forwarding
   // ===========================================================================
   wire [31:0] ex_alu_result;
   wire        ex_zero;
@@ -157,7 +157,7 @@ module cpu_top (
     .zero(ex_zero)
   );
 
-  // Đánh giá đa điều kiện Branch
+  // Branch condition evaluation, on forwarded operands
   reg branch_cond;
   always @(*) begin
     case (ex_funct3)
@@ -171,18 +171,18 @@ module cpu_top (
     endcase
   end
 
-  // Xử lý địa chỉ nhảy JUMP & BRANCH
+  // Branch and jump target computation
   assign ex_branch_target = ex_pc + ex_imm;
   assign branch_taken     = ex_Branch & branch_cond;
 
-  wire [31:0] jalr_target = (ex_alu_result & ~32'd1); // JALR ép bit cuối về 0
+  wire [31:0] jalr_target = (ex_alu_result & ~32'd1); // JALR forces the low bit to zero
   assign jump_target = (ex_Jump == 2'b10) ? jalr_target : ex_branch_target;
   assign jump_taken  = (ex_Jump != 2'b00);
 
-  // Đánh tráo kết quả: Lưu PC+4 vào Register File nếu là lệnh JAL/JALR
+  // JAL and JALR write the return address instead of the ALU result
   wire [31:0] ex_result_to_mem = (ex_Jump != 2'b00) ? (ex_pc + 32'd4) : ex_alu_result;
 
-  // --- BĂNG CHUYỀN EX/MEM ---
+  // --- EX/MEM pipeline register ---
   wire mem_Branch, mem_MemRead, mem_MemtoReg, mem_MemWrite, mem_zero;
   wire [2:0]  mem_funct3;
   wire [31:0] mem_branch_target, mem_rd2;
@@ -201,7 +201,7 @@ module cpu_top (
   );
 
   // ===========================================================================
-  // TRẠM 4: MEM (Memory) - MẠCH CĂN CHỈNH BYTE & MMIO
+  // STAGE 4: MEM (Memory) with byte alignment and MMIO
   // ===========================================================================
   wire we_gpio, we_uart, we_i2c;
   wire [3:0]  we_dmem;
@@ -209,7 +209,7 @@ module cpu_top (
 
   wire i2c_tick;
 
-  // 1. CĂN CHỈNH GHI (SB, SH, SW)
+  // 1. STORE ALIGNMENT (SB, SH, SW)
   reg [3:0]  mem_we_mask;
   reg [31:0] mem_store_data;
   always @(*) begin
@@ -267,21 +267,21 @@ module cpu_top (
     .wd(mem_store_data), .rd(i2c_rd), .sda(i2c_sda), .scl(i2c_scl)
   );
 
-  // 2. CĂN CHỈNH ĐỌC (LB, LBU, LH, LHU, LW)
+  // 2. LOAD ALIGNMENT (LB, LBU, LH, LHU, LW)
   reg  [31:0] mem_load_formatted;
   wire [31:0] shifted_read = mem_read_data >> {mem_alu_result[1:0], 3'b000};
 
   always @(*) begin
     case (mem_funct3)
-      3'b000: mem_load_formatted = {{24{shifted_read[7]}},  shifted_read[7:0]};  // LB  (Mở rộng dấu)
-      3'b100: mem_load_formatted = { 24'd0,                 shifted_read[7:0]};  // LBU (Thêm 0)
-      3'b001: mem_load_formatted = {{16{shifted_read[15]}}, shifted_read[15:0]}; // LH  (Mở rộng dấu)
-      3'b101: mem_load_formatted = { 16'd0,                 shifted_read[15:0]}; // LHU (Thêm 0)
+      3'b000: mem_load_formatted = {{24{shifted_read[7]}},  shifted_read[7:0]};  // LB  (sign extend)
+      3'b100: mem_load_formatted = { 24'd0,                 shifted_read[7:0]};  // LBU (zero extend)
+      3'b001: mem_load_formatted = {{16{shifted_read[15]}}, shifted_read[15:0]}; // LH  (sign extend)
+      3'b101: mem_load_formatted = { 16'd0,                 shifted_read[15:0]}; // LHU (zero extend)
       default: mem_load_formatted = mem_read_data;                               // LW
     endcase
   end
 
-  // --- BĂNG CHUYỀN MEM/WB ---
+  // --- MEM/WB pipeline register ---
   wire wb_MemtoReg;
   wire [31:0] wb_read_data, wb_alu_result;
 
@@ -296,7 +296,7 @@ module cpu_top (
   );
 
   // ===========================================================================
-  // TRẠM 5: WB (Write Back) - GHI TRẢ VỀ TẬP THANH GHI
+  // STAGE 5: WB (Write Back)
   // ===========================================================================
   assign wb_reg_wd = (wb_MemtoReg) ? wb_read_data : wb_alu_result;
 

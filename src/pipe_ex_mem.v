@@ -12,7 +12,7 @@ module pipe_ex_mem (
   input  wire [31:0] ex_alu_result,
   input  wire [31:0] ex_rd2,
   input  wire [4:0]  ex_rd_idx,
-  input  wire [2:0]  ex_funct3,  // <-- Dây mới
+  input  wire [2:0]  ex_funct3,
 
   output reg         mem_RegWrite,
   output reg         mem_MemtoReg,
@@ -24,7 +24,7 @@ module pipe_ex_mem (
   output reg  [31:0] mem_alu_result,
   output reg  [31:0] mem_rd2,
   output reg  [4:0]  mem_rd_idx,
-  output reg  [2:0]  mem_funct3  // <-- Dây mới
+  output reg  [2:0]  mem_funct3
 );
   always @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin

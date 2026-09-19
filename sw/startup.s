@@ -2,13 +2,13 @@
 .global _start
 
 _start:
-    # 1. Khởi tạo con trỏ Stack Pointer (sp) trỏ tới đỉnh RAM (0x20000FFC - 4KB RAM)
+    # 1. Point the stack pointer at the top of RAM (0x20000FFC, 4 KB region)
     lui  sp, 0x20001
     addi sp, sp, -4
 
-    # 2. Nhảy vào hàm main của C
+    # 2. Jump into the C entry point
     jal  ra, main
 
-    # 3. Nếu main return thì lặp vô tận
+    # 3. Spin forever if main ever returns
 halt:
     j halt

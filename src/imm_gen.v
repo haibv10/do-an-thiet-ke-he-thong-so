@@ -16,7 +16,7 @@ module imm_gen(
       7'b0110111: // LUI (U-Type)
         imm_out = {instr[31:12], 12'b0};
 
-      7'b1101111: // JAL (J-Type) - Sắp xếp lại bit cho Jump
+      7'b1101111: // JAL (J-type) - immediate bits are scrambled in the encoding
         imm_out = {{12{instr[31]}}, instr[19:12], instr[20], instr[30:21], 1'b0};
 
       default:

@@ -31,7 +31,8 @@ if [[ ! -f "$system_libfreetype" ]]; then
 fi
 
 mkdir -p "$build_dir"
-ln -sfn "$repo_dir/src" "$build_dir/src"
+# imem.v reads $readmemh("sw/firmware.hex") relative to the synthesis working directory
+ln -sfn "$repo_dir/sw" "$build_dir/sw"
 cd "$build_dir"
 
 exec env -u DISPLAY \

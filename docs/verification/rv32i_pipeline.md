@@ -61,8 +61,8 @@ Post-route summary:
 These figures are from the current tree. Zero registers are inferred as latches, confirming the two I2C
 FSMs have explicit default states. Raw log: `logs/02-fpga-build.log`.
 
-The board measurements further down predate the fixes in [docs/fix_log.md](../fix_log.md); this bitstream
-has not been programmed yet.
+The board measurements further down are from a build carrying the fixes in [docs/fix_log.md](../fix_log.md),
+except where a row is explicitly labelled as a fault capture.
 
 The generated SRAM bitstream is `build/gowin/impl/pnr/fpga_project.fs`.
 
@@ -107,9 +107,14 @@ requires an RX FIFO, which this feature deliberately does not implement.
 ### I2C and LCD
 
 The scan firmware sweeps `0x20-0x27` and `0x38-0x3f`, reports the acknowledging address over UART and writes
-`HELLO FPGA` to the display. After the ACK sampling phase was corrected, the capture repeats `I2C 21` byte for
-byte and the 20x4 LCD shows the string, so `0x21` is the real PCF8574 address on this backpack rather than the
-more common `0x27`.
+`HELLO FPGA` to the display. On a build carrying the register file fix the capture repeats `I2C 27` byte for
+byte and the 20x4 LCD shows the string, so `0x27` is the PCF8574 address on this backpack, matching the
+datasheet default for a part with A0/A1/A2 left open.
+
+Two earlier captures of the same board disagreed, and both are now understood as symptoms of the register
+file defect rather than as address readings: `I2C 2>` is `0x27` with the low nibble mangled by the hex
+formatter's branch, and `I2C 21` came from a scan whose result was corrupted before it reached the
+formatter.
 
 | Stimulus | Result | Evidence |
 |---|---|---|

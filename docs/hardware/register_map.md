@@ -74,7 +74,7 @@ Decoded on **`a[3:2]` only**, so the registers alias every 16 bytes:
 | `0x00` | Write | `[8]` | `cmd_data` — `0` selects an LCD command, `1` display data |
 | `0x04` | Read | `[0]` | `busy` — a transaction is in flight |
 | `0x04` | Read | `[1]` | `ack` — ACK result of the transaction that just finished |
-| `0x08` | Write | `[6:0]` | 7-bit slave address, defaults to `0x27`; the board in use answers at `0x21`, and the firmware scans for it |
+| `0x08` | Write | `[6:0]` | 7-bit slave address, defaults to `0x27`, which is also what the board in use answers at; the firmware scans anyway |
 
 Both write registers are **only sampled while `busy` is 0**. Writing during a
 transaction is dropped silently, so wait first:

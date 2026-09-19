@@ -14,10 +14,11 @@
 | Fmax after place and route | 31.762 MHz against a 27 MHz constraint |
 | Timing violations | 0 setup, 0 hold |
 | Logic utilisation | 3343 / 8640 (39%) |
-| Hardware | 20x4 LCD displays `HELLO FPGA`; UART reports the PCF8574 at `0x21` |
+| Hardware | Banner reads `BOOT 5A5A5A5A 00000000`; 20x4 LCD displays `HELLO FPGA`; UART reports the PCF8574 at `0x27` |
 
-The hardware row was measured before the fixes recorded in [fix_log.md](fix_log.md).
-The bitstream built from the current tree has not been programmed onto the board.
+The hardware row is from a build carrying the fixes in [fix_log.md](fix_log.md).
+An earlier capture read the address as `0x21`; that reading was itself corrupted
+by the register file defect, as finding 10 records.
 
 ---
 

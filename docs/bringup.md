@@ -75,6 +75,11 @@ SDA and SCL **must not** be pulled up to 5 V — level-shift them or use 3.3 V
 pull-ups.
 
 The PCF8574 address is set by pins A0/A1/A2 within `0x20-0x27` for the PCF8574
-and `0x38-0x3F` for the PCF8574A. The backpack in use acknowledges at **`0x21`**,
-not the widely quoted `0x27`. The firmware scans both ranges, so swapping
-backpacks needs no code change.
+and `0x38-0x3F` for the PCF8574A. The backpack in use leaves all three straps
+open and acknowledges at **`0x27`**, the usual default. The firmware scans both
+ranges, so swapping backpacks needs no code change.
+
+An earlier capture reported `0x21` and was written up as the real address. It
+was not: the reading itself was corrupted by the register file defect recorded
+as finding 1 in [fix_log.md](fix_log.md). Read an address off this board only
+from a build that carries that fix.

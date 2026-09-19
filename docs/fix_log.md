@@ -19,15 +19,17 @@ Entries are newest first.
   - [7. `.data` and `.bss` were never initialised](#7-data-and-bss-were-never-initialised)
   - [8. The ROM image left words undefined past the end of the firmware](#8-the-rom-image-left-words-undefined-past-the-end-of-the-firmware)
   - [9. Documentation described the I2C defect incorrectly](#9-documentation-described-the-i2c-defect-incorrectly)
+  - [10. The PCF8574 address was recorded as `0x21`](#10-the-pcf8574-address-was-recorded-as-0x21)
 
 ---
 
 ## 2026-09-19 review
 
-Nine findings from a full re-read of the tree after the repository restructure.
+Ten findings from a full re-read of the tree after the repository restructure.
 Items 1 through 3 are silicon defects, item 4 is a pair of tests that could not
 fail, items 5 through 7 are missing functionality that blocked ordinary C, item
-8 is simulation hygiene and item 9 is a documentation error.
+8 is simulation hygiene, and items 9 and 10 are documentation errors that came
+from misreading the evidence.
 
 ### 1. The register file had no write-first bypass
 
@@ -280,7 +282,7 @@ depends on that one.
 the check: `data_marker` only reads back as `5A5A5A5A` if `.data` was copied out
 of ROM, and `bss_marker` only reads back as zero if `.bss` was cleared. The hex
 digits come from a `.rodata` table, so the banner also exercises finding 6, and
-printing `0x21` correctly instead of `2>` exercises finding 1.
+printing `0x27` correctly instead of `2>` exercises finding 1.
 
 `tb/firmware_boot_tb.sv` runs the real `sw/firmware.hex` on the real SoC and
 decodes the UART output bit by bit:
@@ -339,6 +341,37 @@ removed from both documents rather than reworded.
 
 **Status** — Fixed.
 
+### 10. The PCF8574 address was recorded as `0x21`
+
+**Severity** — Low in the RTL, high in the documentation. Five documents stated
+the wrong address as measured fact.
+
+**Symptom.** `logs/05-board-uart.log` captured `I2C 21` repeatedly, and that was
+written up as "`0x21` is the real PCF8574 address on this backpack rather than
+the more common `0x27`". A PCF8574 with A0, A1 and A2 left open answers at
+`0x27`; `0x21` needs A0 strapped, which this backpack does not do.
+
+**Cause.** The reading itself was corrupted by finding 1. This is the third
+independent symptom of that defect, after `I2C 2>` and the directed distance-3
+test. `I2C 2>` already carried the answer and was misread at the time: `'0' + 7`
+is `'7'` and `'A' - 10 + 7` is `'>'`, so the low nibble was **7** all along and
+the address was always `0x27`.
+
+**Fix.** No RTL change. Corrected the claim in `README.md`,
+`docs/design_report.md`, `docs/bringup.md`,
+`docs/verification/rv32i_pipeline.md` and `docs/hardware/register_map.md`, and
+recorded that an address must only be read off a build carrying finding 1's fix.
+
+**Verification.** On the board, with the fixed bitstream:
+
+```
+I2C 27
+I2C 27
+I2C 27
+```
+
+**Status** — Fixed.
+
 ---
 
 ### Result of the pass
@@ -394,9 +427,29 @@ with 4.76 MHz to spare.
 The extra BSRAM block is the ROM's second read port. Gowin inferred a dual-port
 memory rather than duplicating the 4 KB image, so the cost is one block, not two.
 
-Board measurement has **not** been repeated since these changes. The bitstream
-at `build/gowin/impl/pnr/fpga_project.fs` is new and has not been programmed;
-`logs/05-board-uart.log` still shows the previous firmware's output.
+Board measurement has been repeated on the bitstream built from this tree.
+Programming reports `User Code is: 0x000003D3` and `Finished.`, and the capture
+in [../logs/05-board-uart.log](../logs/05-board-uart.log) closes the loop on
+four of the findings at once:
+
+```
+I2C 27
+I2C 27
+BOOT 5A5A5A5A 00000000
+I2C 27
+BOOT 5A5A5A5A 00000000
+I2C 27
+```
+
+| Evidence in the capture | Finding it confirms |
+|---|---|
+| `5A5A5A5A` | 7 — `.data` was copied out of ROM |
+| `00000000` | 7 — `.bss` was cleared |
+| The digits themselves, from a `.rodata` table | 6 — the ROM data window answers loads |
+| Every address in `startup.s`, formed with AUIPC | 5 |
+| `27` rather than `2>` or `21` | 1 and 10 |
+
+The 20x4 LCD shows `HELLO FPGA`.
 
 ---
 
@@ -409,4 +462,3 @@ Carried forward, not addressed in this pass.
 | UART RX holds a single byte, with no FIFO and no overrun flag | A byte arriving before software reads the previous one is lost |
 | FENCE, ECALL and EBREAK are not implemented | 37 of the 40 RV32I base instructions |
 | U-type and J-type instructions can trigger a spurious load-use stall | `instr[19:15]` is immediate data for these formats but is still fed to the hazard unit as `rs1`. Costs one cycle, never wrong |
-| `i2c_mmio` defaults `pcf8574_addr` to `0x27` | The board answers at `0x21`. Harmless, because the firmware scans and sets the address before use |

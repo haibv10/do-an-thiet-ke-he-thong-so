@@ -226,7 +226,7 @@ FT2232 JTAG channel, are collected in [docs/bringup.md](docs/bringup.md).
 | Simulation | 22 / 22 testbenches pass on Icarus Verilog 11.0 |
 | Timing | Fmax 31.762 MHz against a 27 MHz constraint, 0 setup and 0 hold violations |
 | Resources | Logic 3343 / 8640 (39%), registers 1588 / 6693 (24%), BSRAM 6 / 26 (24%) |
-| Hardware | LCD displays `HELLO FPGA`, UART reports the PCF8574 at `0x21`. Last measured before the fixes in [docs/fix_log.md](docs/fix_log.md); the current bitstream has not been programmed |
+| Hardware | Banner reads `BOOT 5A5A5A5A 00000000`, LCD displays `HELLO FPGA`, UART reports the PCF8574 at `0x27` |
 
 Measurements and the logs behind them are in
 [docs/verification/rv32i_pipeline.md](docs/verification/rv32i_pipeline.md).

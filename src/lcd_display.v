@@ -55,6 +55,8 @@ module lcd_display(
       end
       WaitWrite: ena_write<=1'b0;
       WaitDelay: cnt_clr<=1'b0;
+      // Done must let the counter reach 50 ms before returning to Write to refresh the frame
+      Done: begin cnt_clr<=1'b0; ena_write<=1'b0; end
       default: begin cnt_clr<=1'b1; ena_write<=1'b0; end
     endcase
   end

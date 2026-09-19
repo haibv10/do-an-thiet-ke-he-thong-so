@@ -1,6 +1,6 @@
-// Module tiện ích sinh waveform. Không thuộc thiết kế và không được instantiate.
-// Biên dịch kèm bất kỳ testbench nào bằng cách thêm `-s dump_vcd` và file này.
-// Đường dẫn file VCD lấy từ plusarg +vcd=<path>, mặc định build/sim/wave.vcd
+// Waveform dump helper. Not part of the design and never instantiated.
+// Compile it alongside any testbench by adding `-s dump_vcd` and this file.
+// The VCD path comes from the +vcd=<path> plusarg, defaulting to build/sim/wave.vcd
 module dump_vcd;
   string vcd_path;
 

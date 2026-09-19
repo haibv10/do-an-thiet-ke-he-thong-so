@@ -1,27 +1,30 @@
-// Clock 27MHz thạch anh onboard
+// Pin constraints for Tang Nano 9K (GW1NR-LV9QN88PC6/I5)
+
+// 27 MHz onboard oscillator
 IO_LOC "clk" 52;
 IO_PORT "clk" PULL_MODE=UP;
 
-// Nút Reset S2
+// Reset button S2
 IO_LOC "rst_n" 3;
 IO_PORT "rst_n" PULL_MODE=UP;
 
-// Nút bấm S1
+// User button S1
 IO_LOC "btn_in" 4;
 IO_PORT "btn_in" PULL_MODE=UP;
 
-// LED 1
+// Onboard LED, active low
 IO_LOC "led_out" 10;
 IO_PORT "led_out" PULL_MODE=UP DRIVE=8;
 
-// UART TX truyền lên USB-UART ngoài qua GPIO pin 34
+// UART TX to the RXD pin of the external USB-UART module
 IO_LOC "uart_tx_out" 34;
 IO_PORT "uart_tx_out" IO_TYPE=LVCMOS33 PULL_MODE=UP DRIVE=8;
 
-// UART RX nhận từ USB-UART ngoài qua GPIO pin 33
+// UART RX from the TXD pin of the external USB-UART module
 IO_LOC "uart_rx_in" 33;
 IO_PORT "uart_rx_in" IO_TYPE=LVCMOS33 PULL_MODE=UP;
 
+// I2C to the PCF8574 LCD backpack, open-drain with 3.3 V pull-ups
 IO_LOC "i2c_sda" 31;
 IO_PORT "i2c_sda" IO_TYPE=LVCMOS33 PULL_MODE=UP DRIVE=8;
 

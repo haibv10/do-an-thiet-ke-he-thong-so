@@ -72,6 +72,11 @@ into the bitstream as ROM contents.
 Branches resolve in EX, so a taken branch costs two cycles. There is no branch
 predictor; the design trades those cycles for a simpler control path.
 
+Nothing outside the design reaches a register directly. The reset button, the
+user button and the I2C data line each pass through a two-stage synchroniser
+first, and reset is released in step with the clock rather than whenever the
+contact happens to close.
+
 The ROM has a second read port wired to the same decoder, so loads from region
 `0x0` reach `.rodata` and the load image of `.data`. That is what lets the
 firmware use string literals and initialised globals.
@@ -117,7 +122,7 @@ export GOWIN_ROOT=/home/haihbv/tools/Gowin_V1.9.12.03
 bash tools/run_tests.sh
 ```
 
-Runs 22 self-checking testbenches, ending with `firmware_boot_tb`, which boots
+Runs 24 self-checking testbenches, ending with `firmware_boot_tb`, which boots
 the real `sw/firmware.hex` image on the full SoC and decodes its UART output.
 Each prints `<name>: PASS`; the script stops at the first failure.
 
@@ -223,9 +228,9 @@ FT2232 JTAG channel, are collected in [docs/bringup.md](docs/bringup.md).
 
 | Layer | Result |
 |---|---|
-| Simulation | 22 / 22 testbenches pass on Icarus Verilog 11.0 |
-| Timing | Fmax 31.762 MHz against a 27 MHz constraint, 0 setup and 0 hold violations |
-| Resources | Logic 3343 / 8640 (39%), registers 1588 / 6693 (24%), BSRAM 6 / 26 (24%) |
+| Simulation | 24 / 24 testbenches pass on Icarus Verilog 11.0 |
+| Timing | Fmax 28.912 MHz against a 27 MHz constraint, 0 setup and 0 hold violations |
+| Resources | Logic 3321 / 8640 (39%), registers 1594 / 6693 (24%), BSRAM 6 / 26 (24%) |
 | Hardware | Banner reads `BOOT 5A5A5A5A 00000000`, LCD displays `HELLO FPGA`, UART reports the PCF8574 at `0x27` |
 
 Measurements and the logs behind them are in
@@ -238,6 +243,10 @@ Measurements and the logs behind them are in
 - **FENCE, ECALL and EBREAK are not implemented.** The core covers 37 of the 40
   RV32I base instructions; there is no trap or privilege machinery for the rest
   to hook into.
+- **Timing margin is 7%.** Fmax 28.912 MHz against the 27 MHz oscillator. The
+  binding path is the half-cycle memory read into MEM/WB.
+- **The user button is synchronised but not debounced.** A press produces
+  several transitions; software has to filter them.
 - **U-type and J-type instructions can cause a spurious load-use stall.** For
   these formats `instr[19:15]` is immediate data, but the hazard unit still
   reads it as `rs1`. The cost is one cycle; the result is never wrong.

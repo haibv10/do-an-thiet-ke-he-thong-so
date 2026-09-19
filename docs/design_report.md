@@ -10,10 +10,10 @@
 
 | Metric | Result |
 |---|---|
-| Simulation | 22 / 22 testbenches pass |
-| Fmax after place and route | 31.762 MHz against a 27 MHz constraint |
+| Simulation | 24 / 24 testbenches pass |
+| Fmax after place and route | 28.912 MHz against a 27 MHz constraint |
 | Timing violations | 0 setup, 0 hold |
-| Logic utilisation | 3343 / 8640 (39%) |
+| Logic utilisation | 3321 / 8640 (39%) |
 | Hardware | Banner reads `BOOT 5A5A5A5A 00000000`; 20x4 LCD displays `HELLO FPGA`; UART reports the PCF8574 at `0x27` |
 
 The hardware row is from a build carrying the fixes in [fix_log.md](fix_log.md).
@@ -83,7 +83,7 @@ bits select a register.
 
 | `addr[31:28]` | Region | Device | Role |
 |---|---|---|---|
-| `0x0` | `0x00000000` | IMEM (ROM) | Holds machine code, fetched directly by the IF stage |
+| `0x0` | `0x00000000` | IMEM (ROM) | Machine code for the IF stage, plus read-only data for loads |
 | `0x2` | `0x20000000` | DMEM (RAM) | Globals and stack |
 | `0x4` | `0x40000000` | GPIO | LED output, button input |
 | `0x5` | `0x50000000` | UART | Serial link to the laptop |
@@ -94,9 +94,11 @@ executes as an ordinary memory write, but the decoder recognises region `0x5`
 and triggers the UART, pushing the character out of a physical pin as an 8N1
 frame.
 
-Region `0x0` is deliberately absent from the decoder. The fetch stage reads ROM
-directly, so ROM is not reachable over the data bus — a limitation with real
-consequences, discussed in section 8.
+Region `0x0` is in the decoder as a read-only window. The ROM carries a second
+read port for it, so loads reach `.rodata` and the load image of `.data`, which
+is what lets the firmware use string literals and initialised globals. There is
+no write enable on that region, so a store aimed at ROM is dropped rather than
+faulting.
 
 ---
 
@@ -215,7 +217,44 @@ adding a branch predictor.
 
 ---
 
-## 5. Peripherals
+## 5. The boundary with the outside world
+
+Everything inside the SoC runs on one 27 MHz clock. Three signals arriving from
+outside have no relationship to it: the reset button, the user button and the
+I2C data line, which the PCF8574 drives on its own timing. Sampling any of them
+directly can capture a register mid-transition, and the resulting metastable
+value takes an unbounded time to settle.
+
+Each one therefore passes through two flip-flops before anything else sees it.
+The first may go metastable; the second has a full clock period to settle, which
+reduces the probability of a bad value escaping to a rate measured in years.
+
+Reset needs more than that. Asserting it asynchronously is the point of an
+asynchronous reset, but **releasing** it asynchronously means the rising edge
+lands wherever the contact happens to bounce. Recovery and removal timing cannot
+be met, and nothing guarantees that all 1588 registers leave reset on the same
+cycle. `reset_sync.v` therefore passes the release through a two-stage chain
+while leaving the assertion direct:
+
+```verilog
+always @(posedge clk or negedge rst_n_in) begin
+  if (!rst_n_in) chain <= {STAGES{1'b0}};
+  else           chain <= {chain[STAGES-2:0], 1'b1};
+end
+assign rst_n_out = chain[STAGES-1];
+```
+
+The pin drives the reset of this chain and nothing else; every other module in
+the design takes `rst_n_out`.
+
+Synchronising is not debouncing. A mechanical contact still produces several
+clean transitions where a human saw one press. For reset that is harmless, since
+each bounce re-asserts and the final release is still clean. For the user button
+software has to filter, and the register map says so.
+
+---
+
+## 6. Peripherals
 
 ### GPIO
 
@@ -270,7 +309,7 @@ unsynchronised to the FPGA clock. The design addresses three problems:
 
 The receiver holds **exactly one byte**. There is no FIFO and no overrun flag: a
 new byte overwrites the previous one if software has not read it yet. See
-section 8.
+section 9.
 
 ### I2C and the LCD
 
@@ -297,7 +336,7 @@ requires.
 
 ---
 
-## 6. Software and build flow
+## 7. Software and build flow
 
 The program running on the CPU is written in C and compiled with the standard
 RISC-V toolchain using `-march=rv32i -mabi=ilp32 -nostdlib -msmall-data-limit=0`.
@@ -366,7 +405,7 @@ instructions the CPU already has.
 
 ---
 
-## 7. Verification
+## 8. Verification
 
 The design is confirmed in three independent layers, each catching a different
 class of fault: simulation catches logic errors, timing analysis catches speed
@@ -378,7 +417,7 @@ errors, and board measurement catches physical integration errors.
 bash tools/run_tests.sh
 ```
 
-Twenty-two self-checking testbenches run under Icarus Verilog; all pass.
+Twenty-four self-checking testbenches run under Icarus Verilog; all pass.
 
 | Testbench | What it checks |
 |---|---|
@@ -386,6 +425,8 @@ Twenty-two self-checking testbenches run under Icarus Verilog; all pass.
 | `control_unit_tb` | Opcode decoding into control signals |
 | `imm_gen_tb` | Immediate generation for every instruction format |
 | `regfile_tb` | Write, read, `x0` behaviour and the write-first bypass |
+| `reset_sync_tb` | Asynchronous assert, synchronous release, and that the chain is not one-shot |
+| `gpio_tb` | LED register, read-only button offset, and the two-stage button synchroniser |
 | `forwarding_unit_tb` | MEM-before-WB priority |
 | `hazard_detection_unit_tb` | Correct detection of the load-use case |
 | `pipe_if_id_tb` | Reset, stall and flush behaviour |
@@ -416,14 +457,14 @@ and bitstream generation for the GW1NR-9C against the 27 MHz constraint in
 | Metric | Result | Assessment |
 |---|---|---|
 | Clock constraint | 27.000 MHz | Onboard oscillator |
-| Actual Fmax | 31.762 MHz | 18% margin |
+| Actual Fmax | 28.912 MHz | 7% margin |
 | Setup violated endpoints | 0 | Pass |
 | Hold violated endpoints | 0 | Pass |
-| Deepest logic level | 15 | Critical path runs through the register file bypass |
-| Logic | 3343 / 8640 (39%) | — |
-| Registers | 1588 / 6693 (24%) | — |
+| Deepest logic level | 8 | Critical path is the half-cycle DMEM read into MEM/WB |
+| Logic | 3321 / 8640 (39%) | — |
+| Registers | 1594 / 6693 (24%) | — |
 | Registers inferred as latch | 0 / 6480 (0%) | Both I2C state machines have explicit default states |
-| CLS | 2700 / 4320 (63%) | — |
+| CLS | 2733 / 4320 (64%) | — |
 | BSRAM | 6 / 26 (24%) | IMEM dual-port, plus DMEM |
 | I/O ports | 8 / 71 (12%) | — |
 
@@ -470,7 +511,7 @@ bring-up procedure in `docs/bringup.md`.
 
 ---
 
-## 8. Limitations and future work
+## 9. Limitations and future work
 
 Defects found in review, together with the evidence for each and the fix
 applied, are recorded in [fix_log.md](fix_log.md). This section lists only what
@@ -500,6 +541,30 @@ JAL following a load can stall for a cycle it does not need. The result is never
 wrong, only one cycle late. Suppressing it needs a `UsesRs1` signal out of the
 decoder.
 
+### The user button is synchronised but not debounced
+
+Two flip-flops stop a metastable value reaching the CPU, but a mechanical
+contact still produces several clean transitions per press. Software reading
+offset `0x40000004` sees all of them. Filtering belongs with whatever uses the
+button, since how long a press must be held is an application decision, so the
+hardware deliberately does not impose one.
+
+### The memory read path only gets half a clock period
+
+`dmem.v` and `imem.v` read on the falling edge so the result is settled before
+the rising edge that captures it into MEM/WB. That keeps the design to one
+clock with no extra stall, but it gives the BSRAM output to register path
+18.518 ns instead of a full 37.037 ns, and it is what limits Fmax:
+
+```
+ram/ram_3_ram_3_0_0_s/DO[7]  ->  reg_mem_wb/wb_read_data_28_s0/D
+clk:[F] -> clk:[R]   slack 1.225 ns
+```
+
+At 28.912 MHz against a 27 MHz oscillator the margin is 7%, which passes with
+zero violations but leaves little room. Recovering it means giving the read a
+full cycle, which costs a pipeline stage or a stall on every load.
+
 ### No branch prediction
 
 Every taken branch costs two cycles. For the current small programs this is
@@ -511,11 +576,11 @@ negligible, but it is the clearest performance improvement available.
 
 ```text
 src/      SoC RTL: cpu_top, pipeline stages, alu, control_unit, regfile,
-          imm_gen, forwarding_unit, hazard_detection_unit, imem, dmem,
-          address_decoder, gpio, uart_tx, uart_rx, uart_mmio,
+          imm_gen, forwarding_unit, hazard_detection_unit, reset_sync,
+          imem, dmem, address_decoder, gpio, uart_tx, uart_rx, uart_mmio,
           i2c_mmio, i2c_writeframe, lcd_write_cmd_data, clock_enable_divider
 constr/   Pin (.cst) and timing (.sdc) constraints
-tb/       22 self-checking SystemVerilog testbenches
+tb/       24 self-checking SystemVerilog testbenches
 sw/       C firmware: main.c, startup.s, linker.ld, firmware.hex
 tools/    Scripts for firmware, bitstream, programming and tests
 docs/     Design report, register map, bring-up notes, verification results

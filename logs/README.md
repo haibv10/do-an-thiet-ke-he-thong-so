@@ -17,7 +17,7 @@ the evidence in [../docs/fix_log.md](../docs/fix_log.md).
 
 | File | Produced by | Conclusion it supports |
 |---|---|---|
-| `01-simulation.log` | `bash tools/run_tests.sh` | 22 / 22 testbenches pass on Icarus Verilog |
+| `01-simulation.log` | `bash tools/run_tests.sh` | 24 / 24 testbenches pass on Icarus Verilog |
 | `02-fpga-build.log` | `bash tools/build_fpga.sh` | Gowin completes timing analysis and bitstream generation with no latch warnings |
 | `03-jtag-scan.log` | `programmer_cli --scan` | The FT2CH cable detects GW1NR-9C `0x1100481B` |
 | `04-program-board.log` | `bash tools/program_fpga.sh` | SRAM programming reaches 100% and reports `Finished.` |

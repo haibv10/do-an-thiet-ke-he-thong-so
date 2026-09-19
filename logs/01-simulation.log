@@ -6,6 +6,8 @@ imm_gen_tb: PASS
 tb/imm_gen_tb.sv:26: $finish called at 8000 (1ps)
 regfile_tb: PASS
 tb/regfile_tb.sv:87: $finish called at 91000 (1ps)
+reset_sync_tb: PASS
+tb/reset_sync_tb.sv:65: $finish called at 106000 (1ps)
 forwarding_unit_tb: PASS
 tb/forwarding_unit_tb.sv:42: $finish called at 4000 (1ps)
 hazard_detection_unit_tb: PASS
@@ -18,6 +20,8 @@ pipe_ex_mem_tb: PASS
 tb/pipe_ex_mem_tb.sv:41: $finish called at 16000 (1ps)
 pipe_mem_wb_tb: PASS
 tb/pipe_mem_wb_tb.sv:32: $finish called at 16000 (1ps)
+gpio_tb: PASS
+tb/gpio_tb.sv:82: $finish called at 147000 (1ps)
 uart_rx_tb: PASS
 tb/uart_rx_tb.sv:59: $finish called at 2635000 (1ps)
 uart_mmio_tb: PASS
@@ -33,7 +37,7 @@ tb/i2c_mmio_tb.sv:38: $finish called at 747935000 (1ps)
 lcd_display_tb: PASS
 tb/lcd_display_tb.sv:34: $finish called at 48465000 (1ps)
 cpu_top_tb: PASS
-tb/cpu_top_tb.sv:213: $finish called at 252358500 (1ps)
+tb/cpu_top_tb.sv:213: $finish called at 252432500 (1ps)
 cpu_hazard_tb: PASS
 tb/cpu_hazard_tb.sv:105: $finish called at 2275500 (1ps)
 cpu_auipc_tb: PASS
@@ -41,4 +45,4 @@ tb/cpu_auipc_tb.sv:94: $finish called at 1535500 (1ps)
 uart_hex_cpu_tb: PASS
 tb/uart_hex_cpu_tb.sv:59: $finish called at 3755500 (1ps)
 firmware_boot_tb: PASS (banner "BOOT 5A5A5A5A 00000000")
-tb/firmware_boot_tb.sv:70: $finish called at 2084635500 (1ps)
+tb/firmware_boot_tb.sv:70: $finish called at 2084709500 (1ps)

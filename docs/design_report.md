@@ -10,7 +10,7 @@
 
 | Metric | Result |
 |---|---|
-| Simulation | 24 / 24 testbenches pass |
+| Simulation | 29 / 29 testbenches pass |
 | Fmax after place and route | 28.912 MHz against a 27 MHz constraint |
 | Timing violations | 0 setup, 0 hold |
 | Logic utilisation | 3321 / 8640 (39%) |
@@ -334,6 +334,41 @@ SCL and SDA are driven **open-drain**: the master either pulls the line low or
 releases it to high-Z and lets the pull-up do the rest, as the I2C standard
 requires.
 
+#### The frame, state by state
+
+![i2c_writeframe states mapped onto one I2C write frame](images/schematic_1frame_FSM.png)
+
+*Where each state of `i2c_writeframe` sits on the bus. Nine SCL pulses per
+byte — eight data bits and the ACK — then `PreStop` releases SCL and `Stop`
+releases SDA while SCL is high, which is the edge that defines a STOP. Driving
+SDA low in `AckDone` first is what makes that edge exist; without it there is no
+STOP at all, which is the defect recorded as finding 2 in [fix_log.md](fix_log.md).*
+
+![i2c_writeframe state diagram](images/FSM_i2c_writeframe.png)
+
+*The same machine as a state diagram. One inaccuracy to note: the transition out
+of `WaitACK` is drawn as a decision on `sda_in`, but the RTL leaves that state on
+the delay counter alone and samples the ACK level during `Ack1`.*
+
+#### One LCD byte, five I2C frames
+
+![lcd_write_cmd_data state diagram](images/FSM_lcd_write_cmd_data.png)
+
+*`lcd_write_cmd_data` issues the address frame, then the high nibble twice and
+the low nibble twice. The pairs exist because the HD44780 latches on the falling
+edge of EN, so each nibble is sent once with EN high and once with EN low.*
+
+The pin mapping those nibbles assume comes from the backpack itself:
+
+![PCF8574 backpack schematic](images/schematic_lcd_i2c_pcf8574.png)
+
+*P0 to P7 carry RS, RW, EN, backlight and then DB4 to DB7, which is the byte
+layout `lcd_write_cmd_data` builds. A0, A1 and A2 sit on pull-ups with the
+jumpers open, so the part answers at `0x27` — the schematic is the reason the
+address was never `0x21`, as finding 10 in [fix_log.md](fix_log.md) records. The
+drawing shows a 16x2 display; this project drives a 20x4 through the same
+backpack.*
+
 ---
 
 ## 7. Software and build flow
@@ -417,7 +452,7 @@ errors, and board measurement catches physical integration errors.
 bash tools/run_tests.sh
 ```
 
-Twenty-four self-checking testbenches run under Icarus Verilog; all pass.
+Twenty-nine self-checking testbenches run under Icarus Verilog; all pass.
 
 | Testbench | What it checks |
 |---|---|
@@ -427,6 +462,10 @@ Twenty-four self-checking testbenches run under Icarus Verilog; all pass.
 | `regfile_tb` | Write, read, `x0` behaviour and the write-first bypass |
 | `reset_sync_tb` | Asynchronous assert, synchronous release, and that the chain is not one-shot |
 | `gpio_tb` | LED register, read-only button offset, and the two-stage button synchroniser |
+| `address_decoder_tb` | Region select, unmapped regions, byte mask pass-through, stores into the ROM window |
+| `dmem_tb` | Each byte lane, halfword masks, the 4 KB wrap, and a read concurrent with a write |
+| `imem_tb` | Both read ports, independently and on the same word; zero fill past the image |
+| `uart_tx_tb` | A captured 8N1 frame, and a write arriving mid-frame being dropped |
 | `forwarding_unit_tb` | MEM-before-WB priority |
 | `hazard_detection_unit_tb` | Correct detection of the load-use case |
 | `pipe_if_id_tb` | Reset, stall and flush behaviour |
@@ -580,7 +619,7 @@ src/      SoC RTL: cpu_top, pipeline stages, alu, control_unit, regfile,
           imem, dmem, address_decoder, gpio, uart_tx, uart_rx, uart_mmio,
           i2c_mmio, i2c_writeframe, lcd_write_cmd_data, clock_enable_divider
 constr/   Pin (.cst) and timing (.sdc) constraints
-tb/       24 self-checking SystemVerilog testbenches
+tb/       29 self-checking SystemVerilog testbenches
 sw/       C firmware: main.c, startup.s, linker.ld, firmware.hex
 tools/    Scripts for firmware, bitstream, programming and tests
 docs/     Design report, register map, bring-up notes, verification results

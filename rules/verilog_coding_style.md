@@ -20,46 +20,83 @@ Use SystemVerilog constructs where supported instead of legacy Verilog construct
 
 ## 2. General Rules
 
-### 2.1 Use SystemVerilog
+### 2.1 Language, and which half of the tree you are in
 
-Prefer:
+This repository uses two language standards, split by role.
 
-```systemverilog
-logic        data;
-logic [7:0]  counter;
+| Role | Files | Standard |
+|---|---|---|
+| Synthesizable RTL | `src/*.v` | Verilog-2001 |
+| Verification | `tb/*.sv` | SystemVerilog-2017 |
 
-always_ff @(posedge clk) begin
-    ...
-end
-
-always_comb begin
-    ...
-end
-```
-
-Avoid legacy constructs when SystemVerilog is available:
+**Synthesizable RTL is Verilog-2001.** The target is a Gowin GW1NR-9C built with
+GowinSynthesis, whose Verilog-2001 path is the one this design is closed on;
+`tools/build_gowin.tcl` pins `-verilog_std v2001` to say so explicitly. The
+design sits at roughly 7% timing margin, so changing the elaboration path is not
+a free refactor: it can change inference and therefore placement. RTL therefore
+uses `reg`, `wire`, `always @(posedge clk ...)` and `always @(*)`.
 
 ```verilog
-reg        data;
-wire [7:0] counter;
-
-always @(posedge clk) begin
-    ...
-end
-
-always @(*) begin
-    ...
-end
+module pc_reg (
+  input  wire        clk,
+  input  wire        rst_n,
+  input  wire        stall,
+  input  wire [31:0] pc_next,
+  output reg  [31:0] pc
+);
+  always @(posedge clk or negedge rst_n) begin
+    if (!rst_n)      pc <= 32'h00000000;
+    else if (!stall) pc <= pc_next;
+  end
+endmodule
 ```
 
-Use:
+**Verification is SystemVerilog-2017.** Testbenches are never synthesized, so
+nothing is gained by holding them back. Use `logic`, `always_comb`/`always_ff`,
+`.*` port connection, `automatic` tasks and functions, `string`, and `$fatal`
+with a message that names the expected and actual values.
 
-* `logic` instead of `reg`/`wire` where possible.
-* `always_ff` for sequential logic.
-* `always_comb` for combinational logic.
-* `always_latch` only when a latch is intentionally required.
-* `localparam` for local constants.
-* Typed parameters where appropriate.
+```systemverilog
+module pc_reg_tb;
+  logic clk = 1'b0;
+  logic rst_n = 1'b0;
+  ...
+  pc_reg dut (.*);
+```
+
+Examples further down this guide are written in whichever form makes the point
+clearest, and several use `always_ff` or `always_comb` because the rule under
+discussion is about the block, not the keyword. Sections 12 and 13 govern which
+keyword actually belongs in which half of the tree.
+
+### 2.2 Constructs to use inside each half
+
+In RTL:
+
+* `localparam` for local constants, including FSM state encodings.
+* Parameters for anything a caller may need to override.
+* Non-blocking assignment in sequential blocks, blocking in combinational ones.
+* A `default` arm on every `case`.
+
+In testbenches, additionally:
+
+* `logic` rather than `reg`/`wire`.
+* `always_ff` and `always_comb` where the intent is worth stating.
+* `assert` or an explicit `$fatal`, never a silent check.
+
+### 2.3 When this guide and the tree disagree
+
+One of the two is wrong, and leaving them to disagree quietly is what makes a
+style guide decorative. Either change the code or change this document, in the
+same commit that notices the gap.
+
+The deviations below are deliberate and are not to be "fixed":
+
+| Guide says | This repository does | Because |
+|---|---|---|
+| `logic`, `always_ff`, `always_comb` in RTL | `reg`/`wire`, `always @` | Verilog-2001 synthesis path, see 2.1 |
+| Ports suffixed `_i`, `_o`, `_ni` | Plain functional names | `constr/fpga_project.cst` binds pins to these exact names |
+| No `initial` in synthesizable modules | `initial` with `$readmemh` in `imem.v` | The standard way to give an FPGA block RAM its contents |
 
 ---
 
@@ -188,36 +225,36 @@ logic [31:0] packet_data;
 
 ## 6. Input / Output Naming
 
-Use suffixes to indicate direction.
+Ports take plain functional names. The direction is already in the declaration,
+and the top-level names are bound to physical pins in
+`constr/fpga_project.cst`, so a rename is a change to the constraints as well.
 
-```text
-_i   input
-_o   output
-_io  bidirectional
-```
-
-Example:
-
-```systemverilog
-module uart_rx (
-    input  logic       clk_i,
-    input  logic       rst_ni,
-    input  logic       rx_i,
-    output logic [7:0] data_o,
-    output logic       valid_o
+```verilog
+module uart_rx #(
+  parameter CLKS_PER_BIT = 234
+) (
+  input  wire       clk,
+  input  wire       rst_n,
+  input  wire       rx,
+  input  wire       clear,
+  output reg  [7:0] data,
+  output reg        valid
 );
 ```
 
-For internal signals, use functional suffixes instead of `_i`/`_o`.
+Name a port for what it carries, not for where it goes. Where a module has both
+a register-facing and a pin-facing version of a signal, distinguish them by
+function: `sda` is the pad, `sda_in` is the value read back from it, `sda_out`
+is the value driven onto it.
 
 ---
 
 ## 7. Clock Naming
 
-The primary clock should normally be named:
+The primary clock is named:
 
 ```text
-clk_i
+clk
 ```
 
 Additional clock domains should have explicit names:
@@ -232,11 +269,17 @@ clk_mem
 
 Example:
 
-```systemverilog
-input logic clk_i;
-input logic clk_axi_i;
-input logic clk_uart_i;
+```verilog
+input wire clk;
+input wire clk_axi;
+input wire clk_uart;
 ```
+
+This design has a single 27 MHz domain. Slower rates are derived as **clock
+enables**, never as separately divided clocks, so that everything stays on one
+clock tree: see `clock_enable_divider.v` and the `tick` input on the I2C
+modules. A divided clock would create a second domain and with it a crossing to
+get wrong.
 
 Do not use ambiguous names:
 
@@ -258,9 +301,9 @@ Use `_n` to indicate an active-low reset.
 Examples:
 
 ```text
-rst_ni
-rst_axi_ni
-rst_uart_ni
+rst_n
+rst_axi_n
+rst_uart_n
 ```
 
 Use `_n` only when the signal is actually active-low.
@@ -268,7 +311,7 @@ Use `_n` only when the signal is actually active-low.
 For active-high reset:
 
 ```text
-rst_i
+rst
 ```
 
 Do not name an active-high reset:
@@ -300,8 +343,8 @@ logic       busy_d;
 Typical structure:
 
 ```systemverilog
-always_ff @(posedge clk_i or negedge rst_ni) begin
-    if (!rst_ni) begin
+always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
         data_q <= '0;
     end else begin
         data_q <= data_d;
@@ -311,7 +354,7 @@ end
 always_comb begin
     data_d = data_q;
 
-    if (enable_i) begin
+    if (enable) begin
         data_d = data_q + 8'd1;
     end
 end
@@ -369,11 +412,11 @@ Recommended indentation:
 Example:
 
 ```systemverilog
-always_ff @(posedge clk_i or negedge rst_ni) begin
-    if (!rst_ni) begin
+always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
         counter_q <= '0;
     end else begin
-        if (enable_i) begin
+        if (enable) begin
             counter_q <= counter_q + 1'b1;
         end
     end
@@ -402,25 +445,30 @@ Do not use trailing whitespace.
 
 ## 12. Sequential Logic
 
-Sequential logic must use `always_ff`.
+In RTL, sequential logic uses `always @(posedge clk)`. In testbenches, prefer
+`always_ff`, which lets the tool check the intent.
 
-```systemverilog
-always_ff @(posedge clk_i) begin
+```verilog
+always @(posedge clk) begin
     q <= d;
 end
 ```
 
 With asynchronous active-low reset:
 
-```systemverilog
-always_ff @(posedge clk_i or negedge rst_ni) begin
-    if (!rst_ni) begin
-        q <= '0;
+```verilog
+always @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+        q <= 32'd0;
     end else begin
         q <= d;
     end
 end
 ```
+
+Reset every register the block drives, in the reset branch. A register left out
+of that branch powers up undefined and, if it drives a pad, can hold an external
+bus in a stuck state before the design has run a single cycle.
 
 Sequential logic must use **non-blocking assignments**:
 
@@ -439,8 +487,8 @@ Keep sequential blocks simple.
 Prefer:
 
 ```systemverilog
-always_ff @(posedge clk_i or negedge rst_ni) begin
-    if (!rst_ni) begin
+always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
         counter_q <= '0;
     end else begin
         counter_q <= counter_d;
@@ -454,17 +502,20 @@ over putting complicated combinational calculations directly inside the sequenti
 
 ## 13. Combinational Logic
 
-Use `always_comb` for procedural combinational logic.
+In RTL, use `always @(*)`. In testbenches, prefer `always_comb`.
 
-```systemverilog
-always_comb begin
-    data_d = data_q;
+```verilog
+always @(*) begin
+    data_next = data;
 
-    if (enable_i) begin
-        data_d = data_q + 1'b1;
+    if (enable) begin
+        data_next = data + 1'b1;
     end
 end
 ```
+
+Assign every output on every path, or the block infers a latch. Section 14 says
+how to check that it did not.
 
 Combinational logic must use **blocking assignments**:
 
@@ -481,14 +532,14 @@ data_d <= data_q;
 Prefer continuous assignments when the logic is simple:
 
 ```systemverilog
-assign valid_o = valid_q && ready_i;
+assign valid = valid_q && ready_in;
 ```
 
 instead of:
 
 ```systemverilog
 always_comb begin
-    valid_o = valid_q && ready_i;
+    valid = valid_q && ready_in;
 end
 ```
 
@@ -502,13 +553,13 @@ Bad:
 
 ```systemverilog
 always_comb begin
-    if (enable_i) begin
+    if (enable) begin
         data_d = data_q + 1'b1;
     end
 end
 ```
 
-`data_d` is not assigned when `enable_i == 0`, which can infer a latch.
+`data_d` is not assigned when `enable == 0`, which can infer a latch.
 
 Good:
 
@@ -516,7 +567,7 @@ Good:
 always_comb begin
     data_d = data_q;
 
-    if (enable_i) begin
+    if (enable) begin
         data_d = data_q + 1'b1;
     end
 end
@@ -541,7 +592,7 @@ assign      → =
 Example:
 
 ```systemverilog
-always_ff @(posedge clk_i) begin
+always_ff @(posedge clk) begin
     counter_q <= counter_d;
 end
 ```
@@ -563,11 +614,11 @@ A register should normally be assigned in only one `always_ff` block.
 Bad:
 
 ```systemverilog
-always_ff @(posedge clk_i) begin
+always_ff @(posedge clk) begin
     data_q <= data_d;
 end
 
-always_ff @(posedge clk_i) begin
+always_ff @(posedge clk) begin
     data_q <= '0;
 end
 ```
@@ -575,10 +626,10 @@ end
 Good:
 
 ```systemverilog
-always_ff @(posedge clk_i or negedge rst_ni) begin
-    if (!rst_ni) begin
+always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
         data_q <= '0;
-    end else if (enable_i) begin
+    end else if (enable) begin
         data_q <= data_d;
     end
 end
@@ -617,8 +668,8 @@ state_t state_d;
 State register:
 
 ```systemverilog
-always_ff @(posedge clk_i or negedge rst_ni) begin
-    if (!rst_ni) begin
+always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
         state_q <= ST_IDLE;
     end else begin
         state_q <= state_d;
@@ -634,7 +685,7 @@ always_comb begin
 
     unique case (state_q)
         ST_IDLE: begin
-            if (start_i) begin
+            if (start) begin
                 state_d = ST_START;
             end
         end
@@ -644,7 +695,7 @@ always_comb begin
         end
 
         ST_RUN: begin
-            if (done_i) begin
+            if (done) begin
                 state_d = ST_DONE;
             end
         end
@@ -705,7 +756,7 @@ These constructs can cause simulation/synthesis mismatches.
 Use logical operators for control conditions:
 
 ```systemverilog
-if (valid_i && ready_i) begin
+if (valid_in && ready_in) begin
     ...
 end
 ```
@@ -729,7 +780,7 @@ Bitwise:
 Good:
 
 ```systemverilog
-if (!rst_ni) begin
+if (!rst_n) begin
     ...
 end
 ```
@@ -737,7 +788,7 @@ end
 Good:
 
 ```systemverilog
-assign data_o = data_a & data_b;
+assign data_out = data_a & data_b;
 ```
 
 Avoid using bitwise operators in control expressions when logical operators better express the intent.
@@ -832,13 +883,13 @@ Do not use `X` assignments to indicate don't-care conditions in synthesizable RT
 Avoid:
 
 ```systemverilog
-data_o = 8'hXX;
+data_out = 8'hXX;
 ```
 
 or:
 
 ```systemverilog
-data_o = 'x;
+data_out = 'x;
 ```
 
 Instead, fully define the RTL behavior and use assertions or verification logic to detect invalid conditions.
@@ -875,9 +926,9 @@ Use `assign` when the combinational logic is simple.
 Good:
 
 ```systemverilog
-assign ready_o = ready_q;
-assign valid_o = valid_q && enable_i;
-assign empty_o = (count_q == '0);
+assign ready = ready_q;
+assign valid = valid_q && enable;
+assign empty = (count_q == '0);
 ```
 
 Use `always_comb` when the combinational logic becomes more complex:
@@ -903,12 +954,12 @@ module fifo_sync #(
     parameter int unsigned DATA_WIDTH = 32,
     parameter int unsigned DEPTH      = 16
 ) (
-    input  logic                  clk_i,
-    input  logic                  rst_ni,
-    input  logic [DATA_WIDTH-1:0] data_i,
-    input  logic                  valid_i,
-    output logic                  ready_o,
-    output logic [DATA_WIDTH-1:0] data_o
+    input  logic                  clk,
+    input  logic                  rst_n,
+    input  logic [DATA_WIDTH-1:0] data_in,
+    input  logic                  valid_in,
+    output logic                  ready,
+    output logic [DATA_WIDTH-1:0] data_out
 );
 ```
 
@@ -938,10 +989,10 @@ Example:
 module counter #(
     parameter int unsigned WIDTH = 32
 ) (
-    input  logic             clk_i,
-    input  logic             rst_ni,
-    input  logic             enable_i,
-    output logic [WIDTH-1:0] count_o
+    input  logic             clk,
+    input  logic             rst_n,
+    input  logic             enable,
+    output logic [WIDTH-1:0] count
 );
 ```
 
@@ -1009,7 +1060,7 @@ counter_q <= counter_q + 1'b1;
 For non-obvious hardware behavior, explain the design reason.
 
 ```systemverilog
-// Two flip-flop synchronizer is required because ack_i
+// Two flip-flop synchronizer is required because ack
 // originates in the asynchronous clock domain.
 ```
 
@@ -1050,12 +1101,12 @@ Example:
 logic sync_ff1_q;
 logic sync_ff2_q;
 
-always_ff @(posedge clk_dst_i or negedge rst_dst_ni) begin
-    if (!rst_dst_ni) begin
+always_ff @(posedge clk_dst or negedge rst_dst_n) begin
+    if (!rst_dst_n) begin
         sync_ff1_q <= 1'b0;
         sync_ff2_q <= 1'b0;
     end else begin
-        sync_ff1_q <= signal_src_i;
+        sync_ff1_q <= signal_src;
         sync_ff2_q <= sync_ff1_q;
     end
 end
@@ -1148,7 +1199,7 @@ The objective is to make the hardware behavior easy to understand.
 Do not write:
 
 ```systemverilog
-always_ff @(posedge clk_i) begin
+always_ff @(posedge clk) begin
     if (cond_a) begin
         data_q <= value_a;
     end
@@ -1164,7 +1215,7 @@ Even when conditions are currently mutually exclusive, this creates ambiguous pr
 Prefer:
 
 ```systemverilog
-always_ff @(posedge clk_i) begin
+always_ff @(posedge clk) begin
     if (cond_a) begin
         data_q <= value_a;
     end else if (cond_b) begin
@@ -1180,16 +1231,16 @@ end
 Prefer explicit enable logic.
 
 ```systemverilog
-always_ff @(posedge clk_i or negedge rst_ni) begin
-    if (!rst_ni) begin
+always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
         data_q <= '0;
-    end else if (enable_i) begin
+    end else if (enable) begin
         data_q <= data_d;
     end
 end
 ```
 
-If `enable_i` is low, the register naturally retains its value.
+If `enable` is low, the register naturally retains its value.
 
 Do not unnecessarily write:
 
@@ -1232,18 +1283,18 @@ The valid signal must be pipelined consistently with the associated data.
 For ready/valid interfaces, use consistent naming:
 
 ```text
-valid_i
-ready_i
-valid_o
-ready_o
-data_i
-data_o
+valid_in
+ready_in
+valid
+ready
+data_in
+data_out
 ```
 
 A transfer occurs when:
 
 ```systemverilog
-valid_i && ready_o
+valid_in && ready
 ```
 
 Do not invent different names for the same protocol concept across modules.
@@ -1278,8 +1329,8 @@ Assertions should be used to verify important design assumptions.
 Example:
 
 ```systemverilog
-assert property (@(posedge clk_i)
-    valid_i |-> ready_o);
+assert property (@(posedge clk)
+    valid_in |-> ready);
 ```
 
 Assertions are preferred over propagating `X` values to represent illegal states.
@@ -1377,16 +1428,27 @@ Production RTL must be synthesizable unless the file is explicitly designated as
 
 Avoid simulation-only constructs in synthesizable modules:
 
-```systemverilog
+```verilog
 #10
 $display(...)
 $finish
-initial begin
-    ...
-end
 ```
 
 Simulation-specific code belongs in testbench or verification files.
+
+`initial` with `$readmemh` is the exception. It is how an FPGA block RAM is
+given its contents, and every vendor supports it for that purpose:
+
+```verilog
+initial begin
+  for (index = 0; index < 1024; index = index + 1) rom[index] = 32'd0;
+  $readmemh(HEX_PATH, rom);
+end
+```
+
+Clear the array before reading the file. `$readmemh` leaves anything past the
+end of the image untouched, so without the loop a stray read returns `x` in
+simulation and the file itself has to cover the whole depth to avoid a warning.
 
 ---
 
@@ -1397,8 +1459,8 @@ Every important register should have an intentional reset behavior when required
 Good:
 
 ```systemverilog
-always_ff @(posedge clk_i or negedge rst_ni) begin
-    if (!rst_ni) begin
+always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
         valid_q <= 1'b0;
         state_q <= ST_IDLE;
         count_q <= '0;
@@ -1428,11 +1490,11 @@ If the same expression is used repeatedly and has meaningful intent, consider cr
 Instead of:
 
 ```systemverilog
-if ((valid_i && ready_i) && (count_q < FIFO_DEPTH)) begin
+if ((valid_in && ready_in) && (count_q < FIFO_DEPTH)) begin
     ...
 end
 
-assign busy_o = (valid_i && ready_i) && (count_q < FIFO_DEPTH);
+assign busy = (valid_in && ready_in) && (count_q < FIFO_DEPTH);
 ```
 
 Prefer:
@@ -1440,8 +1502,8 @@ Prefer:
 ```systemverilog
 logic transfer_allowed;
 
-assign transfer_allowed = valid_i &&
-                           ready_i &&
+assign transfer_allowed = valid_in &&
+                           ready_in &&
                            (count_q < FIFO_DEPTH);
 ```
 
@@ -1452,7 +1514,7 @@ if (transfer_allowed) begin
     ...
 end
 
-assign busy_o = transfer_allowed;
+assign busy = transfer_allowed;
 ```
 
 Do not create intermediate signals for trivial expressions that reduce readability.
@@ -1517,18 +1579,18 @@ The top-level module should primarily connect major blocks rather than contain l
 module counter #(
     parameter int unsigned WIDTH = 32
 ) (
-    input  logic             clk_i,
-    input  logic             rst_ni,
-    input  logic             enable_i,
-    input  logic             clear_i,
-    output logic [WIDTH-1:0] count_o
+    input  logic             clk,
+    input  logic             rst_n,
+    input  logic             enable,
+    input  logic             clear,
+    output logic [WIDTH-1:0] count
 );
 
     logic [WIDTH-1:0] count_q;
     logic [WIDTH-1:0] count_d;
 
-    always_ff @(posedge clk_i or negedge rst_ni) begin
-        if (!rst_ni) begin
+    always_ff @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
             count_q <= '0;
         end else begin
             count_q <= count_d;
@@ -1538,14 +1600,14 @@ module counter #(
     always_comb begin
         count_d = count_q;
 
-        if (clear_i) begin
+        if (clear) begin
             count_d = '0;
-        end else if (enable_i) begin
+        end else if (enable) begin
             count_d = count_q + 1'b1;
         end
     end
 
-    assign count_o = count_q;
+    assign count = count_q;
 
 endmodule
 ```

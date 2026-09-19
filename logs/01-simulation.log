@@ -6,6 +6,8 @@ imm_gen_tb: PASS
 tb/imm_gen_tb.sv:26: $finish called at 8000 (1ps)
 regfile_tb: PASS
 tb/regfile_tb.sv:87: $finish called at 91000 (1ps)
+pc_reg_tb: PASS
+tb/pc_reg_tb.sv:60: $finish called at 92000 (1ps)
 reset_sync_tb: PASS
 tb/reset_sync_tb.sv:65: $finish called at 106000 (1ps)
 forwarding_unit_tb: PASS
@@ -20,8 +22,17 @@ pipe_ex_mem_tb: PASS
 tb/pipe_ex_mem_tb.sv:41: $finish called at 16000 (1ps)
 pipe_mem_wb_tb: PASS
 tb/pipe_mem_wb_tb.sv:32: $finish called at 16000 (1ps)
+address_decoder_tb: PASS
+tb/address_decoder_tb.sv:97: $finish called at 18000 (1ps)
+dmem_tb: PASS
+tb/dmem_tb.sv:93: $finish called at 476000 (1ps)
+WARNING: src/imem.v:24: $readmemh(tb/support/imem_test.hex): Not enough words in the file for the requested range [0:1023].
+imem_tb: PASS
+tb/imem_tb.sv:78: $finish called at 216000 (1ps)
 gpio_tb: PASS
 tb/gpio_tb.sv:82: $finish called at 147000 (1ps)
+uart_tx_tb: PASS
+tb/uart_tx_tb.sv:118: $finish called at 2887000 (1ps)
 uart_rx_tb: PASS
 tb/uart_rx_tb.sv:59: $finish called at 2635000 (1ps)
 uart_mmio_tb: PASS

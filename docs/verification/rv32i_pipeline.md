@@ -2,7 +2,7 @@
 
 ## Simulation
 
-Icarus Verilog 11.0 passes twenty-four self-checking tests. Coverage includes ALU and decode operations,
+Icarus Verilog 12.0 passes twenty-nine self-checking tests. Coverage includes ALU and decode operations,
 immediate generation, register file read/write/bypass behavior, reset synchronisation, forwarding priority, load-use hazard
 detection, pipeline register reset/stall/flush behavior, branch and JAL flushing, subword memory accesses,
 GPIO MMIO, an UART TX frame containing `0x48`, UART RX framing with start/stop validation and LSB-first
@@ -115,6 +115,15 @@ Two earlier captures of the same board disagreed, and both are now understood as
 file defect rather than as address readings: `I2C 2>` is `0x27` with the low nibble mangled by the hex
 formatter's branch, and `I2C 21` came from a scan whose result was corrupted before it reached the
 formatter.
+
+![lcd_write_cmd_data frame sequence](../images/waveform_lcd_write_cmd_data.png)
+
+*One LCD byte on the bus. `i2c_addr` reads `27`, and for `data = 0xd4` as a
+command the five frames are `4e`, `dc`, `d8`, `4c`, `48` — the address with the
+write bit, then the high nibble with EN high and low, then the low nibble the
+same way. Each matches what `lcd_write_cmd_data.v` computes. The capture
+predates the move to a 1 MHz clock enable, so it shows a `clk_1MHz` input where
+the current module takes `clk` and `tick`.*
 
 | Stimulus | Result | Evidence |
 |---|---|---|

@@ -26,6 +26,9 @@ vsim.wlf
 *.ghw
 *.log
 
+# Log verification duoc chon loc thi van theo doi (xem logs/README.md)
+!logs/*.log
+
 # Intel Quartus generated output
 db/
 incremental_db/

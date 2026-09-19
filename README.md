@@ -33,12 +33,12 @@ into the bitstream as ROM contents.
 
 ## Features
 
-- **RV32I core** — 36 of the 40 base instructions, five-stage pipeline
-- **Hazard handling** — EX/MEM and MEM/WB forwarding, one-cycle load-use stall,
-  two-cycle branch flush
+- **RV32I core** — 37 of the 40 base instructions, five-stage pipeline
+- **Hazard handling** — EX/MEM and MEM/WB forwarding, a write-first register
+  file bypass, one-cycle load-use stall, two-cycle branch flush
 - **Sub-word memory access** — `LB`, `LBU`, `LH`, `LHU`, `LW`, `SB`, `SH`, `SW`
   through a byte-alignment stage
-- **Memory-mapped I/O** — one address decoder, four regions, no peripheral-specific
+- **Memory-mapped I/O** — one address decoder, five regions, no peripheral-specific
   CPU instructions
 - **UART** — 115200 8N1, transmit and receive, both memory mapped
 - **I2C** — bit-banged master driving a 20x4 HD44780 LCD over a PCF8574 backpack
@@ -72,11 +72,15 @@ into the bitstream as ROM contents.
 Branches resolve in EX, so a taken branch costs two cycles. There is no branch
 predictor; the design trades those cycles for a simpler control path.
 
+The ROM has a second read port wired to the same decoder, so loads from region
+`0x0` reach `.rodata` and the load image of `.data`. That is what lets the
+firmware use string literals and initialised globals.
+
 ## Memory map
 
 | `addr[31:28]` | Base | Device | Notes |
 |---|---|---|---|
-| `0x0` | `0x00000000` | Instruction memory | Fetch stage only — not readable over the data bus |
+| `0x0` | `0x00000000` | Instruction memory, 4 KB | Fetch, plus read-only data access for `.rodata` and the `.data` load image |
 | `0x2` | `0x20000000` | Data memory, 4 KB | Globals and stack |
 | `0x4` | `0x40000000` | GPIO | LED output, button input |
 | `0x5` | `0x50000000` | UART | 115200 8N1, TX and RX |
@@ -113,8 +117,9 @@ export GOWIN_ROOT=/home/haihbv/tools/Gowin_V1.9.12.03
 bash tools/run_tests.sh
 ```
 
-Runs 18 self-checking testbenches. Each prints `<name>: PASS`; the script stops
-at the first failure.
+Runs 22 self-checking testbenches, ending with `firmware_boot_tb`, which boots
+the real `sw/firmware.hex` image on the full SoC and decodes its UART output.
+Each prints `<name>: PASS`; the script stops at the first failure.
 
 ### Build the firmware
 
@@ -164,14 +169,19 @@ picocom -b 115200 --flow n /dev/ttyUSB0
 Press the **S2** reset button on the board to catch the `BOOT` line. Exit with
 `Ctrl-A` then `Ctrl-X`.
 
-The shipped firmware sends `BOOT`, scans `0x20-0x27` and `0x38-0x3f` for a
-PCF8574, prints the address it finds and writes `HELLO FPGA` to the LCD:
+The shipped firmware prints a banner, scans `0x20-0x27` and `0x38-0x3f` for a
+PCF8574, reports the address it finds and writes `HELLO FPGA` to the LCD:
 
 ```text
-BOOT
+BOOT 5A5A5A5A 00000000
 I2C 21
 I2C 21
 ```
+
+The two words in the banner are a startup self-check: `5A5A5A5A` is a `.data`
+global, so it only reads back correctly if `startup.s` copied `.data` out of
+ROM, and `00000000` is a `.bss` global, so it only reads back as zero if
+`.bss` was cleared.
 
 ## Hardware setup
 
@@ -213,28 +223,27 @@ FT2232 JTAG channel, are collected in [docs/bringup.md](docs/bringup.md).
 
 | Layer | Result |
 |---|---|
-| Simulation | 18 / 18 testbenches pass on Icarus Verilog 11.0 |
-| Timing | Fmax 34.937 MHz against a 27 MHz constraint, 0 setup and 0 hold violations |
-| Resources | Logic 3167 / 8640 (37%), registers 1587 / 6693 (24%), BSRAM 5 / 26 (20%) |
-| Hardware | LCD displays `HELLO FPGA`, UART reports the PCF8574 at `0x21` |
+| Simulation | 22 / 22 testbenches pass on Icarus Verilog 11.0 |
+| Timing | Fmax 31.762 MHz against a 27 MHz constraint, 0 setup and 0 hold violations |
+| Resources | Logic 3343 / 8640 (39%), registers 1588 / 6693 (24%), BSRAM 6 / 26 (24%) |
+| Hardware | LCD displays `HELLO FPGA`, UART reports the PCF8574 at `0x21`. Last measured before the fixes in [docs/fix_log.md](docs/fix_log.md); the current bitstream has not been programmed |
 
 Measurements and the logs behind them are in
 [docs/verification/rv32i_pipeline.md](docs/verification/rv32i_pipeline.md).
 
 ## Known limitations
 
-- **AUIPC is not implemented.** Opcode `0010111` decodes silently to a NOP.
-- **ROM is not readable over the data bus.** `.rodata` — string literals and
-  lookup tables — reads back as zero.
-- **`.data` and `.bss` are not initialised.** `startup.s` sets the stack pointer
-  and jumps to `main` without copying or zeroing.
 - **UART RX holds a single byte.** There is no FIFO and no overrun flag; a new
   byte overwrites the previous one if software has not read it.
-- **A RAW hazard three instructions apart reads a stale register.** The register
-  file has no WB-to-ID bypass and the forwarding unit only covers distances one
-  and two.
-- **I2C does not emit a compliant STOP condition,** and the NACK path skips the
-  ninth SCL pulse.
+- **FENCE, ECALL and EBREAK are not implemented.** The core covers 37 of the 40
+  RV32I base instructions; there is no trap or privilege machinery for the rest
+  to hook into.
+- **U-type and J-type instructions can cause a spurious load-use stall.** For
+  these formats `instr[19:15]` is immediate data, but the hazard unit still
+  reads it as `rs1`. The cost is one cycle; the result is never wrong.
+
+Defects found and fixed, each with the evidence behind it, are recorded in
+[docs/fix_log.md](docs/fix_log.md).
 
 ## Documentation
 
@@ -243,5 +252,6 @@ Measurements and the logs behind them are in
 | [docs/design_report.md](docs/design_report.md) | Full design report |
 | [docs/hardware/register_map.md](docs/hardware/register_map.md) | MMIO register reference |
 | [docs/bringup.md](docs/bringup.md) | Board bring-up procedure and pitfalls |
+| [docs/fix_log.md](docs/fix_log.md) | Defects found, fixes applied and the evidence for each |
 | [docs/verification/rv32i_pipeline.md](docs/verification/rv32i_pipeline.md) | Simulation, timing and hardware results |
 | [rules/](rules/) | Coding style, commit style, git flow |

@@ -10,11 +10,14 @@
 
 | Metric | Result |
 |---|---|
-| Simulation | 18 / 18 testbenches pass |
-| Fmax after place and route | 34.937 MHz against a 27 MHz constraint |
+| Simulation | 22 / 22 testbenches pass |
+| Fmax after place and route | 31.762 MHz against a 27 MHz constraint |
 | Timing violations | 0 setup, 0 hold |
-| Logic utilisation | 3167 / 8640 (37%) |
+| Logic utilisation | 3343 / 8640 (39%) |
 | Hardware | 20x4 LCD displays `HELLO FPGA`; UART reports the PCF8574 at `0x21` |
+
+The hardware row was measured before the fixes recorded in [fix_log.md](fix_log.md).
+The bitstream built from the current tree has not been programmed onto the board.
 
 ---
 
@@ -125,22 +128,26 @@ As a result, five different instructions are in flight at any moment.
 
 ### Implemented instruction set
 
-36 of the 40 RV32I base instructions are implemented.
+37 of the 40 RV32I base instructions are implemented.
 
 | Group | Opcode | Instructions |
 |---|---|---|
 | Register arithmetic | `0110011` | ADD SUB AND OR XOR SLL SRL SRA SLT SLTU |
 | Immediate arithmetic | `0010011` | ADDI ANDI ORI XORI SLLI SRLI SRAI SLTI SLTIU |
 | Upper immediate | `0110111` | LUI |
+| PC-relative upper immediate | `0010111` | AUIPC |
 | Loads | `0000011` | LB LBU LH LHU LW |
 | Stores | `0100011` | SB SH SW |
 | Branches | `1100011` | BEQ BNE BLT BGE BLTU BGEU |
 | Calls | `1101111` | JAL |
 | Returns and indirect jumps | `1100111` | JALR |
 
-**AUIPC, FENCE, ECALL and EBREAK are not implemented.** There is no illegal
+**FENCE, ECALL and EBREAK are not implemented.** There is no illegal
 instruction trap either, so an unimplemented opcode decodes silently to a NOP.
-The consequences of the missing AUIPC are covered in section 8.
+
+AUIPC needs its own control bit, `ALUSrcA`, because it is the only instruction
+whose first ALU operand is its own program counter rather than a register. The
+bit runs from the control unit through ID/EX to a mux in front of the ALU.
 
 Sub-word loads and stores are handled by a dedicated **byte-alignment** circuit
 in the MEM stage. On a write it replicates the data across all 32 bits and
@@ -292,10 +299,16 @@ requires.
 ## 6. Software and build flow
 
 The program running on the CPU is written in C and compiled with the standard
-RISC-V toolchain using `-march=rv32i -mabi=ilp32 -nostdlib`. An assembly startup
-stub sets the stack pointer to the top of RAM and jumps to `main`; the linker
-script maps `.text` into ROM and `.data`/`.bss` into RAM according to the
-hardware address map.
+RISC-V toolchain using `-march=rv32i -mabi=ilp32 -nostdlib -msmall-data-limit=0`.
+The small-data limit is pinned to zero so nothing lands in `.sdata` or `.sbss`,
+because those sections would be addressed relative to `gp` and nothing sets `gp`
+up on this core.
+
+The linker script maps `.text` and `.rodata` into ROM and `.data`/`.bss` into
+RAM, giving `.data` a load address in ROM and a run address in RAM. `startup.s`
+closes that gap before any C runs: it sets the stack pointer to the top of RAM,
+copies `.data` across through the ROM data window, clears `.bss`, and only then
+calls `main`. Every address it forms uses AUIPC.
 
 ```text
   main.c  ──gcc + linker.ld──►  firmware.elf  ──objcopy──►  firmware.bin
@@ -308,30 +321,47 @@ hardware address map.
 The demo program exercises all three MMIO blocks:
 
 ```c
-/* sw/main.c — boot banner, I2C scan, LCD output */
-uart_putc('B'); uart_putc('O'); uart_putc('O'); uart_putc('T');
+/* sw/main.c - boot banner, I2C scan, LCD output */
+uart_puts("BOOT ");
+uart_hex32(data_marker);                 /* .data  -> 5A5A5A5A */
+uart_putc(' ');
+uart_hex32(bss_marker);                  /* .bss   -> 00000000 */
+uart_puts("\r\n");
 
 lcd_address = lcd_find_address();        /* scan 0x20-0x27 and 0x38-0x3f */
 if (lcd_address >= 0) {
   lcd_init();
   lcd_command(0x80);                     /* cursor to row 1 */
-  lcd_data('H'); lcd_data('E'); lcd_data('L'); lcd_data('L'); lcd_data('O');
+  lcd_puts("HELLO FPGA");
 }
 
 while (1) {
-  uart_putc('I'); uart_putc('2'); uart_putc('C'); uart_putc(' ');
-  uart_hex((unsigned char)lcd_address);  /* report the address found */
+  uart_puts("I2C ");
+  uart_hex8((unsigned char)lcd_address); /* digits come from a .rodata table */
+  uart_puts("\r\n");
   delay_cycles(27000000);
 }
 ```
 
-Characters are emitted one at a time rather than from a string literal. That is
-not a style choice: string literals live in `.rodata` inside ROM, and ROM is not
-readable over the data bus, so a string read would return zeros. See section 8.
+The firmware uses string literals, a `.rodata` lookup table for hex digits and
+globals in both `.data` and `.bss`. All three depend on the ROM data window and
+on the copy and clear loops in `startup.s`.
 
-The whole program uses nothing but `volatile` pointer assignments — no library,
-no operating system. That is the direct proof that memory-mapped I/O works:
-software controls hardware using exactly the instructions the CPU already has.
+The boot banner is deliberately a self-check rather than a greeting:
+
+```text
+BOOT 5A5A5A5A 00000000
+```
+
+`5A5A5A5A` is a `.data` global, so it reads back correctly only if `.data` was
+copied out of ROM. `00000000` is a `.bss` global, so it reads back as zero only
+if `.bss` was cleared. `tb/firmware_boot_tb.sv` decodes exactly these bytes off
+the UART pin of the simulated SoC.
+
+Apart from the startup code the whole program uses nothing but `volatile`
+pointer assignments — no library, no operating system. That is the direct proof
+that memory-mapped I/O works: software controls hardware using exactly the
+instructions the CPU already has.
 
 ---
 
@@ -347,13 +377,14 @@ errors, and board measurement catches physical integration errors.
 bash tools/run_tests.sh
 ```
 
-Eighteen self-checking testbenches run under Icarus Verilog; all pass.
+Twenty-two self-checking testbenches run under Icarus Verilog; all pass.
 
 | Testbench | What it checks |
 |---|---|
 | `alu_tb` | All arithmetic, logic and shift operations |
 | `control_unit_tb` | Opcode decoding into control signals |
 | `imm_gen_tb` | Immediate generation for every instruction format |
+| `regfile_tb` | Write, read, `x0` behaviour and the write-first bypass |
 | `forwarding_unit_tb` | MEM-before-WB priority |
 | `hazard_detection_unit_tb` | Correct detection of the load-use case |
 | `pipe_if_id_tb` | Reset, stall and flush behaviour |
@@ -384,15 +415,15 @@ and bitstream generation for the GW1NR-9C against the 27 MHz constraint in
 | Metric | Result | Assessment |
 |---|---|---|
 | Clock constraint | 27.000 MHz | Onboard oscillator |
-| Actual Fmax | 34.937 MHz | 29% margin |
+| Actual Fmax | 31.762 MHz | 18% margin |
 | Setup violated endpoints | 0 | Pass |
 | Hold violated endpoints | 0 | Pass |
-| Deepest logic level | 12 | Critical path is in the EX stage |
-| Logic | 3167 / 8640 (37%) | — |
-| Registers | 1587 / 6693 (24%) | — |
+| Deepest logic level | 15 | Critical path runs through the register file bypass |
+| Logic | 3343 / 8640 (39%) | — |
+| Registers | 1588 / 6693 (24%) | — |
 | Registers inferred as latch | 0 / 6480 (0%) | Both I2C state machines have explicit default states |
-| CLS | 2615 / 4320 (61%) | — |
-| BSRAM | 5 / 26 (20%) | IMEM and DMEM |
+| CLS | 2700 / 4320 (63%) | — |
+| BSRAM | 6 / 26 (24%) | IMEM dual-port, plus DMEM |
 | I/O ports | 8 / 71 (12%) | — |
 
 Raw log: `logs/02-fpga-build.log`.
@@ -440,47 +471,9 @@ bring-up procedure in `docs/bringup.md`.
 
 ## 8. Limitations and future work
 
-### The register file has no WB-to-ID bypass
-
-The forwarding unit covers EX/MEM and MEM/WB into EX, which handles RAW hazards
-at distances one and two. At distance three the consuming instruction is in ID
-during the same cycle the producer writes the register file, and the register
-file reads combinationally with no internal bypass — so it reads the stale
-value. A directed test confirms it:
-
-```text
-  source  | distance | expected | actual
-  --------+----------+----------+--------
-  x1 = 7  |     1    |     7    |  7
-  x2 = 8  |     2    |     8    |  8
-  x3 = 9  |     3    |     9    |  0     ← wrong
-  x4 = 10 |     4    |    10    |  10
-```
-
-This surfaced on hardware as `I2C 2>` instead of `I2C 27`: the hex formatter's
-`sltiu` plus branch sequence selected the wrong character branch. The firmware
-now avoids that branch, but the defect itself is still open. The fix is a
-two-line write-first bypass inside `regfile.v`.
-
-### AUIPC is not implemented
-
-Opcode `0010111` is absent from both the control unit and the immediate
-generator, so it decodes silently to a NOP. GCC emits AUIPC for `la` and for
-far calls, so this blocks any use of globals or string literals.
-
-### ROM is not readable over the data bus
-
-The address decoder has no region `0x0`. `.rodata` therefore reads back as zero,
-which is why the firmware spells out characters instead of using string
-literals. Adding a read path from IMEM into the decoder would fix it.
-
-### `.data` and `.bss` are not initialised
-
-The linker script places both sections in RAM, but `startup.s` only sets the
-stack pointer and jumps to `main` — nothing copies `.data` from its load address
-and nothing zeroes `.bss`. The current firmware uses no globals, so this has not
-yet surfaced. Together with the two items above, it is the third independent
-reason globals are unusable today.
+Defects found in review, together with the evidence for each and the fix
+applied, are recorded in [fix_log.md](fix_log.md). This section lists only what
+is still open.
 
 ### UART RX has no FIFO
 
@@ -491,14 +484,20 @@ lossless; a 1024-byte burst loses roughly 0.3%. Lossless sustained streaming
 requires a FIFO or hardware flow control, which this design deliberately does
 not implement.
 
-### I2C does not emit a compliant STOP condition
+### FENCE, ECALL and EBREAK are not implemented
 
-In the `PreStop` state SCL rises while SDA is still released high, so the
-transition that defines a STOP never happens. Whether anything resembling a STOP
-appears on the bus depends on the least significant bit of the last byte sent.
-The NACK path additionally skips the ninth SCL pulse, leaving an 8-clock frame
-where the protocol requires nine. The PCF8574 tolerates both, which is why the
-LCD demo works, but the bus is not standard-compliant.
+Three of the 40 RV32I base instructions remain. FENCE is a no-op on a core with
+a single in-order memory port, so implementing it is trivial; ECALL and EBREAK
+are not, because there is no trap vector, no privilege level and no CSR file for
+them to act on. Adding them properly means adding machine-mode CSRs first.
+
+### U-type and J-type formats can trigger a spurious load-use stall
+
+The hazard unit reads `instr[19:15]` as `rs1` for every instruction. In the
+U-type and J-type encodings those bits are immediate data, so a LUI, AUIPC or
+JAL following a load can stall for a cycle it does not need. The result is never
+wrong, only one cycle late. Suppressing it needs a `UsesRs1` signal out of the
+decoder.
 
 ### No branch prediction
 
@@ -515,7 +514,7 @@ src/      SoC RTL: cpu_top, pipeline stages, alu, control_unit, regfile,
           address_decoder, gpio, uart_tx, uart_rx, uart_mmio,
           i2c_mmio, i2c_writeframe, lcd_write_cmd_data, clock_enable_divider
 constr/   Pin (.cst) and timing (.sdc) constraints
-tb/       18 self-checking SystemVerilog testbenches
+tb/       22 self-checking SystemVerilog testbenches
 sw/       C firmware: main.c, startup.s, linker.ld, firmware.hex
 tools/    Scripts for firmware, bitstream, programming and tests
 docs/     Design report, register map, bring-up notes, verification results

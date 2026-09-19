@@ -1,0 +1,412 @@
+# Fix log
+
+A running record of defects found in this repository and what was done about
+each one. Every entry carries two pieces of evidence: proof the defect was real,
+and proof it is gone. Commands are run from
+`/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so`.
+
+Entries are newest first.
+
+## Contents
+
+- [2026-09-19 review](#2026-09-19-review)
+  - [1. The register file had no write-first bypass](#1-the-register-file-had-no-write-first-bypass)
+  - [2. I2C never generated a STOP condition](#2-i2c-never-generated-a-stop-condition)
+  - [3. `sda_out` had no reset value](#3-sda_out-had-no-reset-value)
+  - [4. Two I2C testbenches passed on a transition that preceded the START](#4-two-i2c-testbenches-passed-on-a-transition-that-preceded-the-start)
+  - [5. AUIPC was not implemented](#5-auipc-was-not-implemented)
+  - [6. ROM was not readable over the data bus](#6-rom-was-not-readable-over-the-data-bus)
+  - [7. `.data` and `.bss` were never initialised](#7-data-and-bss-were-never-initialised)
+  - [8. The ROM image left words undefined past the end of the firmware](#8-the-rom-image-left-words-undefined-past-the-end-of-the-firmware)
+  - [9. Documentation described the I2C defect incorrectly](#9-documentation-described-the-i2c-defect-incorrectly)
+
+---
+
+## 2026-09-19 review
+
+Nine findings from a full re-read of the tree after the repository restructure.
+Items 1 through 3 are silicon defects, item 4 is a pair of tests that could not
+fail, items 5 through 7 are missing functionality that blocked ordinary C, item
+8 is simulation hygiene and item 9 is a documentation error.
+
+### 1. The register file had no write-first bypass
+
+**Severity** — High. Silent wrong answers in ordinary straight-line code.
+
+**Symptom.** An instruction that read a register written three instructions
+earlier got the stale value. The forwarding unit covers distances one and two
+by reaching into EX/MEM and MEM/WB. At distance three the producer is in WB
+exactly while the consumer is in ID, and neither path applies.
+
+**Evidence before the fix.** A four-instruction program on the real `cpu_top`:
+
+```
+addi x1, x0, 4
+addi x2, x0, 5
+nop
+add  x3, x1, x2
+
+x1=4 x2=5 x3=5  (expected x3=9)
+RESULT: distance-3 RAW FAILS
+```
+
+`x1` read back as zero, so the add produced `0 + 5`. The firmware worked around
+this in `uart_hex()` by branching around the `A`-`F` arithmetic instead of using
+a lookup table, which is why the UART used to print `0x27` as `2>`.
+
+**Fix.** [`src/regfile.v`](../src/regfile.v) — return the pending write data
+when the write port and a read port name the same register in the same cycle:
+
+```verilog
+wire bypass_rs1 = we && (rd != 5'd0) && (rd == rs1);
+wire bypass_rs2 = we && (rd != 5'd0) && (rd == rs2);
+
+assign rd1 = (rs1 == 5'd0) ? 32'd0 : (bypass_rs1 ? wd : x[rs1]);
+assign rd2 = (rs2 == 5'd0) ? 32'd0 : (bypass_rs2 ? wd : x[rs2]);
+```
+
+**Verification.** Two new testbenches, both confirmed to fail against the old
+`regfile.v` and pass against the new one.
+
+`tb/regfile_tb.sv` covers the bypass itself, including the cases where it must
+*not* fire — `x0`, a non-matching index, and write enable low:
+
+```
+against the old regfile: FATAL tb/regfile_tb.sv:61: bypass rd1=00000000 rd2=00000000 expected 12345678
+against the new regfile: regfile_tb: PASS
+```
+
+`tb/cpu_hazard_tb.sv` runs RAW dependencies at distance one through four on the
+full CPU, plus a distance-three dependency whose producer is a load, plus the
+load-use interlock:
+
+```
+against the old regfile: FATAL tb/cpu_hazard_tb.sv:61: distance 3, write-first bypass: x7 = 1, expected 21
+against the new regfile: cpu_hazard_tb: PASS
+```
+
+**Status** — Fixed.
+
+### 2. I2C never generated a STOP condition
+
+**Severity** — Medium. Off-spec bus behaviour that the PCF8574 happened to
+tolerate.
+
+**Symptom.** `stop_frame` produced no STOP. `PreStop` released SCL while SDA was
+already high, so the edge that defines a STOP — SDA rising while SCL is high —
+never occurred. What the bus saw instead was one extra SCL rising edge with no
+falling edge after it.
+
+**Evidence before the fix.** Logging every bus edge through a full frame with
+`stop_frame` asserted:
+
+```
+>>> STOP  at t=105000 state=1      <- PreStart, before the START
+>>> START at t=585000 state=2
+t=10745000 state=12 scl=1 sda=1 sda_en=0
+--- frame done ---
+```
+
+The only STOP in the trace preceded the START. Counting SCL rising edges across
+a NACK frame gave ten where I2C defines nine:
+
+```
+NACK frame (no slave): scl rising edges = 10 (I2C requires 9), ack=0
+```
+
+**Fix.** [`src/i2c_writeframe.v`](../src/i2c_writeframe.v) — drive SDA low in
+`AckDone`, while SCL is still low, so that releasing SCL in `PreStop` and then
+SDA in `Stop` produces a real rising edge on a high clock.
+
+**Verification.** The same bus probe after the fix:
+
+```
+>>> START at t=585000  state=2
+>>> STOP  at t=11185000 state=13   <- Stop state, after the START
+```
+
+`tb/i2c_writeframe_tb.sv` now asserts one START, one STOP after it, exactly nine
+SCL pulses in between, and both lines idle high afterwards, for the ACK frame
+and the NACK frame:
+
+```
+i2c_writeframe_tb: PASS
+```
+
+**Status** — Fixed.
+
+### 3. `sda_out` had no reset value
+
+**Severity** — Medium. The bus was held low from power-up.
+
+**Symptom.** The reset branch of the output logic set `sda_en`, `cnt_clr`, `ack`
+and `scl_drive_low`, but not `sda_out`. Reset leaves `sda_en` at 1, and
+
+```verilog
+assign sda = sda_en ? (~sda_out ? 1'b0 : 1'bz) : 1'bz;
+```
+
+drives SDA low whenever `sda_out` is 0. Gowin powers registers up at zero, so
+SDA was pulled low from configuration until the CPU issued its first I2C write —
+the state machine sits in `WaitEn` until then. In simulation `sda_out` was `x`,
+which is where the spurious transition in finding 2 came from.
+
+**Fix.** Reset `sda_out` to 1 so the line starts released and the pull-up
+defines the idle level.
+
+**Verification.** `tb/i2c_writeframe_tb.sv` checks the line immediately after
+reset, before any frame:
+
+```
+before the fix: FATAL tb/i2c_writeframe_tb.sv:135: SDA = x after reset, expected the line to be released
+after the fix:  i2c_writeframe_tb: PASS
+```
+
+**Status** — Fixed.
+
+### 4. Two I2C testbenches passed on a transition that preceded the START
+
+**Severity** — High as a process defect. Both tests asserted `stop_count == 1`
+and could not have caught finding 2.
+
+**Symptom.** `tb/i2c_writeframe_tb.sv` and `tb/lcd_write_cmd_data_tb.sv` counted
+a STOP on any SDA rising edge while SCL was high, with no requirement that a
+START had happened first. The `x`-to-1 settle described in finding 3 satisfied
+that at t=105 ns, so the assertion was met before the frame even began.
+
+**Fix.** Gate STOP detection on `frame_active`, so only a transition inside an
+open frame counts. `tb/i2c_writeframe_tb.sv` additionally counts complete SCL
+pulses between the START and the STOP and checks the bus is idle afterwards.
+
+**Verification.** With the gate in place and the RTL still unfixed, the LCD
+testbench reported the real picture rather than a pass:
+
+```
+FATAL: tb/lcd_write_cmd_data_tb.sv:107: expected one START and one STOP, got 1 and 2
+```
+
+Both pass against the fixed RTL.
+
+**Status** — Fixed.
+
+### 5. AUIPC was not implemented
+
+**Severity** — Medium. Opcode `0010111` decoded silently to a NOP.
+
+**Symptom.** Every control signal defaulted to zero for that opcode and
+`imm_gen` returned zero, so the instruction retired without writing its
+destination. Any PC-relative address formation was impossible, which in turn is
+what `la` needs for a position-independent reference.
+
+**Fix.** A new `ALUSrcA` control bit selects the program counter instead of
+`rs1` for the ALU's first operand:
+
+- [`src/imm_gen.v`](../src/imm_gen.v) — AUIPC shares the U-type immediate with LUI
+- [`src/control_unit.v`](../src/control_unit.v) — decode, with `ALUSrcA` set
+- [`src/pipe_id_ex.v`](../src/pipe_id_ex.v) — carry `ALUSrcA` into EX
+- [`src/cpu_top.v`](../src/cpu_top.v) — `alu_src_a = ex_ALUSrcA ? ex_pc : alu_mux_a`
+
+**Verification.** `tb/cpu_auipc_tb.sv` checks AUIPC at three program counters
+and a PC-relative load built from AUIPC plus `lw`. `tb/control_unit_tb.sv` and
+`tb/imm_gen_tb.sv` gained decode checks. The real firmware then confirms it end
+to end: the assembler expands every `la` in `sw/startup.s` to AUIPC.
+
+```
+00000000 <_start>:
+   0:	20001117          	auipc	sp,0x20001
+   c:	20000317          	auipc	t1,0x20000
+  14:	20000397          	auipc	t2,0x20000
+```
+
+```
+cpu_auipc_tb: PASS
+```
+
+The base instruction count goes from 36 of 40 to 37 of 40. FENCE, ECALL and
+EBREAK remain unimplemented.
+
+**Status** — Fixed.
+
+### 6. ROM was not readable over the data bus
+
+**Severity** — Medium. `.rodata` read back as zero.
+
+**Symptom.** `address_decoder` had no case for region `0x0`, so a load from the
+instruction ROM fell through to the default and returned zero. The linker places
+`.rodata` and the load image of `.data` in ROM, so string literals and lookup
+tables were unreachable. The firmware worked around it by sending characters one
+`uart_putc` call at a time.
+
+**Fix.** A second read port on the ROM, and a decoder case for it:
+
+- [`src/imem.v`](../src/imem.v) — `a_data` / `rd_data`, read on the same falling edge as the fetch port
+- [`src/address_decoder.v`](../src/address_decoder.v) — `4'h0: rd_out = rd_rom`, with no write enable, so a store into ROM is dropped
+- [`src/cpu_top.v`](../src/cpu_top.v) — the data port is addressed from the MEM stage
+
+**Verification.** `tb/cpu_auipc_tb.sv` loads a word and two individual bytes out
+of the ROM window, reads the same constant through an AUIPC-relative address,
+and confirms a store into region `0x0` leaves the image untouched.
+
+```
+cpu_auipc_tb: PASS
+```
+
+**Status** — Fixed.
+
+### 7. `.data` and `.bss` were never initialised
+
+**Severity** — Medium. Initialised globals held garbage, zero-initialised
+globals held whatever the RAM powered up with.
+
+**Symptom.** `sw/startup.s` set the stack pointer and jumped to `main`. The
+linker script placed `.data` in RAM with a load address in ROM but nothing ever
+performed the copy, and `.bss` was never cleared. Writing ordinary C with
+globals was therefore unsafe.
+
+**Fix.**
+
+- [`sw/linker.ld`](../sw/linker.ld) — export `_data_lma`, `_data_start`,
+  `_data_end`, `_bss_start`, `_bss_end` and `_stack_top`
+- [`sw/startup.s`](../sw/startup.s) — copy `.data` from ROM to RAM, zero `.bss`,
+  then call `main`
+- [`tools/build_firmware.sh`](../tools/build_firmware.sh) — add
+  `-msmall-data-limit=0`, so nothing lands in `.sdata`/`.sbss` and no
+  `gp`-relative addressing is generated for a `gp` that is never set up
+
+The copy loop reads through the ROM data window from finding 6, so this fix
+depends on that one.
+
+**Verification.** [`sw/main.c`](../sw/main.c) now prints a banner that is itself
+the check: `data_marker` only reads back as `5A5A5A5A` if `.data` was copied out
+of ROM, and `bss_marker` only reads back as zero if `.bss` was cleared. The hex
+digits come from a `.rodata` table, so the banner also exercises finding 6, and
+printing `0x21` correctly instead of `2>` exercises finding 1.
+
+`tb/firmware_boot_tb.sv` runs the real `sw/firmware.hex` on the real SoC and
+decodes the UART output bit by bit:
+
+```
+firmware_boot_tb: PASS (banner "BOOT 5A5A5A5A 00000000")
+```
+
+**Status** — Fixed.
+
+### 8. The ROM image left words undefined past the end of the firmware
+
+**Severity** — Low. Simulation hygiene.
+
+**Symptom.** `sw/firmware.hex` held only as many words as the firmware needed,
+172 of 1024, so `$readmemh` warned on every run and left the rest of the ROM at
+`x`:
+
+```
+WARNING: src/imem.v:13: $readmemh(sw/firmware.hex): Not enough words in the file for the requested range [0:1023].
+```
+
+That mattered more once ROM became readable as data, because a stray load would
+have returned `x` rather than zero.
+
+**Fix.** [`tools/make_hex.py`](../tools/make_hex.py) pads the image to the full
+1024-word ROM depth and now fails loudly if the firmware would overflow it,
+which previously would have wrapped silently in `rom[a[11:2]]`.
+[`src/imem.v`](../src/imem.v) also clears the array before `$readmemh`.
+
+**Verification.** The suite runs clean:
+
+```
+$ bash tools/run_tests.sh 2>&1 | grep -c WARNING
+0
+```
+
+**Status** — Fixed.
+
+### 9. Documentation described the I2C defect incorrectly
+
+**Severity** — Low, but misleading.
+
+**Symptom.** `README.md` and `docs/design_report.md` both stated that "the NACK
+path skips the ninth SCL pulse". Reading the state machine shows `WaitAck` to
+`Ack1` to `Ack2` to `AckDone` runs unconditionally, so the ninth pulse is always
+present. Measurement showed the opposite of the claim — an extra edge, not a
+missing one:
+
+```
+NACK frame (no slave): scl rising edges = 10 (I2C requires 9), ack=0
+```
+
+**Fix.** The underlying defect is fixed under finding 2, so the limitation is
+removed from both documents rather than reworded.
+
+**Status** — Fixed.
+
+---
+
+### Result of the pass
+
+All 22 testbenches pass, including the four new ones:
+
+```
+$ bash tools/run_tests.sh
+alu_tb: PASS
+control_unit_tb: PASS
+imm_gen_tb: PASS
+regfile_tb: PASS
+forwarding_unit_tb: PASS
+hazard_detection_unit_tb: PASS
+pipe_if_id_tb: PASS
+pipe_id_ex_tb: PASS
+pipe_ex_mem_tb: PASS
+pipe_mem_wb_tb: PASS
+uart_rx_tb: PASS
+uart_mmio_tb: PASS
+clock_enable_divider_tb: PASS
+i2c_writeframe_tb: PASS
+lcd_write_cmd_data_tb: PASS
+i2c_mmio_tb: PASS
+lcd_display_tb: PASS
+cpu_top_tb: PASS
+cpu_hazard_tb: PASS
+cpu_auipc_tb: PASS
+uart_hex_cpu_tb: PASS
+firmware_boot_tb: PASS (banner "BOOT 5A5A5A5A 00000000")
+```
+
+Gowin V1.9.12.03 completes the flow for `GW1NR-LV9QN88PC6/I5` with no errors and
+no registers inferred as latches. Full output in
+[../logs/02-fpga-build.log](../logs/02-fpga-build.log).
+
+| Metric | Before this pass | After |
+|---|---|---|
+| Actual Fmax | 34.937 MHz | 31.762 MHz |
+| Constraint | 27.000 MHz | 27.000 MHz |
+| Deepest logic level | 12 | 15 |
+| Setup / hold violated endpoints | 0 / 0 | 0 / 0 |
+| Logic | 3167 / 8640 (37%) | 3343 / 8640 (39%) |
+| Registers | 1587 / 6693 (24%) | 1588 / 6693 (24%) |
+| Registers inferred as latch | 0 | 0 |
+| BSRAM | 5 / 26 (20%) | 6 / 26 (24%) |
+
+Timing margin fell from 29% to 18%. The register file bypass puts a mux in the
+ID read path and is now on the critical path, which is also what pushed the
+deepest logic level from 12 to 15. The design still meets the 27 MHz oscillator
+with 4.76 MHz to spare.
+
+The extra BSRAM block is the ROM's second read port. Gowin inferred a dual-port
+memory rather than duplicating the 4 KB image, so the cost is one block, not two.
+
+Board measurement has **not** been repeated since these changes. The bitstream
+at `build/gowin/impl/pnr/fpga_project.fs` is new and has not been programmed;
+`logs/05-board-uart.log` still shows the previous firmware's output.
+
+---
+
+### Still open
+
+Carried forward, not addressed in this pass.
+
+| Item | Impact |
+|---|---|
+| UART RX holds a single byte, with no FIFO and no overrun flag | A byte arriving before software reads the previous one is lost |
+| FENCE, ECALL and EBREAK are not implemented | 37 of the 40 RV32I base instructions |
+| U-type and J-type instructions can trigger a spurious load-use stall | `instr[19:15]` is immediate data for these formats but is still fed to the hazard unit as `rs1`. Costs one cycle, never wrong |
+| `i2c_mmio` defaults `pcf8574_addr` to `0x27` | The board answers at `0x21`. Harmless, because the firmware scans and sets the address before use |

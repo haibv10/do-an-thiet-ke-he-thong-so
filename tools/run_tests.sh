@@ -26,6 +26,7 @@ run_test() {
 run_test alu_tb          src/alu.v          tb/alu_tb.sv
 run_test control_unit_tb src/control_unit.v tb/control_unit_tb.sv
 run_test imm_gen_tb      src/imm_gen.v      tb/imm_gen_tb.sv
+run_test regfile_tb      src/regfile.v      tb/regfile_tb.sv
 
 # --- CPU: hazard handling and pipeline registers ---
 run_test forwarding_unit_tb        src/forwarding_unit.v        tb/forwarding_unit_tb.sv
@@ -53,4 +54,9 @@ run_test lcd_display_tb src/lcd_display.v tb/lcd_display_tb.sv
 
 # --- Full SoC integration ---
 run_test cpu_top_tb      src/*.v tb/cpu_top_tb.sv
+run_test cpu_hazard_tb   src/*.v tb/cpu_hazard_tb.sv
+run_test cpu_auipc_tb    src/*.v tb/cpu_auipc_tb.sv
 run_test uart_hex_cpu_tb src/*.v tb/uart_hex_cpu_tb.sv
+
+# --- End to end: the real firmware image on the real SoC ---
+run_test firmware_boot_tb src/*.v tb/firmware_boot_tb.sv

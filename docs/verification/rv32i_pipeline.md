@@ -2,12 +2,32 @@
 
 ## Simulation
 
-Icarus Verilog 11.0 passes eighteen self-checking tests. Coverage includes ALU and decode operations, immediate
-generation, forwarding priority, load-use hazard detection, pipeline register reset/stall/flush behavior,
-branch and JAL flushing, subword memory accesses, GPIO MMIO, an UART TX frame containing `0x48`, UART RX
-framing with start/stop validation and LSB-first assembly, UART MMIO status and read-clear semantics, and a
-CPU-level echo that drives `0xA5` into the RX pin and checks that the CPU transmits the same byte back, plus
-the I2C frame FSM, the PCF8574 LCD write sequence and the I2C MMIO handshake.
+Icarus Verilog 11.0 passes twenty-two self-checking tests. Coverage includes ALU and decode operations,
+immediate generation, register file read/write/bypass behavior, forwarding priority, load-use hazard
+detection, pipeline register reset/stall/flush behavior, branch and JAL flushing, subword memory accesses,
+GPIO MMIO, an UART TX frame containing `0x48`, UART RX framing with start/stop validation and LSB-first
+assembly, UART MMIO status and read-clear semantics, and a CPU-level echo that drives `0xA5` into the RX pin
+and checks that the CPU transmits the same byte back, plus the I2C frame FSM, the PCF8574 LCD write sequence
+and the I2C MMIO handshake.
+
+Four tests are CPU-level programs rather than unit tests:
+
+| Testbench | What it proves |
+|---|---|
+| `cpu_hazard_tb` | RAW dependencies at distance one through four, including a load producer, and the load-use interlock |
+| `cpu_auipc_tb` | AUIPC at several program counters, loads out of the ROM window, and that a store into ROM is dropped |
+| `uart_hex_cpu_tb` | The `sltiu` plus branch sequence the hex formatter depends on |
+| `firmware_boot_tb` | The real `sw/firmware.hex` image booting on the full SoC, decoded off the UART pin |
+
+`firmware_boot_tb` is the end-to-end case. It checks the banner byte by byte:
+
+```text
+firmware_boot_tb: PASS (banner "BOOT 5A5A5A5A 00000000")
+```
+
+`5A5A5A5A` is a `.data` global and `00000000` a `.bss` global, so the banner passes only if `startup.s`
+copied `.data` out of ROM and cleared `.bss`. The digits come from a `.rodata` table, so it also exercises
+the ROM data window.
 
 Command:
 
@@ -25,22 +45,24 @@ Post-route summary:
 | Metric | Result |
 |---|---:|
 | Constraint | 27.000 MHz |
-| Actual Fmax | 34.937 MHz |
-| Logic levels | 12 |
+| Actual Fmax | 31.762 MHz |
+| Logic levels | 15 |
 | Setup violated endpoints | 0 |
 | Hold violated endpoints | 0 |
 | Setup TNS | 0.000 ns |
 | Hold TNS | 0.000 ns |
-| Logic | 3167 / 8640 (37%) |
-| Registers | 1587 / 6693 (24%) |
+| Logic | 3343 / 8640 (39%) |
+| Registers | 1588 / 6693 (24%) |
 | Registers inferred as latch | 0 / 6480 (0%) |
-| CLS | 2615 / 4320 (61%) |
-| BSRAM | 5 / 26 (20%) |
+| CLS | 2700 / 4320 (63%) |
+| BSRAM | 6 / 26 (24%) |
 | I/O ports | 8 / 71 (12%) |
 
-These figures are from the build that produced the bitstream currently validated on the board, with the
-I2C peripheral included. Zero registers are inferred as latches, confirming the two I2C FSMs now have
-explicit default states. Raw log: `logs/02-fpga-build.log`.
+These figures are from the current tree. Zero registers are inferred as latches, confirming the two I2C
+FSMs have explicit default states. Raw log: `logs/02-fpga-build.log`.
+
+The board measurements further down predate the fixes in [docs/fix_log.md](../fix_log.md); this bitstream
+has not been programmed yet.
 
 The generated SRAM bitstream is `build/gowin/impl/pnr/fpga_project.fs`.
 
@@ -96,9 +118,10 @@ more common `0x27`.
 | Reset, hex formatter using the A-F branch | `I2C 2>` instead of `I2C 27` | `logs/08-fault-hex-branch.log` |
 | Reset, current firmware | `I2C 21` repeated, LCD shows `HELLO FPGA` | `logs/05-board-uart.log` |
 
-The third row is a CPU fault, not a UART fault. `'0' + 14` is `0x3e`, and `'A' - 10 + 7` is also `0x3e`, so the
-low nibble took the A-F branch while the high nibble of the same call took the correct one. The firmware now
-avoids that branch; the pipeline defect itself is still open.
+Rows two and three are CPU faults, not UART faults, and both are now fixed — see
+[docs/fix_log.md](../fix_log.md) findings 6 and 1. In row three `'0' + 14` is `0x3e` and `'A' - 10 + 7` is also
+`0x3e`, so the low nibble took the A-F branch while the high nibble of the same call took the correct one.
+The hex formatter now uses a `.rodata` lookup table instead of that branch.
 
 ### Bring-up procedure
 

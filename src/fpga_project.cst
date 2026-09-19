@@ -14,10 +14,16 @@ IO_PORT "btn_in" PULL_MODE=UP;
 IO_LOC "led_out" 10;
 IO_PORT "led_out" PULL_MODE=UP DRIVE=8;
 
-// UART TX truyền lên máy tính
-IO_LOC "uart_tx_out" 17;
+// UART TX truyền lên USB-UART ngoài qua GPIO pin 34
+IO_LOC "uart_tx_out" 34;
 IO_PORT "uart_tx_out" IO_TYPE=LVCMOS33 PULL_MODE=UP DRIVE=8;
 
-// UART RX nhận dữ liệu từ máy tính
-IO_LOC "uart_rx_in" 18;
+// UART RX nhận từ USB-UART ngoài qua GPIO pin 33
+IO_LOC "uart_rx_in" 33;
 IO_PORT "uart_rx_in" IO_TYPE=LVCMOS33 PULL_MODE=UP;
+
+IO_LOC "i2c_sda" 31;
+IO_PORT "i2c_sda" IO_TYPE=LVCMOS33 PULL_MODE=UP DRIVE=8;
+
+IO_LOC "i2c_scl" 32;
+IO_PORT "i2c_scl" IO_TYPE=LVCMOS33 PULL_MODE=UP;

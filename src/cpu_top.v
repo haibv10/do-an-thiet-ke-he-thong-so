@@ -4,7 +4,9 @@ module cpu_top (
   output wire led_out,
   input  wire btn_in,
   input  wire uart_rx_in,
-  output wire uart_tx_out
+  output wire uart_tx_out,
+  inout wire i2c_sda,
+  inout wire i2c_scl
 );
 
   // ===========================================================================
@@ -25,14 +27,10 @@ module cpu_top (
   // ===========================================================================
   wire [31:0] if_pc, if_next_pc, if_instr;
   wire [31:0] ex_branch_target, jump_target;
-  reg  [31:0] pc_reg;
-
-  // PC chỉ được phép nhảy nhịp mới nếu không bị tín hiệu stall phanh lại
-  always @(posedge clk or negedge rst_n) begin
-    if (!rst_n)      pc_reg <= 32'd0;
-    else if (!stall) pc_reg <= if_next_pc;
-  end
-  assign if_pc = pc_reg;
+  pc_reg pc_register (
+    .clk(clk), .rst_n(rst_n), .stall(stall),
+    .pc_next(if_next_pc), .pc(if_pc)
+  );
 
   // Đa hợp quyết định hướng đi của PC (Được quyết định ở tầng EX)
   assign if_next_pc = (jump_taken)   ? jump_target :
@@ -209,7 +207,7 @@ module cpu_top (
   wire [3:0]  we_dmem;
   wire [31:0] dmem_rd, gpio_rd, uart_rd, i2c_rd, mem_read_data;
 
-  assign i2c_rd = 32'd0;
+  wire i2c_tick;
 
   // 1. CĂN CHỈNH GHI (SB, SH, SW)
   reg [3:0]  mem_we_mask;
@@ -258,6 +256,15 @@ module cpu_top (
     .clk(clk), .rst_n(rst_n), .we(we_uart), .re(uart_read),
     .a(mem_alu_result), .wd(mem_store_data), .rx(uart_rx_in),
     .rd(uart_rd), .tx(uart_tx_out)
+  );
+
+  clock_enable_divider #(.divider(27)) i2c_clock_enable (
+    .clk(clk), .rst_n(rst_n), .tick(i2c_tick)
+  );
+
+  i2c_mmio lcd_port (
+    .clk(clk), .tick(i2c_tick), .rst_n(rst_n), .we(we_i2c), .a(mem_alu_result),
+    .wd(mem_store_data), .rd(i2c_rd), .sda(i2c_sda), .scl(i2c_scl)
   );
 
   // 2. CĂN CHỈNH ĐỌC (LB, LBU, LH, LHU, LW)

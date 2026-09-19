@@ -5,6 +5,7 @@ repo_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 build_dir="$repo_dir/build/gowin"
 gowin_root=${GOWIN_ROOT:-}
 system_libstdcpp=${SYSTEM_LIBSTDCXX:-/usr/lib/x86_64-linux-gnu/libstdc++.so.6}
+system_libfreetype=${SYSTEM_FREETYPE:-/lib/x86_64-linux-gnu/libfreetype.so.6}
 
 if [[ -z "$gowin_root" ]]; then
   echo "GOWIN_ROOT must point to the extracted Gowin installation" >&2
@@ -24,6 +25,11 @@ if [[ ! -f "$system_libstdcpp" ]]; then
   exit 1
 fi
 
+if [[ ! -f "$system_libfreetype" ]]; then
+  echo "system libfreetype not found at $system_libfreetype" >&2
+  exit 1
+fi
+
 mkdir -p "$build_dir"
 ln -sfn "$repo_dir/src" "$build_dir/src"
 cd "$build_dir"
@@ -34,5 +40,5 @@ exec env -u DISPLAY \
   QT_QUICK_BACKEND=software \
   LIBGL_ALWAYS_SOFTWARE=1 \
   LD_LIBRARY_PATH="$gowin_lib_dir${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
-  LD_PRELOAD="$system_libstdcpp${LD_PRELOAD:+:$LD_PRELOAD}" \
+  LD_PRELOAD="$system_libstdcpp:$system_libfreetype${LD_PRELOAD:+:$LD_PRELOAD}" \
   "$gw_sh_bin" "$repo_dir/tools/build_gowin.tcl"

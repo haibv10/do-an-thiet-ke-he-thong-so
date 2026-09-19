@@ -1,5 +1,6 @@
 module lcd_write_cmd_data(
-    input       clk_1MHz,                   // 1 MHz = 1us clock
+    input       clk,
+    input       tick,
     input       rst_n,                      // active low reset
     input [7:0] data,                       // byte to write, could be command or data
     input       cmd_data,                   // 0 = command, 1 = data
@@ -8,6 +9,7 @@ module lcd_write_cmd_data(
     inout       sda,                        // bidirectional data line
     output      scl,                        // clock line
     output      done,                       // write done flag
+    output      ack,                        // final PCF8574 acknowledge result
     output      sda_en
 );
 
@@ -35,31 +37,36 @@ module lcd_write_cmd_data(
     reg         en_write;                   // enable write
     wire        en_i2cwrite = en_write;
     wire        i2c_done;                   // write done flag
+    wire        i2c_ack;
+    reg         ack_result;
     reg [7:0]   i2c_data;                   // data to write
 
     reg         start_frame;                // start frame flag: if set, generate start condition
     reg         stop_frame;                 // stop  frame flag: if set, generate stop  condition
 
     // microsecond counter
-    always @(posedge clk_1MHz, negedge rst_n) begin
+    always @(posedge clk, negedge rst_n) begin
         if (!rst_n)
             cnt <= 21'd0;
-        else if (cnt_clr)
-            cnt <= 21'd0;
-        else
-            cnt <= cnt + 1'b1;
+        else if (tick) begin
+            if (cnt_clr)
+                cnt <= 21'd0;
+            else
+                cnt <= cnt + 1'b1;
+        end
     end
 
     // reset logic
-    always @(posedge clk_1MHz, negedge rst_n) begin
+    always @(posedge clk, negedge rst_n) begin
         if (!rst_n)
             state <= WaitEn;
-        else
+        else if (tick)
             state <= next_state;
     end
 
     // next state logic
     always @(*) begin
+        next_state = WaitEn;
         if (!rst_n)
             next_state = WaitEn;                // reset state, wait for enable
         else begin
@@ -78,17 +85,19 @@ module lcd_write_cmd_data(
                 Write_LowNibble2:   next_state = Wait_Low2Done;
                 Wait_Low2Done:      next_state = i2c_done ? Done : Wait_Low2Done;
                 Done:               next_state = WaitEn;
+                default:            next_state = WaitEn;
             endcase
         end
     end
 
     // output logic
-    always @(posedge clk_1MHz, negedge rst_n) begin
+    always @(posedge clk, negedge rst_n) begin
         if (!rst_n) begin                   // setup initial state
             i2c_data <= 8'd0;
             en_write <= 1'b0;
             cnt_clr  <= 1'b1;
-        end else begin
+            ack_result <= 1'b0;
+        end else if (tick) begin
             case (state)
                 WaitEn: begin
                     i2c_data    <= 8'd0;
@@ -151,6 +160,7 @@ module lcd_write_cmd_data(
                 end
                 Wait_Low2Done: begin
                     en_write    <= 1'b0;                // disable write, wait for done
+                    ack_result <= i2c_ack;
                 end
             endcase
         end
@@ -158,9 +168,11 @@ module lcd_write_cmd_data(
 
     // done flag
     assign done = (state == Done);
+    assign ack = ack_result;
 
     i2c_writeframe i2c_writframe_inst(
-        .clk_1MHz   (clk_1MHz),
+        .clk        (clk),
+        .tick       (tick),
         .rst_n      (rst_n),
         .en_write   (en_i2cwrite),
         .start_frame(start_frame),
@@ -169,6 +181,7 @@ module lcd_write_cmd_data(
         .sda        (sda),
         .scl        (scl),
         .done       (i2c_done),
+        .ack        (i2c_ack),
         .sda_en     (sda_en)
     );
 

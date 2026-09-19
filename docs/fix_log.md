@@ -9,6 +9,8 @@ Entries are newest first.
 
 ## Contents
 
+- [2026-09-19 source layout](#2026-09-19-source-layout)
+  - [16. RTL and testbench paths no longer described ownership](#16-rtl-and-testbench-paths-no-longer-described-ownership)
 - [2026-09-19 review follow-up](#2026-09-19-review-follow-up)
   - [12. The coding style guide described a project that does not exist](#12-the-coding-style-guide-described-a-project-that-does-not-exist)
   - [13. Five modules had no unit test](#13-five-modules-had-no-unit-test)
@@ -27,6 +29,44 @@ Entries are newest first.
   - [8. The ROM image left words undefined past the end of the firmware](#8-the-rom-image-left-words-undefined-past-the-end-of-the-firmware)
   - [9. Documentation described the I2C defect incorrectly](#9-documentation-described-the-i2c-defect-incorrectly)
   - [10. The PCF8574 address was recorded as `0x21`](#10-the-pcf8574-address-was-recorded-as-0x21)
+
+---
+
+## 2026-09-19 source layout
+
+### 16. RTL and testbench paths no longer described ownership
+
+**Symptom.** The flat `src/` and `tb/` tree mixed CPU core, pipeline, memory,
+peripheral and reusable protocol code. After the physical trees were moved to
+`source/` and `sim/`, the build graph still named the removed `src/` and `tb/`
+paths, so the repository had no self-consistent source layout.
+
+**Fix.** CPU files now live in `source/cpu/` and use `cpu_`, `core_`, `pipe_`
+or `mem_` prefixes. SoC-specific MMIO adapters live in `source/peripheral/`,
+common modules in `source/common/`, and reusable I2C/UART blocks live in
+`libs/i2c/` and `libs/uart/` with their unit testbench beside them. CPU
+integration tests live in `sim/cpu/`; the remaining non-library tests are
+grouped by ownership under `sim/`.
+
+`tools/run_tests.sh`, `tools/build_gowin.tcl` and `fpga_project.gprj` now use
+the new paths and module names. README, design report, coding guide and firmware
+image helper now describe the same tree.
+
+**Simulation.** [`logs/09-source-layout-refactor.log`](../logs/09-source-layout-refactor.log)
+records 29/29 PASS. The only warning is the intentional short-image fixture in
+`mem_instruction_rom_tb`; it proves that ROM words beyond the fixture are
+zero-filled.
+
+**Build and programming.** The refactored tree was built and programmed after the
+simulation run. [`logs/10-source-layout-fpga-build.log`](../logs/10-source-layout-fpga-build.log)
+records P&R, timing analysis and bitstream generation complete with Fmax
+28.912 MHz, 0 setup/hold violations, 3321/8640 logic cells, 1594/6693 registers
+and 6/26 BSRAM. [`logs/11-source-layout-program-board.log`](../logs/11-source-layout-program-board.log)
+records SRAM programming at 100% with `Finished.`.
+
+**Status** — Fixed. This is a behavior-preserving refactor. Programming was
+verified, but no new UART/LCD capture was taken after the refactored bitstream
+was loaded; the functional board evidence remains `logs/05-board-uart.log`.
 
 ---
 

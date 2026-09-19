@@ -430,7 +430,7 @@ BOOT 5A5A5A5A 00000000
 
 `5A5A5A5A` is a `.data` global, so it reads back correctly only if `.data` was
 copied out of ROM. `00000000` is a `.bss` global, so it reads back as zero only
-if `.bss` was cleared. `tb/firmware_boot_tb.sv` decodes exactly these bytes off
+if `.bss` was cleared. `sim/cpu/cpu_firmware_boot_tb.sv` decodes exactly these bytes off
 the UART pin of the simulated SoC.
 
 Apart from the startup code the whole program uses nothing but `volatile`
@@ -507,20 +507,22 @@ and bitstream generation for the GW1NR-9C against the 27 MHz constraint in
 | BSRAM | 6 / 26 (24%) | IMEM dual-port, plus DMEM |
 | I/O ports | 8 / 71 (12%) | — |
 
-Raw log: `logs/02-fpga-build.log`.
+Raw log: `logs/10-source-layout-fpga-build.log`.
 
 ### Layer 3 — Board measurement
 
-The bitstream is written into the Tang Nano 9K SRAM over JTAG. The laptop talks
-to the board through an external USB-UART module at 115200 baud, 8N1, raw, no
-flow control.
+The bitstream is written into the Tang Nano 9K SRAM over JTAG. The refactored
+tree was programmed successfully at 100%; see `logs/11-source-layout-program-board.log`.
+The laptop talks to the board through an external USB-UART module at 115200 baud,
+8N1, raw, no flow control. No UART/LCD capture was taken after that programming
+step, so the functional rows below remain the earlier board evidence.
 
 | Stimulus | Result | Evidence |
 |---|---|---|
 | Reset with no device wired | repeated `I2C NACK` | `logs/06-fault-i2c-nack.log` |
 | Reset, firmware reading `.rodata` | `I2C ` followed by two `0x00` bytes | `logs/07-fault-rodata-null.log` |
 | Reset, hex formatter using the A-F branch | `I2C 2>` instead of `I2C 27` | `logs/08-fault-hex-branch.log` |
-| Reset, current firmware | `I2C 21` repeated, LCD shows `HELLO FPGA` | `logs/05-board-uart.log` |
+| Reset, fixed firmware before the source-layout refactor | `I2C 27` repeated, LCD shows `HELLO FPGA` | `logs/05-board-uart.log` |
 
 Earlier UART-only measurements with the echo firmware are recorded in
 `docs/verification/rv32i_pipeline.md`, including the finding that a 1024-byte
@@ -590,7 +592,7 @@ hardware deliberately does not impose one.
 
 ### The memory read path only gets half a clock period
 
-`dmem.v` and `imem.v` read on the falling edge so the result is settled before
+`mem_data_ram.v` and `mem_instruction_rom.v` read on the falling edge so the result is settled before
 the rising edge that captures it into MEM/WB. That keeps the design to one
 clock with no extra stall, but it gives the BSRAM output to register path
 18.518 ns instead of a full 37.037 ns, and it is what limits Fmax:
@@ -614,12 +616,11 @@ negligible, but it is the clearest performance improvement available.
 ## Appendix — repository layout
 
 ```text
-src/      SoC RTL: cpu_top, pipeline stages, alu, control_unit, regfile,
-          imm_gen, forwarding_unit, hazard_detection_unit, reset_sync,
-          imem, dmem, address_decoder, gpio, uart_tx, uart_rx, uart_mmio,
-          i2c_mmio, i2c_writeframe, lcd_write_cmd_data, clock_enable_divider
+source/   CPU RTL, peripherals and common modules. CPU files use the core_,
+          pipe_, mem_ and cpu_ prefixes by responsibility.
+libs/     Reusable I2C and UART RTL, each stored with its unit testbench.
 constr/   Pin (.cst) and timing (.sdc) constraints
-tb/       29 self-checking SystemVerilog testbenches
+sim/      CPU integration and non-library self-checking testbenches
 sw/       C firmware: main.c, startup.s, linker.ld, firmware.hex
 tools/    Scripts for firmware, bitstream, programming and tests
 docs/     Design report, register map, bring-up notes, verification results

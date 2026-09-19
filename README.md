@@ -135,7 +135,7 @@ Each prints `<name>: PASS`; the script stops at the first failure.
 bash tools/build_firmware.sh
 ```
 
-Compiles `sw/main.c` and `sw/startup.s` into `sw/firmware.hex`. `imem.v` reads
+Compiles `sw/main.c` and `sw/startup.s` into `sw/firmware.hex`. `mem_instruction_rom.v` reads
 that file with `$readmemh` at elaboration time, so rebuild the firmware before
 building a bitstream whenever the software changes.
 
@@ -214,17 +214,18 @@ FT2232 JTAG channel, are collected in [docs/bringup.md](docs/bringup.md).
 
 | Path | Contents |
 |---|---|
-| `src/` | SoC RTL. `cpu_top.v` is the top module |
+| `source/` | CPU RTL, peripherals and common modules. `source/cpu/cpu_top.v` is the top module |
+| `libs/` | Reusable protocol blocks. Each library keeps its RTL and unit testbench together |
 | `constr/` | Pin (`.cst`) and timing (`.sdc`) constraints |
 | `sw/` | C firmware, startup code, linker script and the built `firmware.hex` |
-| `tb/` | Self-checking SystemVerilog testbenches; `tb/support/` holds helpers and fixtures |
+| `sim/` | CPU integration and non-library testbenches; `sim/support/` holds helpers and fixtures |
 | `tools/` | Scripts for firmware, bitstream, programming and tests |
 | `docs/` | Design report, register map, bring-up notes, verification results |
 | `logs/` | Curated verification evidence — see [logs/README.md](logs/README.md) |
 | `rules/` | Coding style, commit and branching conventions |
 | `build/` | Generated output, not committed |
 
-`src/lcd_display.v` is a standalone 20x4 LCD sequencer kept for reference. It is
+`libs/i2c/i2c_lcd_20x4_refresh.v` is a standalone 20x4 LCD sequencer kept for reference. It is
 **not** instantiated by `cpu_top` and is not synthesized.
 
 ## Verification

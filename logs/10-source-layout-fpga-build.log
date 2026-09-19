@@ -1,0 +1,132 @@
+*** GOWIN Tcl Command Line Console  *** 
+Warning: Ignoring XDG_SESSION_TYPE=wayland on Gnome. Use QT_QPA_PLATFORM=wayland to run on Wayland anyway.
+current device: GW1NR-9C  GW1NR-LV9QN88PC6/I5
+add new file: "/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/source/cpu/cpu_top.v"
+add new file: "/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/source/cpu/core_pc.v"
+add new file: "/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/source/common/reset_sync.v"
+add new file: "/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/source/cpu/core_control.v"
+add new file: "/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/source/cpu/core_immediate.v"
+add new file: "/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/source/cpu/core_alu.v"
+add new file: "/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/source/cpu/core_regfile.v"
+add new file: "/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/source/cpu/pipe_if_id.v"
+add new file: "/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/source/cpu/pipe_id_ex.v"
+add new file: "/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/source/cpu/pipe_ex_mem.v"
+add new file: "/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/source/cpu/pipe_mem_wb.v"
+add new file: "/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/source/cpu/pipe_forwarding.v"
+add new file: "/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/source/cpu/pipe_hazard.v"
+add new file: "/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/source/cpu/mem_instruction_rom.v"
+add new file: "/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/source/cpu/mem_data_ram.v"
+add new file: "/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/source/cpu/cpu_address_decoder.v"
+add new file: "/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/source/peripheral/gpio_mmio.v"
+add new file: "/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/source/peripheral/uart_mmio.v"
+add new file: "/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/libs/uart/uart_tx.v"
+add new file: "/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/libs/uart/uart_rx.v"
+add new file: "/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/source/peripheral/pcf8574_lcd_mmio.v"
+add new file: "/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/libs/i2c/i2c_pcf8574_lcd_write.v"
+add new file: "/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/libs/i2c/i2c_write_frame.v"
+add new file: "/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/source/common/clock_enable.v"
+add new file: "/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/constr/fpga_project.cst"
+add new file: "/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/constr/fpga_project.sdc"
+GowinSynthesis start
+Running parser ...
+Analyzing Verilog file '/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/source/cpu/cpu_top.v'
+Analyzing Verilog file '/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/source/cpu/core_pc.v'
+Analyzing Verilog file '/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/source/common/reset_sync.v'
+Analyzing Verilog file '/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/source/cpu/core_control.v'
+Analyzing Verilog file '/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/source/cpu/core_immediate.v'
+Analyzing Verilog file '/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/source/cpu/core_alu.v'
+Analyzing Verilog file '/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/source/cpu/core_regfile.v'
+Analyzing Verilog file '/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/source/cpu/pipe_if_id.v'
+Analyzing Verilog file '/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/source/cpu/pipe_id_ex.v'
+Analyzing Verilog file '/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/source/cpu/pipe_ex_mem.v'
+Analyzing Verilog file '/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/source/cpu/pipe_mem_wb.v'
+Analyzing Verilog file '/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/source/cpu/pipe_forwarding.v'
+Analyzing Verilog file '/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/source/cpu/pipe_hazard.v'
+Analyzing Verilog file '/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/source/cpu/mem_instruction_rom.v'
+Analyzing Verilog file '/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/source/cpu/mem_data_ram.v'
+Analyzing Verilog file '/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/source/cpu/cpu_address_decoder.v'
+Analyzing Verilog file '/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/source/peripheral/gpio_mmio.v'
+Analyzing Verilog file '/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/source/peripheral/uart_mmio.v'
+Analyzing Verilog file '/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/libs/uart/uart_tx.v'
+Analyzing Verilog file '/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/libs/uart/uart_rx.v'
+Analyzing Verilog file '/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/source/peripheral/pcf8574_lcd_mmio.v'
+Analyzing Verilog file '/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/libs/i2c/i2c_pcf8574_lcd_write.v'
+Analyzing Verilog file '/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/libs/i2c/i2c_write_frame.v'
+Analyzing Verilog file '/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/source/common/clock_enable.v'
+Compiling module 'cpu_top'("/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/source/cpu/cpu_top.v":1)
+Compiling module 'reset_sync'("/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/source/common/reset_sync.v":9)
+Compiling module 'core_pc'("/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/source/cpu/core_pc.v":1)
+Compiling module 'mem_instruction_rom'("/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/source/cpu/mem_instruction_rom.v":4)
+Extracting RAM for identifier 'rom'("/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/source/cpu/mem_instruction_rom.v":15)
+Compiling module 'pipe_if_id'("/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/source/cpu/pipe_if_id.v":1)
+Compiling module 'pipe_hazard'("/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/source/cpu/pipe_hazard.v":1)
+Compiling module 'core_control'("/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/source/cpu/core_control.v":1)
+Compiling module 'core_immediate'("/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/source/cpu/core_immediate.v":1)
+Compiling module 'core_regfile'("/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/source/cpu/core_regfile.v":1)
+Compiling module 'pipe_id_ex'("/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/source/cpu/pipe_id_ex.v":1)
+Compiling module 'pipe_forwarding'("/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/source/cpu/pipe_forwarding.v":3)
+Compiling module 'core_alu'("/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/source/cpu/core_alu.v":1)
+Compiling module 'pipe_ex_mem'("/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/source/cpu/pipe_ex_mem.v":1)
+Compiling module 'cpu_address_decoder'("/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/source/cpu/cpu_address_decoder.v":1)
+Compiling module 'mem_data_ram'("/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/source/cpu/mem_data_ram.v":1)
+Extracting RAM for identifier 'ram'("/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/source/cpu/mem_data_ram.v":8)
+Compiling module 'gpio_mmio'("/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/source/peripheral/gpio_mmio.v":1)
+Compiling module 'uart_mmio'("/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/source/peripheral/uart_mmio.v":1)
+Compiling module 'uart_tx'("/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/libs/uart/uart_tx.v":1)
+Compiling module 'uart_rx'("/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/libs/uart/uart_rx.v":1)
+Compiling module 'clock_enable'("/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/source/common/clock_enable.v":1)
+Compiling module 'pcf8574_lcd_mmio'("/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/source/peripheral/pcf8574_lcd_mmio.v":1)
+Compiling module 'i2c_pcf8574_lcd_write'("/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/libs/i2c/i2c_pcf8574_lcd_write.v":10)
+Compiling module 'i2c_write_frame'("/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/libs/i2c/i2c_write_frame.v":4)
+Compiling module 'pipe_mem_wb'("/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/source/cpu/pipe_mem_wb.v":1)
+NOTE  (EX0101) : Current top module is "cpu_top"
+[5%] Running netlist conversion ...
+Running device independent optimization ...
+[10%] Optimizing Phase 0 completed
+[15%] Optimizing Phase 1 completed
+[25%] Optimizing Phase 2 completed
+Running inference ...
+[30%] Inferring Phase 0 completed
+[40%] Inferring Phase 1 completed
+[50%] Inferring Phase 2 completed
+[55%] Inferring Phase 3 completed
+Running technical mapping ...
+[60%] Tech-Mapping Phase 0 completed
+[65%] Tech-Mapping Phase 1 completed
+[75%] Tech-Mapping Phase 2 completed
+[80%] Tech-Mapping Phase 3 completed
+[90%] Tech-Mapping Phase 4 completed
+WARN  (NL0002) : The module "core_control" instantiated to "ctrl" is swept in optimizing("/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/source/cpu/cpu_top.v":91)
+WARN  (NL0002) : The module "core_immediate" instantiated to "ig" is swept in optimizing("/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/source/cpu/cpu_top.v":96)
+[95%] Generate netlist file "/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/build/gowin/impl/gwsynthesis/fpga_project.vg" completed
+[100%] Generate report file "/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/build/gowin/impl/gwsynthesis/fpga_project_syn.rpt.html" completed
+GowinSynthesis finish
+Reading netlist file: "/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/build/gowin/impl/gwsynthesis/fpga_project.vg"
+Parsing netlist file "/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/build/gowin/impl/gwsynthesis/fpga_project.vg" completed
+Processing netlist completed
+Reading constraint file: "/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/constr/fpga_project.cst"
+Physical Constraint parsed completed
+Running placement......
+[10%] Placement Phase 0 completed
+[20%] Placement Phase 1 completed
+[30%] Placement Phase 2 completed
+[50%] Placement Phase 3 completed
+Running routing......
+[60%] Routing Phase 0 completed
+[70%] Routing Phase 1 completed
+[80%] Routing Phase 2 completed
+[90%] Routing Phase 3 completed
+Running timing analysis......
+[95%] Timing analysis completed
+Placement and routing completed
+Bitstream generation in progress......
+Bitstream generation completed
+Running power analysis......
+[100%] Power analysis completed
+Generate file "/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/build/gowin/impl/pnr/fpga_project.power.html" completed
+Generate file "/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/build/gowin/impl/pnr/fpga_project.pin.html" completed
+Generate file "/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/build/gowin/impl/pnr/fpga_project.rpt.html" completed
+Generate file "/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/build/gowin/impl/pnr/fpga_project.rpt.txt" completed
+Generate file "/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/build/gowin/impl/pnr/fpga_project.tr.html" completed
+Sat Sep 19 18:54:08 2026
+

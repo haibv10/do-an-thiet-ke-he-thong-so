@@ -1,7 +1,8 @@
 `timescale 1ns/1ps
 
 module lcd_write_cmd_data_tb;
-  logic clk_1MHz = 1'b0;
+  logic clk = 1'b0;
+  wire tick;
   logic rst_n = 1'b0;
   logic [7:0] data = 8'h41;
   logic cmd_data = 1'b1;
@@ -9,8 +10,10 @@ module lcd_write_cmd_data_tb;
   logic [6:0] i2c_addr = 7'h27;
   tri1 sda;
   logic slave_drive_low = 1'b0;
-  logic scl;
+  logic ack_clock_seen = 1'b0;
+  tri1 scl;
   logic done;
+  logic ack;
   logic sda_en;
   logic [7:0] received_bytes [0:4];
   logic [7:0] current_byte = 8'h00;
@@ -22,7 +25,17 @@ module lcd_write_cmd_data_tb;
   integer ack_count = 0;
   integer index;
 
-  always #5 clk_1MHz = ~clk_1MHz;
+  always #5 clk = ~clk;
+
+  initial begin
+    #100000;
+    $fatal(1, "LCD timeout state=%0d count=%0d I2C state=%0d",
+           dut.state, dut.cnt, dut.i2c_writframe_inst.state);
+  end
+
+  clock_enable_divider #(.divider(4)) tick_divider (
+    .clk, .rst_n, .tick
+  );
 
   assign sda = slave_drive_low ? 1'b0 : 1'bz;
 
@@ -58,23 +71,29 @@ module lcd_write_cmd_data_tb;
     ack_count = ack_count + 1;
   end
 
+  always @(posedge scl)
+    if (slave_drive_low && !sda_en)
+      ack_clock_seen = 1'b1;
+
   always @(negedge scl)
-    if (slave_drive_low)
+    if (slave_drive_low && ack_clock_seen) begin
       slave_drive_low = 1'b0;
+      ack_clock_seen = 1'b0;
+    end
 
   initial begin
     for (index = 0; index < 5; index = index + 1)
       received_bytes[index] = 8'h00;
 
-    repeat (3) @(posedge clk_1MHz);
+    repeat (3) @(posedge clk);
     rst_n = 1'b1;
-    @(negedge clk_1MHz);
+    @(negedge clk);
     ena = 1'b1;
-    @(negedge clk_1MHz);
+    repeat (4) @(negedge clk);
     ena = 1'b0;
 
     wait (done === 1'b1);
-    @(posedge clk_1MHz);
+    @(posedge clk);
 
     if (byte_count != 5)
       $fatal(1, "expected 5 I2C bytes, got %0d", byte_count);
@@ -89,6 +108,8 @@ module lcd_write_cmd_data_tb;
              start_count, stop_count);
     if (ack_count != 5)
       $fatal(1, "expected 5 ACK cycles, got %0d", ack_count);
+    if (ack !== 1'b1)
+      $fatal(1, "expected final PCF8574 ACK");
 
     $display("lcd_write_cmd_data_tb: PASS");
     $finish;

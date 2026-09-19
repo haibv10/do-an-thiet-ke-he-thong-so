@@ -36,4 +36,16 @@ run_test pipe_mem_wb_tb src/pipe_mem_wb.v tb/pipe_mem_wb_tb.sv
 run_test uart_rx_tb src/uart_rx.v tb/uart_rx_tb.sv
 run_test uart_mmio_tb \
   src/uart_tx.v src/uart_rx.v src/uart_mmio.v tb/uart_mmio_tb.sv
+run_test clock_enable_divider_tb \
+  src/clock_enable_divider.v tb/clock_enable_divider_tb.sv
+run_test i2c_writeframe_tb \
+  src/clock_enable_divider.v src/i2c_writeframe.v tb/i2c_writeframe_tb.sv
+run_test lcd_write_cmd_data_tb \
+  src/clock_enable_divider.v src/i2c_writeframe.v src/lcd_write_cmd_data.v \
+  tb/lcd_write_cmd_data_tb.sv
+run_test lcd_display_tb src/lcd_display.v tb/lcd_display_tb.sv
+run_test i2c_mmio_tb \
+  src/clock_enable_divider.v src/i2c_writeframe.v \
+  src/lcd_write_cmd_data.v src/i2c_mmio.v tb/i2c_mmio_tb.sv
+run_test uart_loopback_top_tb src/uart_loopback_top.v tb/uart_loopback_top_tb.sv
 run_test cpu_top_tb src/*.v tb/cpu_top_tb.sv

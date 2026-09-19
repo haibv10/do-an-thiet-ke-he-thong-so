@@ -1,7 +1,8 @@
 `timescale 1ns/1ps
 
 module i2c_writeframe_tb;
-  logic clk_1MHz = 1'b0;
+  logic clk = 1'b0;
+  wire tick;
   logic rst_n = 1'b0;
   logic en_write = 1'b0;
   logic start_frame = 1'b0;
@@ -9,8 +10,11 @@ module i2c_writeframe_tb;
   logic [7:0] data = 8'h00;
   tri1 sda;
   logic slave_drive_low = 1'b0;
-  logic scl;
+  logic provide_ack = 1'b1;
+  logic ack_clock_seen = 1'b0;
+  tri1 scl;
   logic done;
+  logic ack;
   logic sda_en;
   logic [7:0] received_data = 8'h00;
   logic frame_active = 1'b0;
@@ -19,12 +23,23 @@ module i2c_writeframe_tb;
   integer stop_count = 0;
   integer ack_count = 0;
 
-  always #5 clk_1MHz = ~clk_1MHz;
+  always #5 clk = ~clk;
+
+  initial begin
+    #100000;
+    $fatal(1, "I2C timeout state=%0d count=%0d tick=%b ack=%b",
+           dut.state, dut.cnt, tick, ack);
+  end
+
+  clock_enable_divider #(.divider(4)) tick_divider (
+    .clk, .rst_n, .tick
+  );
 
   assign sda = slave_drive_low ? 1'b0 : 1'bz;
 
   i2c_writeframe dut (
-    .clk_1MHz,
+    .clk,
+    .tick,
     .rst_n,
     .en_write,
     .start_frame,
@@ -33,6 +48,7 @@ module i2c_writeframe_tb;
     .sda,
     .scl,
     .done,
+    .ack,
     .sda_en
   );
 
@@ -57,29 +73,37 @@ module i2c_writeframe_tb;
 
   // Acknowledge after the controller releases SDA for the ACK bit.
   always @(negedge sda_en) begin
-    slave_drive_low = 1'b1;
-    ack_count = ack_count + 1;
+    if (provide_ack) begin
+      slave_drive_low = 1'b1;
+      ack_count = ack_count + 1;
+    end
   end
 
   // Release SDA after the ACK clock pulse so the pull-up restores logic 1.
+  always @(posedge scl)
+    if (slave_drive_low && !sda_en)
+      ack_clock_seen = 1'b1;
+
   always @(negedge scl)
-    if (slave_drive_low)
+    if (slave_drive_low && ack_clock_seen) begin
       slave_drive_low = 1'b0;
+      ack_clock_seen = 1'b0;
+    end
 
   initial begin
-    repeat (3) @(posedge clk_1MHz);
+    repeat (3) @(posedge clk);
     rst_n = 1'b1;
 
-    @(negedge clk_1MHz);
+    @(negedge clk);
     data = 8'hA5;
     start_frame = 1'b1;
     stop_frame = 1'b1;
     en_write = 1'b1;
-    @(negedge clk_1MHz);
+    repeat (4) @(negedge clk);
     en_write = 1'b0;
 
     wait (done === 1'b1);
-    @(posedge clk_1MHz);
+    @(posedge clk);
 
     if (received_bits != 8)
       $fatal(1, "expected 8 data bits, got %0d", received_bits);
@@ -91,6 +115,25 @@ module i2c_writeframe_tb;
       $fatal(1, "expected one STOP, got %0d", stop_count);
     if (ack_count != 1)
       $fatal(1, "expected one ACK cycle, got %0d", ack_count);
+    if (ack !== 1'b1)
+      $fatal(1, "expected ACK result");
+
+    wait (done === 1'b0);
+    @(negedge clk);
+    provide_ack = 1'b0;
+    data = 8'h5A;
+    start_frame = 1'b1;
+    stop_frame = 1'b1;
+    en_write = 1'b1;
+    repeat (4) @(negedge clk);
+    en_write = 1'b0;
+    wait (done === 1'b1);
+    @(posedge clk);
+
+    if (ack !== 1'b0)
+      $fatal(1, "expected NACK result");
+    if (ack_count != 1)
+      $fatal(1, "unexpected ACK during NACK transfer");
 
     $display("i2c_writeframe_tb: PASS");
     $finish;

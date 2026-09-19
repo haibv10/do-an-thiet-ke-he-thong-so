@@ -2,16 +2,13 @@ module pipe_mem_wb (
   input  wire        clk,
   input  wire        rst_n,
 
-  // --- Control signals ---
   input  wire        mem_RegWrite,
   input  wire        mem_MemtoReg,
 
-  // --- Inputs from the MEM stage ---
-  input  wire [31:0] mem_read_data,   // data read from RAM or a peripheral
-  input  wire [31:0] mem_alu_result,  // ALU result, passed through
-  input  wire [4:0]  mem_rd_idx,      // destination register index
+  input  wire [31:0] mem_read_data,
+  input  wire [31:0] mem_alu_result,
+  input  wire [4:0]  mem_rd_idx,
 
-  // --- Outputs to the WB stage ---
   output reg         wb_RegWrite,
   output reg         wb_MemtoReg,
 

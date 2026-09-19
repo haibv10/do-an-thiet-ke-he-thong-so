@@ -1,50 +1,59 @@
+// One HD44780 byte over a PCF8574 backpack.
+//
+// The backpack wires the expander to the display as
+//   P7..P4 = DB7..DB4, P3 = backlight, P2 = EN, P1 = RW, P0 = RS
+// so the bus is 4 bits wide and the display latches a nibble on the falling
+// edge of EN. That costs five I2C frames per byte: the slave address, then the
+// high nibble with EN high and again with EN low, then the same for the low
+// nibble. Only the first frame opens with a START and only the last closes with
+// a STOP, so all five stay inside one bus session.
 module lcd_write_cmd_data(
     input       clk,
     input       tick,
-    input       rst_n,                      // active low reset
-    input [7:0] data,                       // byte to write, could be command or data
-    input       cmd_data,                   // 0 = command, 1 = data
-    input       ena,                        // enable write flag
-    input [6:0] i2c_addr,                   // PCF8574 i2c address. Texas Instrument's: 0x27 (0 1 0 0 A2 A1 A0). NXP's: 0x3F (0 1 1 1 A2 A1 A0)
-    inout       sda,                        // bidirectional data line
-    output      scl,                        // clock line
-    output      done,                       // write done flag
-    output      ack,                        // final PCF8574 acknowledge result
+    input       rst_n,
+    input [7:0] data,
+    input       cmd_data,                   // 0 = command, 1 = character data
+    input       ena,
+    input [6:0] i2c_addr,                   // strap pins select it: 0x20-0x27 on a PCF8574, 0x38-0x3F on a PCF8574A
+    inout       sda,
+    output      scl,
+    output      done,
+    output      ack,
     output      sda_en
 );
 
-    localparam  DELAY               = 50;   // 50us delay for LCD to process command
-    reg [20:0]  cnt;                        // counter
-    reg         cnt_clr;                    // counter clear flag
+    // The HD44780 needs roughly 40 us to retire most commands and gives no
+    // status over this one-way 4-bit link, so the delay is open loop.
+    localparam  DELAY               = 50;
+    reg [20:0]  cnt;
+    reg         cnt_clr;
 
-    // FSM states
-    localparam  WaitEn              = 0,    // wait for enable
-                Write_Addr          = 1,    // write i2c address
-                Wait_AddrDone       = 2,    // wait for address write done
-                Write_HighNibble1   = 3,    // write high nibble and make enable high
-                Wait_High1Done      = 4,    // wait for done write
-                Delay_CMD1          = 5,    // delay for lcd to process command
-                Write_HighNibble2   = 6,    // make enable low (generate high to low EN pulse) to write high nibble
-                Wait_High2Done      = 7,    // wait for done write
-                Write_LowNibble1    = 8,    // write low nibble and make enable high
-                Wait_Low1Done       = 9,    // wait for done write
-                Delay_CMD2          = 10,   // delay for lcd to process command
-                Write_LowNibble2    = 11,   // make enable low (generate high to low EN pulse) to write low nibble
-                Wait_Low2Done       = 12,   // wait for done write
-                Done                = 13;   // done
-    
+    localparam  WaitEn              = 0,
+                Write_Addr          = 1,
+                Wait_AddrDone       = 2,
+                Write_HighNibble1   = 3,
+                Wait_High1Done      = 4,
+                Delay_CMD1          = 5,
+                Write_HighNibble2   = 6,
+                Wait_High2Done      = 7,
+                Write_LowNibble1    = 8,
+                Wait_Low1Done       = 9,
+                Delay_CMD2          = 10,
+                Write_LowNibble2    = 11,
+                Wait_Low2Done       = 12,
+                Done                = 13;
+
     reg [3:0]   state, next_state;
-    reg         en_write;                   // enable write
+    reg         en_write;
     wire        en_i2cwrite = en_write;
-    wire        i2c_done;                   // write done flag
+    wire        i2c_done;
     wire        i2c_ack;
     reg         ack_result;
-    reg [7:0]   i2c_data;                   // data to write
+    reg [7:0]   i2c_data;
 
-    reg         start_frame;                // start frame flag: if set, generate start condition
-    reg         stop_frame;                 // stop  frame flag: if set, generate stop  condition
+    reg         start_frame;
+    reg         stop_frame;
 
-    // microsecond counter
     always @(posedge clk, negedge rst_n) begin
         if (!rst_n)
             cnt <= 21'd0;
@@ -56,7 +65,6 @@ module lcd_write_cmd_data(
         end
     end
 
-    // reset logic
     always @(posedge clk, negedge rst_n) begin
         if (!rst_n)
             state <= WaitEn;
@@ -64,11 +72,10 @@ module lcd_write_cmd_data(
             state <= next_state;
     end
 
-    // next state logic
     always @(*) begin
         next_state = WaitEn;
         if (!rst_n)
-            next_state = WaitEn;                // reset state, wait for enable
+            next_state = WaitEn;
         else begin
             case (state)
                 WaitEn:             next_state = ena ? Write_Addr : WaitEn;
@@ -90,9 +97,8 @@ module lcd_write_cmd_data(
         end
     end
 
-    // output logic
     always @(posedge clk, negedge rst_n) begin
-        if (!rst_n) begin                   // setup initial state
+        if (!rst_n) begin
             i2c_data <= 8'd0;
             en_write <= 1'b0;
             cnt_clr  <= 1'b1;
@@ -105,68 +111,63 @@ module lcd_write_cmd_data(
                     cnt_clr     <= 1'b1;
                 end
                 Write_Addr: begin
-                    start_frame <= 1'b1;                // before writing i2c address, generate start condition
+                    start_frame <= 1'b1;
                     stop_frame  <= 1'b0;
-                    i2c_data    <= {i2c_addr, 1'b0};    // append write bit after i2c address
-                    en_write    <= 1'b1;                // enable write
+                    i2c_data    <= {i2c_addr, 1'b0};    // bit 0 low marks the transfer as a write
+                    en_write    <= 1'b1;
                 end
                 Wait_AddrDone: begin
-                    en_write    <= 1'b0;                // disable write, wait for done
+                    en_write    <= 1'b0;
                 end
                 Write_HighNibble1: begin
                     start_frame <= 1'b0;
                     stop_frame  <= 1'b0;
-                    // P7 P6 P5 P4 P3 P2 P1 P0 - DB7 DB6 DB5 DB4 BL EN RW RS - D7 D6 D5 D4 1 1 0 RS
-                    i2c_data    <= (data & 8'hF0) | 8'h0C | cmd_data;
-                    en_write    <= 1'b1;                // enable write
+                    i2c_data    <= (data & 8'hF0) | 8'h0C | cmd_data;   // high nibble, EN high
+                    en_write    <= 1'b1;
                 end
                 Wait_High1Done: begin
-                    en_write    <= 1'b0;                // disable write, wait for done
+                    en_write    <= 1'b0;
                 end
                 Delay_CMD1: begin
-                    cnt_clr     <= 1'b0;                // delay for LCD to process comm
+                    cnt_clr     <= 1'b0;
                 end
                 Write_HighNibble2: begin
                     start_frame <= 1'b0;
                     stop_frame  <= 1'b0;
-                    // P7 P6 P5 P4 P3 P2 P1 P0 - DB7 DB6 DB5 DB4 BL EN RW RS - D7 D6 D5 D4 1 0 0 RS
-                    i2c_data    <= ((data & 8'hF0) | 8'h0C | cmd_data) & 8'hFB;
-                    en_write    <= 1'b1;                // enable write
-                    cnt_clr     <= 1'b1;                // clear counter
+                    i2c_data    <= ((data & 8'hF0) | 8'h0C | cmd_data) & 8'hFB; // EN low latches it
+                    en_write    <= 1'b1;
+                    cnt_clr     <= 1'b1;
                 end
                 Wait_High2Done: begin
-                    en_write    <= 1'b0;                // disable write, wait for done
+                    en_write    <= 1'b0;
                 end
-                Write_LowNibble1: begin              
+                Write_LowNibble1: begin
                     start_frame <= 1'b0;
                     stop_frame  <= 1'b0;
-                    // P7 P6 P5 P4 P3 P2 P1 P0 - DB7 DB6 DB5 DB4 BL EN RW RS - D3 D2 D1 D0 1 1 0 RS
-                    i2c_data    <= ((data & 8'h0F) << 4) | 8'h0C | cmd_data;
-                    en_write    <= 1'b1;                
+                    i2c_data    <= ((data & 8'h0F) << 4) | 8'h0C | cmd_data;    // low nibble, EN high
+                    en_write    <= 1'b1;
                 end
                 Wait_Low1Done: begin
-                    en_write    <= 1'b0;                // disable write, wait for done
+                    en_write    <= 1'b0;
                 end
                 Delay_CMD2: begin
-                    cnt_clr     <= 1'b0;                // delay for LCD to process comm
+                    cnt_clr     <= 1'b0;
                 end
                 Write_LowNibble2: begin
                     start_frame <= 1'b0;
-                    stop_frame  <= 1'b1;                // after writing low nibble, generate stop condition
-                    // P7 P6 P5 P4 P3 P2 P1 P0 - DB7 DB6 DB5 DB4 BL EN RW RS - D3 D2 D1 D0 1 0 0 RS
-                    i2c_data    <= (((data & 8'h0F) << 4) | 8'h0C | cmd_data) & 8'hFB;
-                    en_write    <= 1'b1;                // enable write
-                    cnt_clr     <= 1'b1;                // clear counter
+                    stop_frame  <= 1'b1;                // last frame of the byte, so close the session
+                    i2c_data    <= (((data & 8'h0F) << 4) | 8'h0C | cmd_data) & 8'hFB; // EN low latches it
+                    en_write    <= 1'b1;
+                    cnt_clr     <= 1'b1;
                 end
                 Wait_Low2Done: begin
-                    en_write    <= 1'b0;                // disable write, wait for done
+                    en_write    <= 1'b0;
                     ack_result <= i2c_ack;
                 end
             endcase
         end
     end
 
-    // done flag
     assign done = (state == Done);
     assign ack = ack_result;
 

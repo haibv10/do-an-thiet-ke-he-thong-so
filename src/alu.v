@@ -12,12 +12,12 @@ module alu (
       4'b0111: result = a & b;                               // AND
       4'b0110: result = a | b;                               // OR
       4'b0100: result = a ^ b;                               // XOR
-      4'b0001: result = a << b[4:0];                         // SLL (shift left logical)
-      4'b0101: result = a >> b[4:0];                         // SRL (shift right logical)
-      4'b1101: result = $signed(a) >>> b[4:0];               // SRA (shift right arithmetic)
-      4'b0010: result = ($signed(a) < $signed(b)) ? 32'd1 : 32'd0; // SLT (set on less than, signed)
-      4'b0011: result = (a < b) ? 32'd1 : 32'd0;             // SLTU (set on less than, unsigned)
-      4'b1111: result = b;                                   // LUI (pass the immediate straight through)
+      4'b0001: result = a << b[4:0];                         // SLL
+      4'b0101: result = a >> b[4:0];                         // SRL
+      4'b1101: result = $signed(a) >>> b[4:0];               // SRA
+      4'b0010: result = ($signed(a) < $signed(b)) ? 32'd1 : 32'd0; // SLT
+      4'b0011: result = (a < b) ? 32'd1 : 32'd0;             // SLTU
+      4'b1111: result = b;                                   // LUI
       default: result = 32'd0;
     endcase
   end

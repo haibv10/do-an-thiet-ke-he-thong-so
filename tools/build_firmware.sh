@@ -25,6 +25,7 @@ cd "$build_dir"
   -mabi=ilp32 \
   -nostdlib \
   -O1 \
+  -msmall-data-limit=0 \
   -T "$sw_dir/linker.ld" \
   -Wl,-Map=firmware.map \
   "$sw_dir/startup.s" "$sw_dir/main.c" \

@@ -22,53 +22,44 @@ run_test() {
   vvp "$test_build_dir/$top.vvp"
 }
 
-# --- CPU: combinational and decode blocks ---
-run_test alu_tb          src/alu.v          tb/alu_tb.sv
-run_test control_unit_tb src/control_unit.v tb/control_unit_tb.sv
-run_test imm_gen_tb      src/imm_gen.v      tb/imm_gen_tb.sv
-run_test regfile_tb      src/regfile.v      tb/regfile_tb.sv
-run_test pc_reg_tb       src/pc_reg.v       tb/pc_reg_tb.sv
+# --- CPU core ---
+run_test core_alu_tb       source/cpu/core_alu.v       sim/core/core_alu_tb.sv
+run_test core_control_tb   source/cpu/core_control.v   sim/core/core_control_tb.sv
+run_test core_immediate_tb source/cpu/core_immediate.v sim/core/core_immediate_tb.sv
+run_test core_regfile_tb   source/cpu/core_regfile.v   sim/core/core_regfile_tb.sv
+run_test core_pc_tb        source/cpu/core_pc.v        sim/core/core_pc_tb.sv
 
-run_test reset_sync_tb   src/reset_sync.v   tb/reset_sync_tb.sv
+# --- Common and pipeline ---
+run_test reset_sync_tb source/common/reset_sync.v sim/common/reset_sync_tb.sv
+run_test clock_enable_tb source/common/clock_enable.v sim/common/clock_enable_tb.sv
+run_test pipe_forwarding_tb source/cpu/pipe_forwarding.v sim/core/pipe_forwarding_tb.sv
+run_test pipe_hazard_tb source/cpu/pipe_hazard.v sim/core/pipe_hazard_tb.sv
+run_test pipe_if_id_tb source/cpu/pipe_if_id.v sim/core/pipe_if_id_tb.sv
+run_test pipe_id_ex_tb source/cpu/pipe_id_ex.v sim/core/pipe_id_ex_tb.sv
+run_test pipe_ex_mem_tb source/cpu/pipe_ex_mem.v sim/core/pipe_ex_mem_tb.sv
+run_test pipe_mem_wb_tb source/cpu/pipe_mem_wb.v sim/core/pipe_mem_wb_tb.sv
 
-# --- CPU: hazard handling and pipeline registers ---
-run_test forwarding_unit_tb        src/forwarding_unit.v        tb/forwarding_unit_tb.sv
-run_test hazard_detection_unit_tb  src/hazard_detection_unit.v  tb/hazard_detection_unit_tb.sv
-run_test pipe_if_id_tb             src/pipe_if_id.v             tb/pipe_if_id_tb.sv
-run_test pipe_id_ex_tb             src/pipe_id_ex.v             tb/pipe_id_ex_tb.sv
-run_test pipe_ex_mem_tb            src/pipe_ex_mem.v            tb/pipe_ex_mem_tb.sv
-run_test pipe_mem_wb_tb            src/pipe_mem_wb.v            tb/pipe_mem_wb_tb.sv
+# --- Memory, bus, and peripherals ---
+run_test cpu_address_decoder_tb source/cpu/cpu_address_decoder.v sim/cpu/cpu_address_decoder_tb.sv
+run_test mem_data_ram_tb source/cpu/mem_data_ram.v sim/memory/mem_data_ram_tb.sv
+run_test mem_instruction_rom_tb source/cpu/mem_instruction_rom.v sim/memory/mem_instruction_rom_tb.sv
+run_test gpio_mmio_tb source/peripheral/gpio_mmio.v sim/peripheral/gpio_mmio_tb.sv
+run_test uart_tx_tb libs/uart/uart_tx.v libs/uart/uart_tx_tb.sv
+run_test uart_rx_tb libs/uart/uart_rx.v libs/uart/uart_rx_tb.sv
+run_test uart_mmio_tb libs/uart/uart_tx.v libs/uart/uart_rx.v source/peripheral/uart_mmio.v sim/peripheral/uart_mmio_tb.sv
+run_test i2c_write_frame_tb source/common/clock_enable.v libs/i2c/i2c_write_frame.v libs/i2c/i2c_write_frame_tb.sv
+run_test i2c_pcf8574_lcd_write_tb \
+  source/common/clock_enable.v libs/i2c/i2c_write_frame.v libs/i2c/i2c_pcf8574_lcd_write.v \
+  libs/i2c/i2c_pcf8574_lcd_write_tb.sv
+run_test pcf8574_lcd_mmio_tb \
+  source/common/clock_enable.v libs/i2c/i2c_write_frame.v libs/i2c/i2c_pcf8574_lcd_write.v \
+  source/peripheral/pcf8574_lcd_mmio.v sim/peripheral/pcf8574_lcd_mmio_tb.sv
+run_test i2c_lcd_20x4_refresh_tb libs/i2c/i2c_lcd_20x4_refresh.v libs/i2c/i2c_lcd_20x4_refresh_tb.sv
 
-# --- Memory and bus ---
-run_test address_decoder_tb src/address_decoder.v tb/address_decoder_tb.sv
-run_test dmem_tb            src/dmem.v            tb/dmem_tb.sv
-run_test imem_tb            src/imem.v            tb/imem_tb.sv
-
-# --- Peripherals: GPIO ---
-run_test gpio_tb src/gpio.v tb/gpio_tb.sv
-
-# --- Peripherals: UART ---
-run_test uart_tx_tb   src/uart_tx.v tb/uart_tx_tb.sv
-run_test uart_rx_tb   src/uart_rx.v tb/uart_rx_tb.sv
-run_test uart_mmio_tb src/uart_tx.v src/uart_rx.v src/uart_mmio.v tb/uart_mmio_tb.sv
-
-# --- Peripherals: I2C and LCD ---
-run_test clock_enable_divider_tb src/clock_enable_divider.v tb/clock_enable_divider_tb.sv
-run_test i2c_writeframe_tb \
-  src/clock_enable_divider.v src/i2c_writeframe.v tb/i2c_writeframe_tb.sv
-run_test lcd_write_cmd_data_tb \
-  src/clock_enable_divider.v src/i2c_writeframe.v src/lcd_write_cmd_data.v \
-  tb/lcd_write_cmd_data_tb.sv
-run_test i2c_mmio_tb \
-  src/clock_enable_divider.v src/i2c_writeframe.v \
-  src/lcd_write_cmd_data.v src/i2c_mmio.v tb/i2c_mmio_tb.sv
-run_test lcd_display_tb src/lcd_display.v tb/lcd_display_tb.sv
-
-# --- Full SoC integration ---
-run_test cpu_top_tb      src/*.v tb/cpu_top_tb.sv
-run_test cpu_hazard_tb   src/*.v tb/cpu_hazard_tb.sv
-run_test cpu_auipc_tb    src/*.v tb/cpu_auipc_tb.sv
-run_test uart_hex_cpu_tb src/*.v tb/uart_hex_cpu_tb.sv
-
-# --- End to end: the real firmware image on the real SoC ---
-run_test firmware_boot_tb src/*.v tb/firmware_boot_tb.sv
+# --- CPU integration ---
+cpu_sources=(source/cpu/*.v source/peripheral/*.v source/common/*.v libs/i2c/*.v libs/uart/*.v)
+run_test cpu_top_tb "${cpu_sources[@]}" sim/cpu/cpu_top_tb.sv
+run_test cpu_hazard_tb "${cpu_sources[@]}" sim/cpu/cpu_hazard_tb.sv
+run_test cpu_auipc_tb "${cpu_sources[@]}" sim/cpu/cpu_auipc_tb.sv
+run_test cpu_uart_hex_tb "${cpu_sources[@]}" sim/cpu/cpu_uart_hex_tb.sv
+run_test cpu_firmware_boot_tb "${cpu_sources[@]}" sim/cpu/cpu_firmware_boot_tb.sv

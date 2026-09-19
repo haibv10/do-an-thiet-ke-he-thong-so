@@ -9,6 +9,7 @@ set_device -name GW1NR-9C GW1NR-LV9QN88PC6/I5
 # --- CPU core ---
 add_file [file join $repo_dir src cpu_top.v]
 add_file [file join $repo_dir src pc_reg.v]
+add_file [file join $repo_dir src reset_sync.v]
 add_file [file join $repo_dir src control_unit.v]
 add_file [file join $repo_dir src imm_gen.v]
 add_file [file join $repo_dir src alu.v]

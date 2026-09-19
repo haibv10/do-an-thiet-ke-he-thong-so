@@ -28,6 +28,8 @@ run_test control_unit_tb src/control_unit.v tb/control_unit_tb.sv
 run_test imm_gen_tb      src/imm_gen.v      tb/imm_gen_tb.sv
 run_test regfile_tb      src/regfile.v      tb/regfile_tb.sv
 
+run_test reset_sync_tb   src/reset_sync.v   tb/reset_sync_tb.sv
+
 # --- CPU: hazard handling and pipeline registers ---
 run_test forwarding_unit_tb        src/forwarding_unit.v        tb/forwarding_unit_tb.sv
 run_test hazard_detection_unit_tb  src/hazard_detection_unit.v  tb/hazard_detection_unit_tb.sv
@@ -35,6 +37,9 @@ run_test pipe_if_id_tb             src/pipe_if_id.v             tb/pipe_if_id_tb
 run_test pipe_id_ex_tb             src/pipe_id_ex.v             tb/pipe_id_ex_tb.sv
 run_test pipe_ex_mem_tb            src/pipe_ex_mem.v            tb/pipe_ex_mem_tb.sv
 run_test pipe_mem_wb_tb            src/pipe_mem_wb.v            tb/pipe_mem_wb_tb.sv
+
+# --- Peripherals: GPIO ---
+run_test gpio_tb src/gpio.v tb/gpio_tb.sv
 
 # --- Peripherals: UART ---
 run_test uart_rx_tb   src/uart_rx.v tb/uart_rx_tb.sv

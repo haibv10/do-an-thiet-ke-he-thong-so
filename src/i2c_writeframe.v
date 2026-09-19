@@ -46,6 +46,7 @@ module i2c_writeframe(
     reg         sda_out;
     reg         scl_drive_low;
     wire        sda_in;
+    reg         sda_meta, sda_sync;
 
     // Open drain: the master only ever pulls a line down and lets the external
     // pull-up provide the high level, so a slave stretching SCL or acking on SDA
@@ -53,6 +54,20 @@ module i2c_writeframe(
     assign sda = sda_en ? (~sda_out ? 1'b0 : 1'bz) : 1'bz;
     assign scl = scl_drive_low ? 1'b0 : 1'bz;
     assign sda_in = sda;
+
+    // The slave releases or holds sda on its own timing, so the ack bit is
+    // resynchronised before it is sampled. Free running on clk, not on tick,
+    // because metastability has to settle in clock cycles. Two cycles cost 74 ns
+    // against a 10 us state, so the sample still lands well inside Ack1.
+    always @(posedge clk, negedge rst_n) begin
+        if (!rst_n) begin
+            sda_meta <= 1'b1;
+            sda_sync <= 1'b1;
+        end else begin
+            sda_meta <= sda_in;
+            sda_sync <= sda_meta;
+        end
+    end
 
     always @(posedge clk, negedge rst_n) begin
         if (!rst_n)
@@ -149,7 +164,7 @@ module i2c_writeframe(
                 end
                 Ack1: begin
                     scl_drive_low <= 1'b0;
-                    ack     <= (sda_in == 1'b0);
+                    ack     <= (sda_sync == 1'b0);
                     cnt_clr <= (cnt == DELAY-1) ? 1'b1 : 1'b0;
                 end
                 Ack2: begin

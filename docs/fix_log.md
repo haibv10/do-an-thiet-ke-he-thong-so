@@ -9,6 +9,8 @@ Entries are newest first.
 
 ## Contents
 
+- [2026-09-19 asynchronous inputs](#2026-09-19-asynchronous-inputs)
+  - [11. External inputs reached the clock domain unsynchronised](#11-external-inputs-reached-the-clock-domain-unsynchronised)
 - [2026-09-19 review](#2026-09-19-review)
   - [1. The register file had no write-first bypass](#1-the-register-file-had-no-write-first-bypass)
   - [2. I2C never generated a STOP condition](#2-i2c-never-generated-a-stop-condition)
@@ -20,6 +22,108 @@ Entries are newest first.
   - [8. The ROM image left words undefined past the end of the firmware](#8-the-rom-image-left-words-undefined-past-the-end-of-the-firmware)
   - [9. Documentation described the I2C defect incorrectly](#9-documentation-described-the-i2c-defect-incorrectly)
   - [10. The PCF8574 address was recorded as `0x21`](#10-the-pcf8574-address-was-recorded-as-0x21)
+
+---
+
+## 2026-09-19 asynchronous inputs
+
+One finding, in three places. Nothing here showed up as a failure in simulation
+or on the board, which is the point: metastability is a probabilistic fault that
+a directed test cannot provoke.
+
+### 11. External inputs reached the clock domain unsynchronised
+
+**Severity** — High. Intermittent, unreproducible misbehaviour.
+
+**Symptom.** Three signals that have no relationship to the 27 MHz clock were
+consumed directly.
+
+`rst_n` comes off a mechanical button on pin 3 and drove the asynchronous reset
+pin of every sequential block in the design:
+
+```verilog
+always @(posedge clk or negedge rst_n)   // in fifteen modules
+```
+
+Asserting that way is correct and deliberate. Releasing that way is not: the
+rising edge lands wherever the button happens to bounce, so recovery and removal
+cannot be met and nothing guarantees that all 1588 registers leave reset on the
+same cycle. A pipeline that comes out of reset half in one state and half in
+another produces exactly the kind of symptom that gets misdiagnosed as an RTL
+bug.
+
+`btn_in`, also a mechanical button, was read combinationally straight into the
+GPIO read mux, so a press landing near a clock edge could hand the CPU a
+metastable bit. `sda` was sampled for the ACK bit directly off the pad, and the
+PCF8574 drives it on its own timing.
+
+`uart_rx_in` was already synchronised with a two-stage chain, so the technique
+was present in the design; it had just not been applied evenly.
+
+**Fix.**
+
+- add [`src/reset_sync.v`](../src/reset_sync.v): asynchronous assert, release
+  gated through a two-stage chain, and route every module's `rst_n` through it
+- synchronise `btn_in` in [`src/gpio.v`](../src/gpio.v) before software can read
+  it, resetting the chain high because the button is active low with a pull-up
+- synchronise `sda` in [`src/i2c_writeframe.v`](../src/i2c_writeframe.v) before
+  the ACK sample, free running on `clk` rather than on the 1 MHz tick, since
+  metastability settles in clock cycles
+
+**Verification.** `tb/reset_sync_tb.sv` checks the asymmetry directly: the
+output falls when the pin is dropped between clock edges, stays low across five
+edges while the pin is held, does not move when the pin is released between
+edges, and rises only after the chain has clocked twice. It then repeats the
+whole cycle, so the chain is not one-shot.
+
+`tb/gpio_tb.sv` is new and covers the button path end to end, including that a
+pin change is invisible after one clock edge and visible after two.
+
+```
+reset_sync_tb: PASS
+gpio_tb: PASS
+```
+
+Board behaviour is unchanged, as expected: this removes a failure mode rather
+than a failure.
+
+**Cost.** Six registers, and timing margin.
+
+| Metric | Before | After |
+|---|---|---|
+| Actual Fmax | 31.762 MHz | 28.912 MHz |
+| Margin over the 27 MHz oscillator | 18% | 7% |
+| Setup / hold violated endpoints | 0 / 0 | 0 / 0 |
+| Logic | 3343 / 8640 | 3321 / 8640 |
+| Registers | 1588 / 6693 | 1594 / 6693 |
+
+The binding path is not the reset. Place and route reports it as
+
+```
+ram/ram_3_ram_3_0_0_s/DO[7]  ->  reg_mem_wb/wb_read_data_28_s0/D
+clk:[F] -> clk:[R]   relation 18.518 ns   slack 1.225 ns
+```
+
+which is the DMEM read: `dmem.v` reads on the falling edge and MEM/WB captures
+on the next rising edge, so that path gets half a clock period rather than a
+whole one. Nothing in this change touches it. The reset net itself sits on a
+global long-wire resource (`rst_n_sync`, LW 1/8), so its fanout to 1594
+registers costs no fabric routing; what moved is placement around the BSRAM.
+
+Keeping the fix is still right — correctness before margin, and 28.912 MHz meets
+the constraint with zero violations. But 7% is thin enough to record, and the
+lever for recovering it is the half-cycle memory read, not the reset.
+
+**Status** — Fixed.
+
+### Still open from this pass
+
+**No debounce.** Synchronising stops a metastable bit reaching the CPU; it does
+not stop a bouncing contact producing several clean transitions. For `rst_n`
+that is harmless, since each bounce simply re-asserts reset and the final
+release is still clean. For `btn_in` software sees the bounces and would have to
+filter them. Left deliberately: debouncing is a policy choice about how long a
+press must be held, and belongs with whatever eventually uses the button.
 
 ---
 

@@ -17,6 +17,7 @@
     <File path="src/imem.v" type="file.verilog" enable="1"/>
     <File path="src/imm_gen.v" type="file.verilog" enable="1"/>
     <File path="src/pc_reg.v" type="file.verilog" enable="1"/>
+    <File path="src/reset_sync.v" type="file.verilog" enable="1"/>
     <File path="src/pipe_ex_mem.v" type="file.verilog" enable="1"/>
     <File path="src/pipe_id_ex.v" type="file.verilog" enable="1"/>
     <File path="src/pipe_if_id.v" type="file.verilog" enable="1"/>

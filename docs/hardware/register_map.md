@@ -93,6 +93,11 @@ lcd_command(0x00);
 overwrites the previous one if firmware has not read it. There is no overrun
 flag.
 
+**The button is synchronised, not debounced.** Reading offset `0x04` gives a
+value that passed through two flip-flops, so it is never metastable, but a
+mechanical press still produces several transitions. Software has to filter
+them.
+
 **Peripheral registers alias.** Each peripheral decodes only its low address
 bits — `a[7:0]` for GPIO and UART, `a[3:2]` for I2C — so `0x40000100` hits the
 same LED register as `0x40000000`. Address the documented offsets only.

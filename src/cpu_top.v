@@ -9,6 +9,13 @@ module cpu_top (
   inout wire i2c_scl
 );
 
+  // Every sequential block below runs on the synchronised reset, never on the
+  // raw pin.
+  wire rst_n_sync;
+  reset_sync reset_bridge (
+    .clk(clk), .rst_n_in(rst_n), .rst_n_out(rst_n_sync)
+  );
+
   // --- Hazard and flush ---
   wire stall;
   wire branch_taken;
@@ -26,7 +33,7 @@ module cpu_top (
   wire [31:0] mem_alu_result;  // MEM stage address, also drives the ROM data port
   wire [31:0] rom_rd;          // ROM word read over the data bus
   pc_reg pc_register (
-    .clk(clk), .rst_n(rst_n), .stall(stall),
+    .clk(clk), .rst_n(rst_n_sync), .stall(stall),
     .pc_next(if_next_pc), .pc(if_pc)
   );
 
@@ -46,7 +53,7 @@ module cpu_top (
 
   wire [31:0] id_pc, id_instr;
   pipe_if_id reg_if_id (
-    .clk(clk), .rst_n(rst_n), .stall(stall), .flush(if_id_flush),
+    .clk(clk), .rst_n(rst_n_sync), .stall(stall), .flush(if_id_flush),
     .if_pc(if_pc), .if_instr(if_instr),
     .id_pc(id_pc), .id_instr(id_instr)
   );
@@ -93,7 +100,7 @@ module cpu_top (
   wire [31:0] wb_reg_wd;
 
   regfile rf (
-    .clk(clk), .rst_n(rst_n), .we(wb_RegWrite), .wd(wb_reg_wd),
+    .clk(clk), .rst_n(rst_n_sync), .we(wb_RegWrite), .wd(wb_reg_wd),
     .rd(wb_rd_idx), .rs1(id_rs1_idx), .rs2(id_rs2_idx),
     .rd1(id_rd1), .rd2(id_rd2)
   );
@@ -106,7 +113,7 @@ module cpu_top (
   wire [4:0]  ex_rs1_idx, ex_rs2_idx;
 
   pipe_id_ex reg_id_ex (
-    .clk(clk), .rst_n(rst_n), .flush(id_ex_flush),
+    .clk(clk), .rst_n(rst_n_sync), .flush(id_ex_flush),
     .id_RegWrite(id_RegWrite), .id_MemtoReg(id_MemtoReg), .id_MemWrite(id_MemWrite),
     .id_MemRead(id_MemRead), .id_Branch(id_Branch), .id_Jump(id_Jump),
     .id_ALUSrc(id_ALUSrc), .id_ALUSrcA(id_ALUSrcA),
@@ -185,7 +192,7 @@ module cpu_top (
   wire [31:0] mem_branch_target, mem_rd2;
 
   pipe_ex_mem reg_ex_mem (
-    .clk(clk), .rst_n(rst_n),
+    .clk(clk), .rst_n(rst_n_sync),
     .ex_RegWrite(ex_RegWrite), .ex_MemtoReg(ex_MemtoReg), .ex_MemWrite(ex_MemWrite),
     .ex_MemRead(ex_MemRead), .ex_Branch(ex_Branch), .ex_branch_target(ex_branch_target),
     .ex_zero(ex_zero), .ex_alu_result(ex_result_to_mem), .ex_rd2(alu_mux_b), .ex_rd_idx(ex_rd_idx),
@@ -243,24 +250,24 @@ module cpu_top (
   );
 
   gpio led_controller (
-    .clk(clk), .rst_n(rst_n), .we(we_gpio), .a(mem_alu_result),
+    .clk(clk), .rst_n(rst_n_sync), .we(we_gpio), .a(mem_alu_result),
     .wd(mem_store_data), .rd(gpio_rd), .led(led_out), .btn_in(btn_in)
   );
 
   wire uart_read = mem_MemRead && (mem_alu_result[31:28] == 4'h5);
 
   uart_mmio serial_port (
-    .clk(clk), .rst_n(rst_n), .we(we_uart), .re(uart_read),
+    .clk(clk), .rst_n(rst_n_sync), .we(we_uart), .re(uart_read),
     .a(mem_alu_result), .wd(mem_store_data), .rx(uart_rx_in),
     .rd(uart_rd), .tx(uart_tx_out)
   );
 
   clock_enable_divider #(.divider(27)) i2c_clock_enable (
-    .clk(clk), .rst_n(rst_n), .tick(i2c_tick)
+    .clk(clk), .rst_n(rst_n_sync), .tick(i2c_tick)
   );
 
   i2c_mmio lcd_port (
-    .clk(clk), .tick(i2c_tick), .rst_n(rst_n), .we(we_i2c), .a(mem_alu_result),
+    .clk(clk), .tick(i2c_tick), .rst_n(rst_n_sync), .we(we_i2c), .a(mem_alu_result),
     .wd(mem_store_data), .rd(i2c_rd), .sda(i2c_sda), .scl(i2c_scl)
   );
 
@@ -282,7 +289,7 @@ module cpu_top (
   wire [31:0] wb_read_data, wb_alu_result;
 
   pipe_mem_wb reg_mem_wb (
-    .clk(clk), .rst_n(rst_n),
+    .clk(clk), .rst_n(rst_n_sync),
     .mem_RegWrite(mem_RegWrite), .mem_MemtoReg(mem_MemtoReg),
     .mem_read_data(mem_load_formatted),
     .mem_alu_result(mem_alu_result), .mem_rd_idx(mem_rd_idx),

@@ -2,8 +2,8 @@
 
 ## Simulation
 
-Icarus Verilog 11.0 passes twenty-two self-checking tests. Coverage includes ALU and decode operations,
-immediate generation, register file read/write/bypass behavior, forwarding priority, load-use hazard
+Icarus Verilog 11.0 passes twenty-four self-checking tests. Coverage includes ALU and decode operations,
+immediate generation, register file read/write/bypass behavior, reset synchronisation, forwarding priority, load-use hazard
 detection, pipeline register reset/stall/flush behavior, branch and JAL flushing, subword memory accesses,
 GPIO MMIO, an UART TX frame containing `0x48`, UART RX framing with start/stop validation and LSB-first
 assembly, UART MMIO status and read-clear semantics, and a CPU-level echo that drives `0xA5` into the RX pin
@@ -45,16 +45,16 @@ Post-route summary:
 | Metric | Result |
 |---|---:|
 | Constraint | 27.000 MHz |
-| Actual Fmax | 31.762 MHz |
-| Logic levels | 15 |
+| Actual Fmax | 28.912 MHz |
+| Logic levels | 8 |
 | Setup violated endpoints | 0 |
 | Hold violated endpoints | 0 |
 | Setup TNS | 0.000 ns |
 | Hold TNS | 0.000 ns |
-| Logic | 3343 / 8640 (39%) |
-| Registers | 1588 / 6693 (24%) |
+| Logic | 3321 / 8640 (39%) |
+| Registers | 1594 / 6693 (24%) |
 | Registers inferred as latch | 0 / 6480 (0%) |
-| CLS | 2700 / 4320 (63%) |
+| CLS | 2733 / 4320 (64%) |
 | BSRAM | 6 / 26 (24%) |
 | I/O ports | 8 / 71 (12%) |
 

@@ -3,6 +3,7 @@ Warning: Ignoring XDG_SESSION_TYPE=wayland on Gnome. Use QT_QPA_PLATFORM=wayland
 current device: GW1NR-9C  GW1NR-LV9QN88PC6/I5
 add new file: "/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/src/cpu_top.v"
 add new file: "/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/src/pc_reg.v"
+add new file: "/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/src/reset_sync.v"
 add new file: "/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/src/control_unit.v"
 add new file: "/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/src/imm_gen.v"
 add new file: "/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/src/alu.v"
@@ -30,6 +31,7 @@ GowinSynthesis start
 Running parser ...
 Analyzing Verilog file '/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/src/cpu_top.v'
 Analyzing Verilog file '/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/src/pc_reg.v'
+Analyzing Verilog file '/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/src/reset_sync.v'
 Analyzing Verilog file '/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/src/control_unit.v'
 Analyzing Verilog file '/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/src/imm_gen.v'
 Analyzing Verilog file '/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/src/alu.v'
@@ -52,6 +54,7 @@ Analyzing Verilog file '/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/src/
 Analyzing Verilog file '/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/src/i2c_writeframe.v'
 Analyzing Verilog file '/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/src/clock_enable_divider.v'
 Compiling module 'cpu_top'("/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/src/cpu_top.v":1)
+Compiling module 'reset_sync'("/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/src/reset_sync.v":9)
 Compiling module 'pc_reg'("/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/src/pc_reg.v":1)
 Compiling module 'imem'("/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/src/imem.v":4)
 Extracting RAM for identifier 'rom'("/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/src/imem.v":15)
@@ -93,8 +96,8 @@ Running technical mapping ...
 [75%] Tech-Mapping Phase 2 completed
 [80%] Tech-Mapping Phase 3 completed
 [90%] Tech-Mapping Phase 4 completed
-WARN  (NL0002) : The module "control_unit" instantiated to "ctrl" is swept in optimizing("/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/src/cpu_top.v":84)
-WARN  (NL0002) : The module "imm_gen" instantiated to "ig" is swept in optimizing("/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/src/cpu_top.v":89)
+WARN  (NL0002) : The module "control_unit" instantiated to "ctrl" is swept in optimizing("/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/src/cpu_top.v":91)
+WARN  (NL0002) : The module "imm_gen" instantiated to "ig" is swept in optimizing("/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/src/cpu_top.v":96)
 [95%] Generate netlist file "/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/build/gowin/impl/gwsynthesis/fpga_project.vg" completed
 [100%] Generate report file "/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/build/gowin/impl/gwsynthesis/fpga_project_syn.rpt.html" completed
 GowinSynthesis finish
@@ -125,5 +128,5 @@ Generate file "/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/build/gowin/i
 Generate file "/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/build/gowin/impl/pnr/fpga_project.rpt.html" completed
 Generate file "/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/build/gowin/impl/pnr/fpga_project.rpt.txt" completed
 Generate file "/home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so/build/gowin/impl/pnr/fpga_project.tr.html" completed
-Sat Sep 19 17:26:43 2026
+Sat Sep 19 17:46:25 2026
 

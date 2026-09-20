@@ -35,7 +35,7 @@ into the bitstream as ROM contents.
 
 ## Features
 
-- **RV32I core** — 37 of the 40 base instructions, five-stage pipeline
+- **RV32I core** — 38 of the 40 base instructions, five-stage pipeline
 - **Hazard handling** — EX/MEM and MEM/WB forwarding, a write-first register
   file bypass, one-cycle load-use stall, two-cycle branch flush
 - **Sub-word memory access** — `LB`, `LBU`, `LH`, `LHU`, `LW`, `SB`, `SH`, `SW`
@@ -125,7 +125,7 @@ export GOWIN_ROOT=/home/haihbv/tools/Gowin_V1.9.12.03
 bash tools/run_tests.sh
 ```
 
-Runs 30 self-checking testbenches, ending with `firmware_boot_tb`, which boots
+Runs 31 self-checking testbenches, ending with `firmware_boot_tb`, which boots
 the real `sw/firmware.hex` image on the full SoC and decodes its UART output.
 Each prints `<name>: PASS`; the script stops at the first failure.
 
@@ -235,7 +235,7 @@ FT2232 JTAG channel, are collected in [docs/bringup.md](docs/bringup.md).
 
 | Layer | Result |
 |---|---|
-| Simulation | 30 / 30 testbenches pass on Icarus Verilog 12.0 |
+| Simulation | 31 / 31 testbenches pass on Icarus Verilog 12.0 |
 | Timing | Fmax 30.210 MHz against a 27 MHz constraint, 0 setup and 0 hold violations |
 | Resources | Logic 3375 / 8640 (40%), registers 1599 / 6693 (24%), BSRAM 6 / 26 (24%) |
 | Hardware | Banner reads `BOOT 5A5A5A5A 00000000`, LCD displays `HELLO FPGA`, UART reports the PCF8574 at `0x27`; RX FIFO board protocol passes 16-byte, overrun and W1C cases |
@@ -248,9 +248,8 @@ Measurements and the logs behind them are in
 - **UART RX has no flow control.** Its 16-byte FIFO absorbs short bursts and
   reports overrun, but a sustained stream faster than software can consume
   still loses bytes.
-- **FENCE, ECALL and EBREAK are not implemented.** The core covers 37 of the 40
-  RV32I base instructions; there is no trap or privilege machinery for the rest
-  to hook into.
+- **ECALL and EBREAK are not implemented.** The core covers 38 of the 40 RV32I
+  base instructions; there is no trap or privilege machinery for them to hook into.
 - **Timing margin is 12%.** Fmax 30.210 MHz against the 27 MHz oscillator. The
   binding path is the half-cycle memory read into MEM/WB.
 - **The user button is synchronised but not debounced.** A press produces

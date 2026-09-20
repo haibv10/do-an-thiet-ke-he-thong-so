@@ -14,6 +14,7 @@ module core_control_tb;
   logic RegWrite;
   logic UsesRs1;
   logic UsesRs2;
+  logic Fence;
   logic [3:0] alu_ctrl;
 
   core_control dut (.*);
@@ -58,9 +59,12 @@ module core_control_tb;
     decode(7'b1100111, 3'b000, 1'b0);
     if (Jump != 2'b10 || !RegWrite || !ALUSrc || !UsesRs1 || UsesRs2)
       $fatal(1, "JALR decode");
+    decode(7'b0001111, 3'b000, 1'b0);
+    if (!Fence || UsesRs1 || UsesRs2 || RegWrite || MemRead || MemWrite)
+      $fatal(1, "FENCE decode");
     decode(7'b1111111, 3'b111, 1'b1);
     if ({Branch, Jump, MemRead, MemtoReg, MemWrite, ALUSrc, ALUSrcA, RegWrite,
-         UsesRs1, UsesRs2} != '0)
+         UsesRs1, UsesRs2, Fence} != '0)
       $fatal(1, "illegal opcode defaults");
     $display("core_control_tb: PASS");
     $finish;

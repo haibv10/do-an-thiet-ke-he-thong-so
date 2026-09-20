@@ -9,6 +9,8 @@ Entries are newest first.
 
 ## Contents
 
+- [2026-09-21 FENCE](#2026-09-21-fence)
+  - [20. FENCE decoded only as an accidental no-op](#20-fence-decoded-only-as-an-accidental-no-op)
 - [2026-09-21 U/J load-use stall](#2026-09-21-uj-load-use-stall)
   - [19. Immediate fields were treated as source registers](#19-immediate-fields-were-treated-as-source-registers)
 - [2026-09-21 UART FIFO board test](#2026-09-21-uart-fifo-board-test)
@@ -35,6 +37,26 @@ Entries are newest first.
   - [8. The ROM image left words undefined past the end of the firmware](#8-the-rom-image-left-words-undefined-past-the-end-of-the-firmware)
   - [9. Documentation described the I2C defect incorrectly](#9-documentation-described-the-i2c-defect-incorrectly)
   - [10. The PCF8574 address was recorded as `0x21`](#10-the-pcf8574-address-was-recorded-as-0x21)
+
+---
+
+## 2026-09-21 FENCE
+
+### 20. FENCE decoded only as an accidental no-op
+
+**Symptom.** Opcode `0001111` had no explicit decoder case. It therefore
+looked like a no-op only because every unrecognised opcode fell through to the
+default control values.
+
+**Fix.** `core_control.v` now emits an explicit `Fence` signal for `funct3=000`.
+The signal creates no datapath control because the core has one in-order memory
+port, which already preserves all earlier accesses before later ones begin.
+
+**Verification.** The full simulation suite passes 31/31. `core_control_tb`
+checks the explicit decode. `cpu_fence_tb` performs store, FENCE, then load,
+checks the loaded value and confirms that FENCE is decoded once.
+
+**Status** — Fixed.
 
 ---
 
@@ -840,4 +862,4 @@ Carried forward, not addressed in this pass.
 | Item | Impact |
 |---|---|
 | UART RX has no flow control | The 16-byte FIFO eventually fills if input remains faster than software service |
-| FENCE, ECALL and EBREAK are not implemented | 37 of the 40 RV32I base instructions |
+| ECALL and EBREAK are not implemented | 38 of the 40 RV32I base instructions |

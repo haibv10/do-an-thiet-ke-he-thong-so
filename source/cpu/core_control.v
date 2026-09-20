@@ -12,6 +12,7 @@ module core_control (
   output reg        RegWrite,
   output reg        UsesRs1,
   output reg        UsesRs2,
+  output reg        Fence,
   output reg [3:0]  alu_ctrl
 );
   always @(*) begin
@@ -25,6 +26,7 @@ module core_control (
     RegWrite = 1'b0;
     UsesRs1  = 1'b0;
     UsesRs2  = 1'b0;
+    Fence     = 1'b0;
     alu_ctrl = 4'b0000;
 
     case (opcode)
@@ -106,6 +108,12 @@ module core_control (
         ALUSrc   = 1'b1;
         alu_ctrl = 4'b0000;
         UsesRs1  = 1'b1;
+      end
+
+      7'b0001111: begin // FENCE
+        if (funct3 == 3'b000)
+          // One in-order memory port already makes all earlier accesses visible.
+          Fence = 1'b1;
       end
     endcase
   end

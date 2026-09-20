@@ -63,4 +63,5 @@ run_test cpu_hazard_tb "${cpu_sources[@]}" sim/cpu/cpu_hazard_tb.sv
 run_test cpu_auipc_tb "${cpu_sources[@]}" sim/cpu/cpu_auipc_tb.sv
 run_test cpu_uart_hex_tb "${cpu_sources[@]}" sim/cpu/cpu_uart_hex_tb.sv
 run_test cpu_uart_fifo_tb "${cpu_sources[@]}" sim/cpu/cpu_uart_fifo_tb.sv
+run_test cpu_fence_tb "${cpu_sources[@]}" sim/cpu/cpu_fence_tb.sv
 run_test cpu_firmware_boot_tb "${cpu_sources[@]}" sim/cpu/cpu_firmware_boot_tb.sv

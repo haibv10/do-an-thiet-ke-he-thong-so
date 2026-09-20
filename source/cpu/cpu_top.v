@@ -63,6 +63,7 @@ module cpu_top #(
   // --- ID: instruction decode ---
   wire id_Branch, id_MemRead, id_MemtoReg, id_MemWrite, id_ALUSrc, id_ALUSrcA, id_RegWrite;
   wire id_UsesRs1, id_UsesRs2;
+  wire id_Fence;
   wire [1:0]  id_Jump;
   wire [3:0]  id_alu_ctrl;
   wire [31:0] id_imm, id_rd1, id_rd2;
@@ -90,7 +91,7 @@ module cpu_top #(
     .Jump(id_Jump),
     .MemRead(id_MemRead), .MemtoReg(id_MemtoReg),
     .MemWrite(id_MemWrite), .ALUSrc(id_ALUSrc), .ALUSrcA(id_ALUSrcA),
-    .RegWrite(id_RegWrite), .UsesRs1(id_UsesRs1), .UsesRs2(id_UsesRs2),
+    .RegWrite(id_RegWrite), .UsesRs1(id_UsesRs1), .UsesRs2(id_UsesRs2), .Fence(id_Fence),
     .alu_ctrl(id_alu_ctrl)
   );
 

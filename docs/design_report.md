@@ -10,7 +10,7 @@
 
 | Metric | Result |
 |---|---|
-| Simulation | 30 / 30 testbenches pass |
+| Simulation | 31 / 31 testbenches pass |
 | Fmax after place and route | 30.210 MHz against a 27 MHz constraint |
 | Timing violations | 0 setup, 0 hold |
 | Logic utilisation | 3375 / 8640 (40%) |
@@ -131,7 +131,7 @@ As a result, five different instructions are in flight at any moment.
 
 ### Implemented instruction set
 
-37 of the 40 RV32I base instructions are implemented.
+38 of the 40 RV32I base instructions are implemented.
 
 | Group | Opcode | Instructions |
 |---|---|---|
@@ -141,11 +141,12 @@ As a result, five different instructions are in flight at any moment.
 | PC-relative upper immediate | `0010111` | AUIPC |
 | Loads | `0000011` | LB LBU LH LHU LW |
 | Stores | `0100011` | SB SH SW |
+| Memory ordering | `0001111` | FENCE |
 | Branches | `1100011` | BEQ BNE BLT BGE BLTU BGEU |
 | Calls | `1101111` | JAL |
 | Returns and indirect jumps | `1100111` | JALR |
 
-**FENCE, ECALL and EBREAK are not implemented.** There is no illegal
+**ECALL and EBREAK are not implemented.** There is no illegal
 instruction trap either, so an unimplemented opcode decodes silently to a NOP.
 
 AUIPC needs its own control bit, `ALUSrcA`, because it is the only instruction
@@ -566,12 +567,11 @@ but cannot sustain an unbounded stream faster than firmware can consume it.
 Lossless sustained streaming still requires hardware flow control, a larger
 buffer sized for the workload, or non-blocking software service.
 
-### FENCE, ECALL and EBREAK are not implemented
+### ECALL and EBREAK are not implemented
 
-Three of the 40 RV32I base instructions remain. FENCE is a no-op on a core with
-a single in-order memory port, so implementing it is trivial; ECALL and EBREAK
-are not, because there is no trap vector, no privilege level and no CSR file for
-them to act on. Adding them properly means adding machine-mode CSRs first.
+Two of the 40 RV32I base instructions remain. ECALL and EBREAK need a trap
+vector, privilege level and CSR file to provide architectural behavior. Adding
+them properly means adding machine-mode CSRs first.
 
 ### The user button is synchronised but not debounced
 

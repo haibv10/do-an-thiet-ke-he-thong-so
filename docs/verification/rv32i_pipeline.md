@@ -2,7 +2,7 @@
 
 ## Simulation
 
-Icarus Verilog 12.0 passes thirty self-checking tests. Coverage includes ALU and decode operations,
+Icarus Verilog 12.0 passes thirty-one self-checking tests. Coverage includes ALU and decode operations,
 immediate generation, register file read/write/bypass behavior, reset synchronisation, forwarding priority, load-use hazard
 detection, pipeline register reset/stall/flush behavior, branch and JAL flushing, subword memory accesses,
 GPIO MMIO, an UART TX frame containing `0x48`, UART RX framing with start/stop validation and LSB-first
@@ -11,7 +11,7 @@ and checks that the CPU transmits the same byte back, plus the I2C frame FSM, th
 and the I2C MMIO handshake. Decoder source-use flags suppress false load-use
 stalls when U-type and J-type immediate fields match a preceding load destination.
 
-Five tests are CPU-level programs rather than unit tests:
+Six tests are CPU-level programs rather than unit tests:
 
 | Testbench | What it proves |
 |---|---|
@@ -19,6 +19,7 @@ Five tests are CPU-level programs rather than unit tests:
 | `cpu_auipc_tb` | AUIPC at several program counters, loads out of the ROM window, and that a store into ROM is dropped |
 | `cpu_uart_hex_tb` | The `sltiu` plus branch sequence the hex formatter depends on |
 | `cpu_uart_fifo_tb` | Two UART frames queued before CPU loads, then popped in FIFO order through `0x50000008` |
+| `cpu_fence_tb` | Store, FENCE, then load; confirms the fence decode and preserved memory order |
 | `firmware_boot_tb` | The real `sw/firmware.hex` image booting on the full SoC, decoded off the UART pin |
 
 `firmware_boot_tb` is the end-to-end case. It checks the banner byte by byte:

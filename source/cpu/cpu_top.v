@@ -62,6 +62,7 @@ module cpu_top #(
 
   // --- ID: instruction decode ---
   wire id_Branch, id_MemRead, id_MemtoReg, id_MemWrite, id_ALUSrc, id_ALUSrcA, id_RegWrite;
+  wire id_UsesRs1, id_UsesRs2;
   wire [1:0]  id_Jump;
   wire [3:0]  id_alu_ctrl;
   wire [31:0] id_imm, id_rd1, id_rd2;
@@ -76,6 +77,7 @@ module cpu_top #(
 
   pipe_hazard hdu (
     .if_id_rs1(id_rs1_idx), .if_id_rs2(id_rs2_idx),
+    .if_id_UsesRs1(id_UsesRs1), .if_id_UsesRs2(id_UsesRs2),
     .id_ex_MemRead(ex_MemRead), .id_ex_rd(ex_rd_idx),
     .stall(stall)
   );
@@ -88,7 +90,7 @@ module cpu_top #(
     .Jump(id_Jump),
     .MemRead(id_MemRead), .MemtoReg(id_MemtoReg),
     .MemWrite(id_MemWrite), .ALUSrc(id_ALUSrc), .ALUSrcA(id_ALUSrcA),
-    .RegWrite(id_RegWrite),
+    .RegWrite(id_RegWrite), .UsesRs1(id_UsesRs1), .UsesRs2(id_UsesRs2),
     .alu_ctrl(id_alu_ctrl)
   );
 

@@ -9,6 +9,8 @@ Entries are newest first.
 
 ## Contents
 
+- [2026-09-21 U/J load-use stall](#2026-09-21-uj-load-use-stall)
+  - [19. Immediate fields were treated as source registers](#19-immediate-fields-were-treated-as-source-registers)
 - [2026-09-21 UART FIFO board test](#2026-09-21-uart-fifo-board-test)
   - [18. Firmware wrote the status bit to the W1C control register](#18-firmware-wrote-the-status-bit-to-the-w1c-control-register)
 - [2026-09-20 UART RX FIFO](#2026-09-20-uart-rx-fifo)
@@ -36,14 +38,38 @@ Entries are newest first.
 
 ---
 
+## 2026-09-21 U/J load-use stall
+
+### 19. Immediate fields were treated as source registers
+
+**Symptom.** `pipe_hazard.v` compared the preceding load destination against
+`instr[19:15]` and `instr[24:20]` for every decoded instruction. Those fields
+are immediate bits in LUI, AUIPC and JAL, so a matching bit pattern inserted a
+load-use bubble even though the instruction did not read either register.
+
+**Fix.** `core_control.v` now emits `UsesRs1` and `UsesRs2`. The hazard unit
+compares an index only when the decoder says the instruction reads that source.
+R-type, store and branch instructions use both sources; I-type, load and JALR
+use `rs1`; LUI, AUIPC and JAL use neither.
+
+**Verification.** The full simulation suite passes 30/30. `pipe_hazard_tb`
+checks that unused instruction fields do
+not stall. `cpu_hazard_tb` places LUI and AUIPC immediately after loads whose
+destinations match their immediate bits, then confirms the program has exactly
+one stall for its only true load-use dependency.
+
+**Status** — Fixed.
+
+---
+
 ## 2026-09-21 UART FIFO board test
 
 ### 18. Firmware wrote the status bit to the W1C control register
 
 **Symptom.** The FIFO board protocol printed `RXFIFO CASE16`, `RXFIFO
 CASE17`, then `RXFIFO FAIL` in both
-[`logs/23-uart-rx-fifo-board-protocol.log`](../logs/23-uart-rx-fifo-board-protocol.log)
-and [`logs/27-uart-rx-fifo-board-test-firmware-protocol.log`](../logs/27-uart-rx-fifo-board-test-firmware-protocol.log).
+`logs/23-uart-rx-fifo-board-protocol.log`
+and `logs/27-uart-rx-fifo-board-test-firmware-protocol.log`.
 The second failure followed a firmware rebuild, so the earlier explanation
 that only a stale firmware image caused the first failure was not supported.
 These captures report only an aggregate result; they do not identify which
@@ -59,14 +85,14 @@ case 16 and case 17 results independently, and drain/clear the FIFO between
 cases. The MMIO test now confirms that writing `0x04` leaves overrun set and
 writing `0x01` clears it.
 
-**Simulation.** [`logs/28-uart-rx-fifo-w1c-fix-simulation.log`](../logs/28-uart-rx-fifo-w1c-fix-simulation.log)
+**Simulation.** `logs/28-uart-rx-fifo-w1c-fix-simulation.log`
 records 30/30 PASS; the rebuilt firmware image is 1024 ROM words.
 
-**Board verification.** [`logs/29-uart-rx-fifo-w1c-fix-build.log`](../logs/29-uart-rx-fifo-w1c-fix-build.log)
+**Board verification.** `logs/29-uart-rx-fifo-w1c-fix-build.log`
 records P&R, timing analysis and bitstream generation complete.
-[`logs/30-uart-rx-fifo-w1c-fix-program.log`](../logs/30-uart-rx-fifo-w1c-fix-program.log)
+`logs/30-uart-rx-fifo-w1c-fix-program.log`
 records SRAM programming at 100% with `Finished.`. The protocol capture in
-[`logs/31-uart-rx-fifo-w1c-fix-protocol.log`](../logs/31-uart-rx-fifo-w1c-fix-protocol.log)
+`logs/31-uart-rx-fifo-w1c-fix-protocol.log`
 records `CASE16 PASS`, `CASE17 PASS` and `RXFIFO PASS`.
 
 **Status** — Fixed and board-verified. Case 16 proves ordered receipt of a
@@ -90,24 +116,24 @@ Reading `0x50000008` pops the oldest byte; writing one to `0x5000000c` bit zero
 clears the overrun indication. A full FIFO drops the new byte and preserves the
 queued sequence.
 
-**Verification.** [`logs/14-uart-rx-fifo-full-simulation.log`](../logs/14-uart-rx-fifo-full-simulation.log)
+**Verification.** `logs/14-uart-rx-fifo-full-simulation.log`
 records 30/30 PASS. The UART unit and MMIO tests cover FIFO order, full state,
 drop-on-full, sticky overrun, W1C clear and pop behavior; `cpu_uart_fifo_tb`
 covers two CPU loads popping queued bytes in order.
 
-**Build.** [`logs/15-uart-rx-fifo-fpga-build.log`](../logs/15-uart-rx-fifo-fpga-build.log)
+**Build.** `logs/15-uart-rx-fifo-fpga-build.log`
 records P&R, timing analysis and bitstream generation complete at 30.210 MHz
 against the 27 MHz constraint with 0 setup/hold violations. The FIFO build uses
 3375/8640 logic cells, 1599/6693 registers and 6/26 BSRAM.
 
-**Board boot.** [`logs/17-uart-rx-fifo-program-board.log`](../logs/17-uart-rx-fifo-program-board.log)
+**Board boot.** `logs/17-uart-rx-fifo-program-board.log`
 records SRAM programming at 100% with `Finished.`. The reset capture in
-[`logs/18-uart-rx-fifo-board-uart.log`](../logs/18-uart-rx-fifo-board-uart.log)
+`logs/18-uart-rx-fifo-board-uart.log`
 records `BOOT 5A5A5A5A 00000000` and `I2C 27` from the FIFO bitstream.
 
-**Status** — Simulation, FPGA build and board boot are verified. The first
-UART RX board workload failed because its firmware wrote the wrong W1C bit;
-physical FIFO validation remains pending after the firmware correction above.
+**Status** — Superseded by finding 18. The initial board workload exposed the
+firmware W1C defect; the corrected board protocol now verifies FIFO ordering,
+overrun handling and W1C clear.
 
 ---
 
@@ -131,16 +157,16 @@ grouped by ownership under `sim/`.
 the new paths and module names. README, design report, coding guide and firmware
 image helper now describe the same tree.
 
-**Simulation.** [`logs/09-source-layout-refactor.log`](../logs/09-source-layout-refactor.log)
+**Simulation.** `logs/09-source-layout-refactor.log`
 records 29/29 PASS. The only warning is the intentional short-image fixture in
 `mem_instruction_rom_tb`; it proves that ROM words beyond the fixture are
 zero-filled.
 
 **Build and programming.** The refactored tree was built and programmed after the
-simulation run. [`logs/10-source-layout-fpga-build.log`](../logs/10-source-layout-fpga-build.log)
+simulation run. `logs/10-source-layout-fpga-build.log`
 records P&R, timing analysis and bitstream generation complete with Fmax
 28.912 MHz, 0 setup/hold violations, 3321/8640 logic cells, 1594/6693 registers
-and 6/26 BSRAM. [`logs/11-source-layout-program-board.log`](../logs/11-source-layout-program-board.log)
+and 6/26 BSRAM. `logs/11-source-layout-program-board.log`
 records SRAM programming at 100% with `Finished.`.
 
 **Status** — Fixed. This is a behavior-preserving refactor. Programming was
@@ -760,7 +786,7 @@ firmware_boot_tb: PASS (banner "BOOT 5A5A5A5A 00000000")
 
 Gowin V1.9.12.03 completes the flow for `GW1NR-LV9QN88PC6/I5` with no errors and
 no registers inferred as latches. Full output in
-[../logs/02-fpga-build.log](../logs/02-fpga-build.log).
+`logs/02-fpga-build.log`.
 
 | Metric | Before this pass | After |
 |---|---|---|
@@ -783,7 +809,7 @@ memory rather than duplicating the 4 KB image, so the cost is one block, not two
 
 Board measurement has been repeated on the bitstream built from this tree.
 Programming reports `User Code is: 0x000003D3` and `Finished.`, and the capture
-in [../logs/05-board-uart.log](../logs/05-board-uart.log) closes the loop on
+in `logs/05-board-uart.log` closes the loop on
 four of the findings at once:
 
 ```
@@ -815,4 +841,3 @@ Carried forward, not addressed in this pass.
 |---|---|
 | UART RX has no flow control | The 16-byte FIFO eventually fills if input remains faster than software service |
 | FENCE, ECALL and EBREAK are not implemented | 37 of the 40 RV32I base instructions |
-| U-type and J-type instructions can trigger a spurious load-use stall | `instr[19:15]` is immediate data for these formats but is still fed to the hazard unit as `rs1`. Costs one cycle, never wrong |

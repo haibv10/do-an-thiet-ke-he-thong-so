@@ -225,7 +225,6 @@ FT2232 JTAG channel, are collected in [docs/bringup.md](docs/bringup.md).
 | `sim/` | CPU integration and non-library testbenches; `sim/support/` holds helpers and fixtures |
 | `tools/` | Scripts for firmware, bitstream, programming and tests |
 | `docs/` | Design report, register map, bring-up notes, verification results |
-| `logs/` | Curated verification evidence — see [logs/README.md](logs/README.md) |
 | `rules/` | Coding style, commit and branching conventions |
 | `build/` | Generated output, not committed |
 
@@ -256,9 +255,6 @@ Measurements and the logs behind them are in
   binding path is the half-cycle memory read into MEM/WB.
 - **The user button is synchronised but not debounced.** A press produces
   several transitions; software has to filter them.
-- **U-type and J-type instructions can cause a spurious load-use stall.** For
-  these formats `instr[19:15]` is immediate data, but the hazard unit still
-  reads it as `rs1`. The cost is one cycle; the result is never wrong.
 
 Defects found and fixed, each with the evidence behind it, are recorded in
 [docs/fix_log.md](docs/fix_log.md).

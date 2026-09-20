@@ -84,11 +84,15 @@ module cpu_hazard_tb;
     dut.rom.rom[24] = addi(5'd13, 5'd12, 12'd0);      // distance 3, producer is a load
     dut.rom.rom[25] = encode_i(12'd0, 5'd20, 3'b010, 5'd14, 7'b0000011); // lw x14, 0(x20)
     dut.rom.rom[26] = addi(5'd15, 5'd14, 12'd1);      // distance 1 on a load, must stall
-    dut.rom.rom[27] = 32'h0000_006f;                  // jal x0, 0
+    dut.rom.rom[27] = encode_i(12'd0, 5'd20, 3'b010, 5'd16, 7'b0000011); // lw x16, 0(x20)
+    dut.rom.rom[28] = {20'h00080, 5'd17, 7'b0110111}; // lui x17; bits 19:15 = x16
+    dut.rom.rom[29] = encode_i(12'd0, 5'd20, 3'b010, 5'd18, 7'b0000011); // lw x18, 0(x20)
+    dut.rom.rom[30] = {20'h00090, 5'd19, 7'b0010111}; // auipc x19; bits 19:15 = x18
+    dut.rom.rom[31] = 32'h0000_006f;                  // jal x0, 0
 
     repeat (2) @(posedge clk);
     @(negedge clk) rst_n = 1'b1;
-    repeat (60) @(posedge clk);
+    repeat (70) @(posedge clk);
 
     expect_reg(5,  32'd5,   "distance 1, forwarded from EX/MEM");
     expect_reg(6,  32'd11,  "distance 2, forwarded from MEM/WB");
@@ -97,6 +101,8 @@ module cpu_hazard_tb;
     expect_reg(10, 32'd200, "distance 3 on both operands");
     expect_reg(13, 32'd77,  "distance 3 where the producer is a load");
     expect_reg(15, 32'd78,  "load-use interlock");
+    expect_reg(17, 32'h0008_0000, "LUI after a load");
+    expect_reg(19, 32'h0009_0078, "AUIPC after a load");
 
     if (stall_count !== 1)
       $fatal(1, "expected exactly one load-use stall, counted %0d", stall_count);

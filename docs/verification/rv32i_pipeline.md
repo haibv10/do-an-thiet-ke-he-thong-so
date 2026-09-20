@@ -8,7 +8,8 @@ detection, pipeline register reset/stall/flush behavior, branch and JAL flushing
 GPIO MMIO, an UART TX frame containing `0x48`, UART RX framing with start/stop validation and LSB-first
 assembly, UART RX FIFO order/full/overrun behavior, UART MMIO pop and W1C semantics, and a CPU-level echo that drives `0xA5` into the RX pin
 and checks that the CPU transmits the same byte back, plus the I2C frame FSM, the PCF8574 LCD write sequence
-and the I2C MMIO handshake.
+and the I2C MMIO handshake. Decoder source-use flags suppress false load-use
+stalls when U-type and J-type immediate fields match a preceding load destination.
 
 Five tests are CPU-level programs rather than unit tests:
 
@@ -89,9 +90,8 @@ repeated `0x48` bytes, confirming the UART TX path from CPU MMIO through FPGA pi
 
 The measurements below were taken with the earlier one-byte receiver. The
 current receiver has a 16-byte FIFO, a sticky overrun flag and simulation
-coverage for FIFO order, full handling, pop and W1C clear in
-`logs/28-uart-rx-fifo-w1c-fix-simulation.log`. The corrected board protocol
-passes all FIFO cases in `logs/31-uart-rx-fifo-w1c-fix-protocol.log`. The historical echo firmware polls
+coverage for FIFO order, full handling, pop and W1C clear. The corrected board
+protocol passes all FIFO cases. The historical echo firmware polls
 `rx_valid`, reads `UART_BASE + 0x08`, transmits the byte back, and drives the
 LED from bit 0 of the received value. Measurements use 115200 baud, 8N1, raw
 mode, no flow control:

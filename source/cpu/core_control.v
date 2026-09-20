@@ -10,6 +10,8 @@ module core_control (
   output reg        ALUSrc,   // 0 = register rs2, 1 = immediate, for the B input
   output reg        ALUSrcA,  // 0 = register rs1, 1 = program counter, for the A input
   output reg        RegWrite,
+  output reg        UsesRs1,
+  output reg        UsesRs2,
   output reg [3:0]  alu_ctrl
 );
   always @(*) begin
@@ -21,11 +23,15 @@ module core_control (
     ALUSrc   = 1'b0;
     ALUSrcA  = 1'b0;
     RegWrite = 1'b0;
+    UsesRs1  = 1'b0;
+    UsesRs2  = 1'b0;
     alu_ctrl = 4'b0000;
 
     case (opcode)
       7'b0110011: begin // R-Type
         RegWrite = 1'b1;
+        UsesRs1  = 1'b1;
+        UsesRs2  = 1'b1;
         case (funct3)
           3'b000: alu_ctrl = (funct7_5) ? 4'b1000 : 4'b0000;
           3'b001: alu_ctrl = 4'b0001;
@@ -41,6 +47,7 @@ module core_control (
       7'b0010011: begin // I-Type
         ALUSrc   = 1'b1;
         RegWrite = 1'b1;
+        UsesRs1  = 1'b1;
         case (funct3)
           3'b000: alu_ctrl = 4'b0000;
           3'b001: alu_ctrl = 4'b0001;
@@ -71,16 +78,21 @@ module core_control (
         MemtoReg = 1'b1;
         RegWrite = 1'b1;
         MemRead  = 1'b1;
+        UsesRs1  = 1'b1;
       end
 
       7'b0100011: begin // Store
         ALUSrc   = 1'b1;
         MemWrite = 1'b1;
+        UsesRs1  = 1'b1;
+        UsesRs2  = 1'b1;
       end
 
       7'b1100011: begin // Branch
         Branch   = 1'b1;
         alu_ctrl = 4'b1000;
+        UsesRs1  = 1'b1;
+        UsesRs2  = 1'b1;
       end
 
       7'b1101111: begin // JAL
@@ -93,6 +105,7 @@ module core_control (
         RegWrite = 1'b1;
         ALUSrc   = 1'b1;
         alu_ctrl = 4'b0000;
+        UsesRs1  = 1'b1;
       end
     endcase
   end

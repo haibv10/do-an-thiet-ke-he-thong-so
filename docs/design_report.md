@@ -507,15 +507,14 @@ and bitstream generation for the GW1NR-9C against the 27 MHz constraint in
 | BSRAM | 6 / 26 (24%) | IMEM dual-port, plus DMEM |
 | I/O ports | 8 / 71 (12%) | — |
 
-Raw log: `logs/10-source-layout-fpga-build.log`.
+Raw log: `logs/29-uart-rx-fifo-w1c-fix-build.log`.
 
 ### Layer 3 — Board measurement
 
-The bitstream is written into the Tang Nano 9K SRAM over JTAG. The refactored
-tree was programmed successfully at 100%; see `logs/11-source-layout-program-board.log`.
-The laptop talks to the board through an external USB-UART module at 115200 baud,
-8N1, raw, no flow control. No UART/LCD capture was taken after that programming
-step, so the functional rows below remain the earlier board evidence.
+The bitstream is written into the Tang Nano 9K SRAM over JTAG. The corrected
+UART FIFO firmware was programmed successfully at 100%; see
+`logs/30-uart-rx-fifo-w1c-fix-program.log`. The laptop talks to the board
+through an external USB-UART module at 115200 baud, 8N1, raw, no flow control.
 
 | Stimulus | Result | Evidence |
 |---|---|---|
@@ -523,6 +522,7 @@ step, so the functional rows below remain the earlier board evidence.
 | Reset, firmware reading `.rodata` | `I2C ` followed by two `0x00` bytes | `logs/07-fault-rodata-null.log` |
 | Reset, hex formatter using the A-F branch | `I2C 2>` instead of `I2C 27` | `logs/08-fault-hex-branch.log` |
 | Reset, fixed firmware before the source-layout refactor | `I2C 27` repeated, LCD shows `HELLO FPGA` | `logs/05-board-uart.log` |
+| UART FIFO protocol | `CASE16 PASS`, `CASE17 PASS`, `RXFIFO PASS` | `logs/31-uart-rx-fifo-w1c-fix-protocol.log` |
 
 Earlier UART-only measurements with the echo firmware are recorded in
 `docs/verification/rv32i_pipeline.md`, including the finding that a 1024-byte
@@ -573,14 +573,6 @@ a single in-order memory port, so implementing it is trivial; ECALL and EBREAK
 are not, because there is no trap vector, no privilege level and no CSR file for
 them to act on. Adding them properly means adding machine-mode CSRs first.
 
-### U-type and J-type formats can trigger a spurious load-use stall
-
-The hazard unit reads `instr[19:15]` as `rs1` for every instruction. In the
-U-type and J-type encodings those bits are immediate data, so a LUI, AUIPC or
-JAL following a load can stall for a cycle it does not need. The result is never
-wrong, only one cycle late. Suppressing it needs a `UsesRs1` signal out of the
-decoder.
-
 ### The user button is synchronised but not debounced
 
 Two flip-flops stop a metastable value reaching the CPU, but a mechanical
@@ -623,5 +615,5 @@ sim/      CPU integration and non-library self-checking testbenches
 sw/       C firmware: main.c, startup.s, linker.ld, firmware.hex
 tools/    Scripts for firmware, bitstream, programming and tests
 docs/     Design report, register map, bring-up notes, verification results
-logs/     Curated verification evidence
+logs/     Local verification output, ignored by Git
 ```

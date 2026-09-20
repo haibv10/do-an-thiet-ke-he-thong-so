@@ -132,7 +132,7 @@ the current module takes `clk` and `tick`.*
 | Reset with no device wired | repeated `I2C NACK` | `logs/06-fault-i2c-nack.log` |
 | Reset, firmware reading `.rodata` | `I2C ` followed by two `0x00` bytes | `logs/07-fault-rodata-null.log` |
 | Reset, hex formatter using the A-F branch | `I2C 2>` instead of `I2C 27` | `logs/08-fault-hex-branch.log` |
-| Reset, current firmware | `I2C 21` repeated, LCD shows `HELLO FPGA` | `logs/05-board-uart.log` |
+| Reset, historical faulty firmware | `I2C 21` repeated, LCD shows `HELLO FPGA` | `logs/05-board-uart.log` |
 
 Rows two and three are CPU faults, not UART faults, and both are now fixed — see
 [docs/fix_log.md](../fix_log.md) findings 6 and 1. In row three `'0' + 14` is `0x3e` and `'A' - 10 + 7` is also

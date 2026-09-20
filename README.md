@@ -170,8 +170,12 @@ SRAM is volatile — the bitstream is lost when the board loses power.
 
 ### Watch the UART output
 
+Find the external USB-UART module; do not open either FT2232 interface used by
+the Tang Nano board:
+
 ```bash
-picocom -b 115200 --flow n /dev/ttyUSB0
+ls -l /dev/serial/by-id/
+picocom -b 115200 --flow n /dev/serial/by-id/<external-usb-uart>
 ```
 
 Press the **S2** reset button on the board to catch the `BOOT` line. Exit with
@@ -182,8 +186,8 @@ PCF8574, reports the address it finds and writes `HELLO FPGA` to the LCD:
 
 ```text
 BOOT 5A5A5A5A 00000000
-I2C 21
-I2C 21
+I2C 27
+I2C 27
 ```
 
 The two words in the banner are a startup self-check: `5A5A5A5A` is a `.data`

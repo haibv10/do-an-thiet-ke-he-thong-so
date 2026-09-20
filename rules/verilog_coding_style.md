@@ -32,7 +32,7 @@ This repository uses two language standards, split by role.
 **Synthesizable RTL is Verilog-2001.** The target is a Gowin GW1NR-9C built with
 GowinSynthesis, whose Verilog-2001 path is the one this design is closed on;
 `tools/build_gowin.tcl` pins `-verilog_std v2001` to say so explicitly. The
-design sits at roughly 7% timing margin, so changing the elaboration path is not
+design sits at roughly 12% timing margin, so changing the elaboration path is not
 a free refactor: it can change inference and therefore placement. RTL therefore
 uses `reg`, `wire`, `always @(posedge clk ...)` and `always @(*)`.
 

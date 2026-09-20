@@ -13,6 +13,7 @@ module uart_mmio_tb;
   logic [31:0] rd;
   logic tx;
   integer bit_index;
+  integer byte_index;
 
   always #5 clk = ~clk;
 
@@ -39,7 +40,7 @@ module uart_mmio_tb;
     repeat (3) @(posedge clk);
     a = 32'h5000_0004;
     #1;
-    if (rd[1:0] !== 2'b10) $fatal(1, "RX status=%h", rd);
+    if (rd[7:0] !== 8'h0a) $fatal(1, "RX status=%h", rd);
 
     a = 32'h5000_0008;
     #1;
@@ -48,7 +49,42 @@ module uart_mmio_tb;
     @(negedge clk) re = 1'b0;
     a = 32'h5000_0004;
     #1;
-    if (rd[1]) $fatal(1, "RX valid did not clear");
+    if (rd[7:0] !== 8'h00) $fatal(1, "RX status after pop=%h", rd);
+
+    for (byte_index = 0; byte_index < 16; byte_index = byte_index + 1)
+      send_byte(8'h40 + byte_index);
+    repeat (3) @(posedge clk);
+    a = 32'h5000_0004;
+    #1;
+    if (rd[7:0] !== 8'h82) $fatal(1, "RX full status=%h", rd);
+
+    send_byte(8'hff);
+    repeat (3) @(posedge clk);
+    a = 32'h5000_0004;
+    #1;
+    if (rd[7:0] !== 8'h86) $fatal(1, "RX overrun status=%h", rd);
+
+    @(negedge clk) begin
+      a = 32'h5000_000c;
+      wd = 32'h0000_0001;
+      we = 1'b1;
+    end
+    @(negedge clk) we = 1'b0;
+    a = 32'h5000_0004;
+    #1;
+    if (rd[7:0] !== 8'h82) $fatal(1, "RX W1C status=%h", rd);
+
+    for (byte_index = 0; byte_index < 16; byte_index = byte_index + 1) begin
+      a = 32'h5000_0008;
+      #1;
+      if (rd !== (32'h0000_0040 + byte_index))
+        $fatal(1, "RX FIFO data=%h index=%d", rd, byte_index);
+      @(negedge clk) re = 1'b1;
+      @(negedge clk) re = 1'b0;
+    end
+    a = 32'h5000_0004;
+    #1;
+    if (rd[7:0] !== 8'h00) $fatal(1, "RX FIFO did not empty=%h", rd);
 
     @(negedge clk) begin
       a = 32'h5000_0000;

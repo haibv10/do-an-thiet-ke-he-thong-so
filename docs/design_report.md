@@ -10,10 +10,10 @@
 
 | Metric | Result |
 |---|---|
-| Simulation | 29 / 29 testbenches pass |
-| Fmax after place and route | 28.912 MHz against a 27 MHz constraint |
+| Simulation | 30 / 30 testbenches pass |
+| Fmax after place and route | 30.210 MHz against a 27 MHz constraint |
 | Timing violations | 0 setup, 0 hold |
-| Logic utilisation | 3321 / 8640 (39%) |
+| Logic utilisation | 3375 / 8640 (40%) |
 | Hardware | Banner reads `BOOT 5A5A5A5A 00000000`; 20x4 LCD displays `HELLO FPGA`; UART reports the PCF8574 at `0x27` |
 
 The hardware row is from a build carrying the fixes in [fix_log.md](fix_log.md).
@@ -480,7 +480,7 @@ Twenty-nine self-checking testbenches run under Icarus Verilog; all pass.
 | `i2c_mmio_tb` | MMIO handshake, busy flag, ACK capture |
 | `lcd_display_tb` | The standalone 20x4 sequencer, all 89 output bytes |
 | `cpu_top_tb` | Full system integration (below) |
-| `uart_hex_cpu_tb` | The `sltiu` plus branch sequence used by hex formatting |
+| `cpu_uart_hex_tb` | The `sltiu` plus branch sequence used by hex formatting |
 
 `cpu_top_tb` is the most important integration test: it loads a short RV32I
 program exercising forwarding, load-use stalling, branch and JAL flushing,
@@ -496,14 +496,14 @@ and bitstream generation for the GW1NR-9C against the 27 MHz constraint in
 | Metric | Result | Assessment |
 |---|---|---|
 | Clock constraint | 27.000 MHz | Onboard oscillator |
-| Actual Fmax | 28.912 MHz | 7% margin |
+| Actual Fmax | 30.210 MHz | 12% margin |
 | Setup violated endpoints | 0 | Pass |
 | Hold violated endpoints | 0 | Pass |
-| Deepest logic level | 8 | Critical path is the half-cycle DMEM read into MEM/WB |
-| Logic | 3321 / 8640 (39%) | — |
-| Registers | 1594 / 6693 (24%) | — |
+| Deepest logic level | 12 | FIFO-enabled build |
+| Logic | 3375 / 8640 (40%) | — |
+| Registers | 1599 / 6693 (24%) | — |
 | Registers inferred as latch | 0 / 6480 (0%) | Both I2C state machines have explicit default states |
-| CLS | 2733 / 4320 (64%) | — |
+| CLS | 2746 / 4320 (64%) | — |
 | BSRAM | 6 / 26 (24%) | IMEM dual-port, plus DMEM |
 | I/O ports | 8 / 71 (12%) | — |
 
@@ -558,14 +558,13 @@ Defects found in review, together with the evidence for each and the fix
 applied, are recorded in [fix_log.md](fix_log.md). This section lists only what
 is still open.
 
-### UART RX has no FIFO
+### UART RX has no flow control
 
-The receiver holds a single byte. It cannot sustain an unbounded stream: at
-115200 baud a transmit frame occupies ten bit times, which leaves the polling
-loop no slack against a host sending continuously. Bursts up to 256 bytes are
-lossless; a 1024-byte burst loses roughly 0.3%. Lossless sustained streaming
-requires a FIFO or hardware flow control, which this design deliberately does
-not implement.
+The receiver queues 16 bytes in a ring buffer and records an overrun when a
+new byte arrives while the buffer is full. This absorbs short service delays,
+but cannot sustain an unbounded stream faster than firmware can consume it.
+Lossless sustained streaming still requires hardware flow control, a larger
+buffer sized for the workload, or non-blocking software service.
 
 ### FENCE, ECALL and EBREAK are not implemented
 
@@ -602,7 +601,7 @@ ram/ram_3_ram_3_0_0_s/DO[7]  ->  reg_mem_wb/wb_read_data_28_s0/D
 clk:[F] -> clk:[R]   slack 1.225 ns
 ```
 
-At 28.912 MHz against a 27 MHz oscillator the margin is 7%, which passes with
+At 30.210 MHz against a 27 MHz oscillator the margin is 12%, which passes with
 zero violations but leaves little room. Recovering it means giving the read a
 full cycle, which costs a pipeline stage or a stall on every load.
 

@@ -46,8 +46,11 @@ Decoded on `a[7:0]`.
 |---|---|---|---|
 | `0x00` | Write | `[7:0]` | Byte to transmit; only takes effect while `tx_busy` is 0 |
 | `0x04` | Read | `[0]` | `tx_busy` — transmitter active |
-| `0x04` | Read | `[1]` | `rx_valid` — an unread byte is waiting |
-| `0x08` | Read | `[7:0]` | Received byte; the read clears `rx_valid` |
+| `0x04` | Read | `[1]` | `rx_valid` — RX FIFO is not empty |
+| `0x04` | Read | `[2]` | `rx_overrun` — sticky when a received byte was dropped because the FIFO was full |
+| `0x04` | Read | `[7:3]` | `rx_level` — number of queued bytes, from 0 through 16 |
+| `0x08` | Read | `[7:0]` | Oldest received byte; the read pops one byte when the FIFO is not empty |
+| `0x0c` | Write | `[0]` | Write one to clear `rx_overrun`; all other bits are ignored |
 
 Correct usage:
 
@@ -57,6 +60,10 @@ UART_TX_REG = value;                       /* then write */
 ```
 
 A write while `tx_busy` is 1 is dropped silently — there is no error flag.
+
+The RX FIFO holds 16 bytes. When full, a new byte is dropped without changing
+the queued order and sets `rx_overrun`. Reading `0x08` while empty returns zero
+and does not change the FIFO.
 
 ---
 
@@ -89,9 +96,9 @@ lcd_command(0x00);
 
 ## Known limitations
 
-**UART RX has no FIFO.** The receiver holds exactly one byte; a new byte
-overwrites the previous one if firmware has not read it. There is no overrun
-flag.
+**UART RX has a finite FIFO.** The receiver holds 16 bytes and reports a
+sticky overrun flag, but has no hardware flow control. A stream that remains
+faster than software can consume will eventually fill the FIFO and lose bytes.
 
 **The button is synchronised, not debounced.** Reading offset `0x04` gives a
 value that passed through two flip-flops, so it is never metastable, but a

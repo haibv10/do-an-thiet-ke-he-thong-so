@@ -28,6 +28,10 @@ the evidence in [../docs/fix_log.md](../docs/fix_log.md).
 | `09-source-layout-refactor.log` | `bash tools/run_tests.sh` | The renamed CPU, peripheral and library tree preserves all 29 testbench contracts |
 | `10-source-layout-fpga-build.log` | `bash tools/build_fpga.sh` | The refactored source tree completes P&R, timing analysis and bitstream generation at the existing timing/resource figures |
 | `11-source-layout-program-board.log` | `bash tools/program_fpga.sh` | The refactored bitstream reaches 100% SRAM programming and reports `Finished.` |
+| `12-uart-rx-fifo-simulation.log` | `bash tools/run_tests.sh` | Interrupted before UART RX because its new testbench reused a loop variable; retained as the pre-fix run record |
+| `13-uart-rx-fifo-simulation.log` | `bash tools/run_tests.sh` | 29 / 29 testbenches pass, including UART FIFO order, full, overrun, pop and W1C coverage |
+| `14-uart-rx-fifo-full-simulation.log` | `bash tools/run_tests.sh` | 30 / 30 testbenches pass, including CPU-level FIFO pop coverage |
+| `15-uart-rx-fifo-fpga-build.log` | `bash tools/build_fpga.sh` | FIFO tree completes P&R, timing analysis and bitstream generation: Fmax 30.210 MHz, 0 setup/hold violations, 3375 logic cells, 1599 registers and 6 BSRAM |
 
 `05-board-uart.log` previously read `I2C 21` and was cited as proof the backpack
 answers at `0x21`. That reading was corrupted by the same register file defect;

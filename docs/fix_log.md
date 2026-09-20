@@ -9,6 +9,8 @@ Entries are newest first.
 
 ## Contents
 
+- [2026-09-20 UART RX FIFO](#2026-09-20-uart-rx-fifo)
+  - [17. UART RX silently overwrote an unread byte](#17-uart-rx-silently-overwrote-an-unread-byte)
 - [2026-09-19 source layout](#2026-09-19-source-layout)
   - [16. RTL and testbench paths no longer described ownership](#16-rtl-and-testbench-paths-no-longer-described-ownership)
 - [2026-09-19 review follow-up](#2026-09-19-review-follow-up)
@@ -29,6 +31,36 @@ Entries are newest first.
   - [8. The ROM image left words undefined past the end of the firmware](#8-the-rom-image-left-words-undefined-past-the-end-of-the-firmware)
   - [9. Documentation described the I2C defect incorrectly](#9-documentation-described-the-i2c-defect-incorrectly)
   - [10. The PCF8574 address was recorded as `0x21`](#10-the-pcf8574-address-was-recorded-as-0x21)
+
+---
+
+## 2026-09-20 UART RX FIFO
+
+### 17. UART RX silently overwrote an unread byte
+
+**Symptom.** `uart_rx.v` stored only one received byte. A later valid frame
+replaced it before firmware read offset `0x50000008`, with no indication that
+data was lost. Historical board measurements recorded a mismatched 1024-byte
+echo stream.
+
+**Fix.** `uart_rx.v` now keeps sixteen bytes in a ring buffer. `uart_mmio.v`
+reports non-empty state, queue level and a sticky overrun bit at `0x50000004`.
+Reading `0x50000008` pops the oldest byte; writing one to `0x5000000c` bit zero
+clears the overrun indication. A full FIFO drops the new byte and preserves the
+queued sequence.
+
+**Verification.** [`logs/14-uart-rx-fifo-full-simulation.log`](../logs/14-uart-rx-fifo-full-simulation.log)
+records 30/30 PASS. The UART unit and MMIO tests cover FIFO order, full state,
+drop-on-full, sticky overrun, W1C clear and pop behavior; `cpu_uart_fifo_tb`
+covers two CPU loads popping queued bytes in order.
+
+**Build.** [`logs/15-uart-rx-fifo-fpga-build.log`](../logs/15-uart-rx-fifo-fpga-build.log)
+records P&R, timing analysis and bitstream generation complete at 30.210 MHz
+against the 27 MHz constraint with 0 setup/hold violations. The FIFO build uses
+3375/8640 logic cells, 1599/6693 registers and 6/26 BSRAM.
+
+**Status** — Simulation and FPGA build verified. SRAM programming and a new
+board throughput capture remain required before claiming physical validation.
 
 ---
 
@@ -734,6 +766,6 @@ Carried forward, not addressed in this pass.
 
 | Item | Impact |
 |---|---|
-| UART RX holds a single byte, with no FIFO and no overrun flag | A byte arriving before software reads the previous one is lost |
+| UART RX has no flow control | The 16-byte FIFO eventually fills if input remains faster than software service |
 | FENCE, ECALL and EBREAK are not implemented | 37 of the 40 RV32I base instructions |
 | U-type and J-type instructions can trigger a spurious load-use stall | `instr[19:15]` is immediate data for these formats but is still fed to the hazard unit as `rs1`. Costs one cycle, never wrong |

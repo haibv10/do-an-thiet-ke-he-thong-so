@@ -42,7 +42,7 @@ into the bitstream as ROM contents.
   through a byte-alignment stage
 - **Memory-mapped I/O** — one address decoder, five regions, no peripheral-specific
   CPU instructions
-- **UART** — 115200 8N1, transmit and receive, both memory mapped
+- **UART** — 115200 8N1, memory-mapped transmit and 16-byte receive FIFO
 - **I2C** — bit-banged master driving a 20x4 HD44780 LCD over a PCF8574 backpack
 - **Headless toolflow** — simulation, synthesis, place and route and programming
   all run from the command line
@@ -125,7 +125,7 @@ export GOWIN_ROOT=/home/haihbv/tools/Gowin_V1.9.12.03
 bash tools/run_tests.sh
 ```
 
-Runs 29 self-checking testbenches, ending with `firmware_boot_tb`, which boots
+Runs 30 self-checking testbenches, ending with `firmware_boot_tb`, which boots
 the real `sw/firmware.hex` image on the full SoC and decodes its UART output.
 Each prints `<name>: PASS`; the script stops at the first failure.
 
@@ -236,9 +236,9 @@ FT2232 JTAG channel, are collected in [docs/bringup.md](docs/bringup.md).
 
 | Layer | Result |
 |---|---|
-| Simulation | 29 / 29 testbenches pass on Icarus Verilog 12.0 |
-| Timing | Fmax 28.912 MHz against a 27 MHz constraint, 0 setup and 0 hold violations |
-| Resources | Logic 3321 / 8640 (39%), registers 1594 / 6693 (24%), BSRAM 6 / 26 (24%) |
+| Simulation | 30 / 30 testbenches pass on Icarus Verilog 12.0 |
+| Timing | Fmax 30.210 MHz against a 27 MHz constraint, 0 setup and 0 hold violations |
+| Resources | Logic 3375 / 8640 (40%), registers 1599 / 6693 (24%), BSRAM 6 / 26 (24%) |
 | Hardware | Banner reads `BOOT 5A5A5A5A 00000000`, LCD displays `HELLO FPGA`, UART reports the PCF8574 at `0x27` |
 
 Measurements and the logs behind them are in
@@ -246,12 +246,13 @@ Measurements and the logs behind them are in
 
 ## Known limitations
 
-- **UART RX holds a single byte.** There is no FIFO and no overrun flag; a new
-  byte overwrites the previous one if software has not read it.
+- **UART RX has no flow control.** Its 16-byte FIFO absorbs short bursts and
+  reports overrun, but a sustained stream faster than software can consume
+  still loses bytes.
 - **FENCE, ECALL and EBREAK are not implemented.** The core covers 37 of the 40
   RV32I base instructions; there is no trap or privilege machinery for the rest
   to hook into.
-- **Timing margin is 7%.** Fmax 28.912 MHz against the 27 MHz oscillator. The
+- **Timing margin is 12%.** Fmax 30.210 MHz against the 27 MHz oscillator. The
   binding path is the half-cycle memory read into MEM/WB.
 - **The user button is synchronised but not debounced.** A press produces
   several transitions; software has to filter them.

@@ -1,4 +1,6 @@
-module cpu_top (
+module cpu_top #(
+  parameter UART_CLKS_PER_BIT = 234
+) (
   input  wire clk,
   input  wire rst_n,
   output wire led_out,
@@ -256,7 +258,9 @@ module cpu_top (
 
   wire uart_read = mem_MemRead && (mem_alu_result[31:28] == 4'h5);
 
-  uart_mmio serial_port (
+  uart_mmio #(
+    .CLKS_PER_BIT(UART_CLKS_PER_BIT)
+  ) serial_port (
     .clk(clk), .rst_n(rst_n_sync), .we(we_uart), .re(uart_read),
     .a(mem_alu_result), .wd(mem_store_data), .rx(uart_rx_in),
     .rd(uart_rd), .tx(uart_tx_out)

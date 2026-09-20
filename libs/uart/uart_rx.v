@@ -1,15 +1,21 @@
 module uart_rx #(
-  parameter CLKS_PER_BIT = 234
+  parameter CLKS_PER_BIT = 234,
+  parameter FIFO_DEPTH = 16
 ) (
   input  wire       clk,
   input  wire       rst_n,
   input  wire       rx,
-  input  wire       clear,
-  output reg  [7:0] data,
-  output reg        valid
+  input  wire       pop,
+  input  wire       clear_overrun,
+  output wire [7:0] data,
+  output wire       valid,
+  output reg        overrun,
+  output wire [$clog2(FIFO_DEPTH + 1)-1:0] level
 );
 
   localparam HALF_CLKS_PER_BIT = CLKS_PER_BIT / 2;
+  localparam PTR_WIDTH = $clog2(FIFO_DEPTH);
+  localparam LEVEL_WIDTH = $clog2(FIFO_DEPTH + 1);
 
   localparam STATE_IDLE  = 2'b00;
   localparam STATE_START = 2'b01;
@@ -22,9 +28,21 @@ module uart_rx #(
   reg [7:0]  shift_data;
   reg        rx_meta;
   reg        rx_sync;
+  reg [7:0]  fifo [0:FIFO_DEPTH-1];
+  reg [PTR_WIDTH-1:0] read_ptr;
+  reg [PTR_WIDTH-1:0] write_ptr;
+  reg [LEVEL_WIDTH-1:0] count;
 
   wire byte_complete = (state == STATE_STOP) &&
                        (clk_count == CLKS_PER_BIT - 1) && rx_sync;
+  wire fifo_empty = (count == {LEVEL_WIDTH{1'b0}});
+  wire fifo_full = (count == FIFO_DEPTH);
+  wire do_pop = pop && !fifo_empty;
+  wire do_push = byte_complete && (!fifo_full || do_pop);
+
+  assign data = fifo_empty ? 8'd0 : fifo[read_ptr];
+  assign valid = !fifo_empty;
+  assign level = count;
 
   always @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
@@ -92,15 +110,32 @@ module uart_rx #(
     end
   end
 
+  // The FIFO keeps arrival order and drops only a byte that cannot be stored.
   always @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
-      data  <= 8'd0;
-      valid <= 1'b0;
-    end else if (byte_complete) begin
-      data  <= shift_data;
-      valid <= 1'b1;
-    end else if (clear) begin
-      valid <= 1'b0;
+      read_ptr <= {PTR_WIDTH{1'b0}};
+      write_ptr <= {PTR_WIDTH{1'b0}};
+      count <= {LEVEL_WIDTH{1'b0}};
+      overrun <= 1'b0;
+    end else begin
+      if (do_push) begin
+        fifo[write_ptr] <= shift_data;
+        write_ptr <= write_ptr + 1'b1;
+      end
+
+      if (do_pop)
+        read_ptr <= read_ptr + 1'b1;
+
+      case ({do_push, do_pop})
+        2'b10: count <= count + 1'b1;
+        2'b01: count <= count - 1'b1;
+        default: count <= count;
+      endcase
+
+      if (byte_complete && fifo_full && !do_pop)
+        overrun <= 1'b1;
+      else if (clear_overrun)
+        overrun <= 1'b0;
     end
   end
 

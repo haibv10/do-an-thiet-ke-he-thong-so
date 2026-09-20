@@ -2,21 +2,22 @@
 
 ## Simulation
 
-Icarus Verilog 12.0 passes twenty-nine self-checking tests. Coverage includes ALU and decode operations,
+Icarus Verilog 12.0 passes thirty self-checking tests. Coverage includes ALU and decode operations,
 immediate generation, register file read/write/bypass behavior, reset synchronisation, forwarding priority, load-use hazard
 detection, pipeline register reset/stall/flush behavior, branch and JAL flushing, subword memory accesses,
 GPIO MMIO, an UART TX frame containing `0x48`, UART RX framing with start/stop validation and LSB-first
-assembly, UART MMIO status and read-clear semantics, and a CPU-level echo that drives `0xA5` into the RX pin
+assembly, UART RX FIFO order/full/overrun behavior, UART MMIO pop and W1C semantics, and a CPU-level echo that drives `0xA5` into the RX pin
 and checks that the CPU transmits the same byte back, plus the I2C frame FSM, the PCF8574 LCD write sequence
 and the I2C MMIO handshake.
 
-Four tests are CPU-level programs rather than unit tests:
+Five tests are CPU-level programs rather than unit tests:
 
 | Testbench | What it proves |
 |---|---|
 | `cpu_hazard_tb` | RAW dependencies at distance one through four, including a load producer, and the load-use interlock |
 | `cpu_auipc_tb` | AUIPC at several program counters, loads out of the ROM window, and that a store into ROM is dropped |
-| `uart_hex_cpu_tb` | The `sltiu` plus branch sequence the hex formatter depends on |
+| `cpu_uart_hex_tb` | The `sltiu` plus branch sequence the hex formatter depends on |
+| `cpu_uart_fifo_tb` | Two UART frames queued before CPU loads, then popped in FIFO order through `0x50000008` |
 | `firmware_boot_tb` | The real `sw/firmware.hex` image booting on the full SoC, decoded off the UART pin |
 
 `firmware_boot_tb` is the end-to-end case. It checks the banner byte by byte:
@@ -45,21 +46,21 @@ Post-route summary:
 | Metric | Result |
 |---|---:|
 | Constraint | 27.000 MHz |
-| Actual Fmax | 28.912 MHz |
-| Logic levels | 8 |
+| Actual Fmax | 30.210 MHz |
+| Logic levels | 12 |
 | Setup violated endpoints | 0 |
 | Hold violated endpoints | 0 |
 | Setup TNS | 0.000 ns |
 | Hold TNS | 0.000 ns |
-| Logic | 3321 / 8640 (39%) |
-| Registers | 1594 / 6693 (24%) |
+| Logic | 3375 / 8640 (40%) |
+| Registers | 1599 / 6693 (24%) |
 | Registers inferred as latch | 0 / 6480 (0%) |
-| CLS | 2733 / 4320 (64%) |
+| CLS | 2746 / 4320 (64%) |
 | BSRAM | 6 / 26 (24%) |
 | I/O ports | 8 / 71 (12%) |
 
-These figures are from the current tree. Zero registers are inferred as latches, confirming the two I2C
-FSMs have explicit default states. Raw log: `logs/10-source-layout-fpga-build.log`.
+These figures are from the current UART FIFO tree. Zero registers are inferred as latches, confirming the two I2C
+FSMs have explicit default states. Raw log: `logs/15-uart-rx-fifo-fpga-build.log`.
 
 The board measurements further down are from a build carrying the fixes in [docs/fix_log.md](../fix_log.md),
 except where a row is explicitly labelled as a fault capture.
@@ -80,8 +81,13 @@ repeated `0x48` bytes, confirming the UART TX path from CPU MMIO through FPGA pi
 
 ### UART RX
 
-The echo firmware polls `rx_valid`, reads `UART_BASE + 0x08`, transmits the byte back, and drives the LED
-from bit 0 of the received value. Measurements use 115200 baud, 8N1, raw mode, no flow control:
+The measurements below were taken with the earlier one-byte receiver. The
+current receiver has a 16-byte FIFO, a sticky overrun flag and simulation
+coverage for FIFO order, full handling, pop and W1C clear in
+`logs/14-uart-rx-fifo-full-simulation.log`. It has not yet received a new board
+capture. The historical echo firmware polls `rx_valid`, reads `UART_BASE +
+0x08`, transmits the byte back, and drives the LED from bit 0 of the received
+value. Measurements use 115200 baud, 8N1, raw mode, no flow control:
 
 | Stimulus | Result |
 |---|---|
@@ -100,11 +106,11 @@ the written value, so this is a board level polarity convention rather than a da
 
 ### Known limitation
 
-The receiver holds a single byte and has no FIFO. A new byte overwrites the previous one if software has not
-read it yet. At 115200 baud a transmit frame occupies ten bit times, which leaves the polling loop no slack
-against a host sending continuously, so the design slips and drops bytes on sustained streams. Bursts up to
-256 bytes are lossless; a 1024 byte burst loses roughly 0.3% of the stream. Lossless sustained streaming
-requires an RX FIFO, which this feature deliberately does not implement.
+The 16-byte FIFO prevents silent overwrite of queued bytes and records an
+overrun, but it has no hardware flow control. At 115200 baud, a sustained
+stream faster than the software service rate still eventually fills the FIFO.
+The current FIFO behavior is simulation-verified only; a new board capture is
+required before making a physical throughput claim.
 
 ### I2C and LCD
 

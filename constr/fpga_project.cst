@@ -8,10 +8,6 @@ IO_PORT "clk" PULL_MODE=UP;
 IO_LOC "rst_n" 3;
 IO_PORT "rst_n" PULL_MODE=UP;
 
-// User button S1
-IO_LOC "btn_in" 4;
-IO_PORT "btn_in" PULL_MODE=UP;
-
 // Onboard LED, active low
 IO_LOC "led_out" 10;
 IO_PORT "led_out" PULL_MODE=UP DRIVE=8;

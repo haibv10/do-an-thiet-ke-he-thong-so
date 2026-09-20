@@ -85,7 +85,7 @@ bits select a register.
 |---|---|---|---|
 | `0x0` | `0x00000000` | IMEM (ROM) | Machine code for the IF stage, plus read-only data for loads |
 | `0x2` | `0x20000000` | DMEM (RAM) | Globals and stack |
-| `0x4` | `0x40000000` | GPIO | LED output, button input |
+| `0x4` | `0x40000000` | GPIO | LED output |
 | `0x5` | `0x50000000` | UART | Serial link to the laptop |
 | `0x6` | `0x60000000` | I2C | 20x4 LCD through a PCF8574 backpack |
 
@@ -220,11 +220,10 @@ adding a branch predictor.
 
 ## 5. The boundary with the outside world
 
-Everything inside the SoC runs on one 27 MHz clock. Three signals arriving from
-outside have no relationship to it: the reset button, the user button and the
-I2C data line, which the PCF8574 drives on its own timing. Sampling any of them
-directly can capture a register mid-transition, and the resulting metastable
-value takes an unbounded time to settle.
+Everything inside the SoC runs on one 27 MHz clock. The reset input and I2C
+data line have no relationship to it. Sampling either directly can capture a
+register mid-transition, and the resulting metastable value takes an unbounded
+time to settle.
 
 Each one therefore passes through two flip-flops before anything else sees it.
 The first may go metastable; the second has a full clock period to settle, which
@@ -248,10 +247,8 @@ assign rst_n_out = chain[STAGES-1];
 The pin drives the reset of this chain and nothing else; every other module in
 the design takes `rst_n_out`.
 
-Synchronising is not debouncing. A mechanical contact still produces several
-clean transitions where a human saw one press. For reset that is harmless, since
-each bounce re-asserts and the final release is still clean. For the user button
-software has to filter, and the register map says so.
+The reset input may bounce, but every low transition re-asserts reset and the
+final release still passes through the synchroniser chain.
 
 ---
 
@@ -259,13 +256,11 @@ software has to filter, and the register map says so.
 
 ### GPIO
 
-The simplest block in the system: a one-bit register driving the LED and a
-direct read path for the button.
+The simplest block in the system: a one-bit register driving the LED.
 
 | Address | Access | Function |
 |---|---|---|
 | `0x40000000` | Write / Read | Bit 0 drives the LED; reads return the value written |
-| `0x40000004` | Read | Bit 0 reflects the state of button S1 |
 
 ### UART — transmit and receive
 
@@ -572,14 +567,6 @@ buffer sized for the workload, or non-blocking software service.
 Two of the 40 RV32I base instructions remain. ECALL and EBREAK need a trap
 vector, privilege level and CSR file to provide architectural behavior. Adding
 them properly means adding machine-mode CSRs first.
-
-### The user button is synchronised but not debounced
-
-Two flip-flops stop a metastable value reaching the CPU, but a mechanical
-contact still produces several clean transitions per press. Software reading
-offset `0x40000004` sees all of them. Filtering belongs with whatever uses the
-button, since how long a press must be held is an application decision, so the
-hardware deliberately does not impose one.
 
 ### The memory read path only gets half a clock period
 

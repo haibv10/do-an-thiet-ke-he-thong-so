@@ -5,7 +5,6 @@ module cpu_top_tb;
 
   logic clk = 1'b0;
   logic rst_n = 1'b0;
-  logic btn_in = 1'b0;
   logic uart_rx_in = 1'b1;
   logic led_out;
   logic uart_tx_out;
@@ -22,7 +21,6 @@ module cpu_top_tb;
     .clk(clk),
     .rst_n(rst_n),
     .led_out(led_out),
-    .btn_in(btn_in),
     .uart_rx_in(uart_rx_in),
     .uart_tx_out(uart_tx_out), .i2c_sda(i2c_sda), .i2c_scl(i2c_scl)
   );

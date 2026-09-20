@@ -16,7 +16,7 @@ module cpu_fence_tb;
   always #18.5 clk = ~clk;
 
   cpu_top dut (
-    .clk(clk), .rst_n(rst_n), .led_out(led_out), .btn_in(1'b0),
+    .clk(clk), .rst_n(rst_n), .led_out(led_out),
     .uart_rx_in(1'b1), .uart_tx_out(uart_tx_out),
     .i2c_sda(i2c_sda), .i2c_scl(i2c_scl)
   );

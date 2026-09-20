@@ -66,14 +66,14 @@ Not run; no simulator is configured in the repository.
 ```
 
 ```text
-fix(gpio): correct active-low button handling
+fix(gpio): correct active-low LED handling
 
 Context:
-The button input is active-low while the LED output is active-high.
+The board LED is active-low while software writes the logical LED state.
 
 Changes:
-Invert the input at the GPIO boundary and preserve the software-visible register format.
+Preserve the software-visible register format while matching the board output polarity.
 
 Verification:
-Simulation passed for reset, released button, and pressed button states.
+Simulation passed for reset, LED set and LED clear states.
 ```

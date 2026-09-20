@@ -9,6 +9,8 @@ Entries are newest first.
 
 ## Contents
 
+- [2026-09-21 GPIO button scope removal](#2026-09-21-gpio-button-scope-removal)
+  - [21. GPIO included an unused button input](#21-gpio-included-an-unused-button-input)
 - [2026-09-21 FENCE](#2026-09-21-fence)
   - [20. FENCE decoded only as an accidental no-op](#20-fence-decoded-only-as-an-accidental-no-op)
 - [2026-09-21 U/J load-use stall](#2026-09-21-uj-load-use-stall)
@@ -37,6 +39,24 @@ Entries are newest first.
   - [8. The ROM image left words undefined past the end of the firmware](#8-the-rom-image-left-words-undefined-past-the-end-of-the-firmware)
   - [9. Documentation described the I2C defect incorrectly](#9-documentation-described-the-i2c-defect-incorrectly)
   - [10. The PCF8574 address was recorded as `0x21`](#10-the-pcf8574-address-was-recorded-as-0x21)
+
+---
+
+## 2026-09-21 GPIO button scope removal
+
+### 21. GPIO included an unused button input
+
+**Scope.** The project no longer includes S1 as a software input. GPIO now
+owns only the LED output register at `0x40000000`.
+
+**Changes.** Remove `btn_in` from `cpu_top`, `gpio_mmio`, integration
+testbenches and the FPGA constraint file. Offset `0x40000004` is now unmapped
+and reads zero. The S1 pin constraint is removed; reset S2 remains on pin 3.
+
+**Verification.** The full simulation suite passes 31/31. `gpio_mmio_tb`
+covers reset, LED write/read and the removed offset. FPGA build completes
+timing analysis and bitstream generation; SRAM programming reaches 100% with
+`Finished.`.
 
 ---
 
@@ -350,10 +370,10 @@ same cycle. A pipeline that comes out of reset half in one state and half in
 another produces exactly the kind of symptom that gets misdiagnosed as an RTL
 bug.
 
-`btn_in`, also a mechanical button, was read combinationally straight into the
-GPIO read mux, so a press landing near a clock edge could hand the CPU a
-metastable bit. `sda` was sampled for the ACK bit directly off the pad, and the
-PCF8574 drives it on its own timing.
+At the time of this review, `btn_in` was also read combinationally through the
+GPIO mux. That S1 input, its MMIO register and pin constraint were later
+removed from project scope. `sda` was sampled for the ACK bit directly off the
+pad, and the PCF8574 drives it on its own timing.
 
 `uart_rx_in` was already synchronised with a two-stage chain, so the technique
 was present in the design; it had just not been applied evenly.
@@ -362,8 +382,6 @@ was present in the design; it had just not been applied evenly.
 
 - add [`src/reset_sync.v`](../src/reset_sync.v): asynchronous assert, release
   gated through a two-stage chain, and route every module's `rst_n` through it
-- synchronise `btn_in` in [`src/gpio.v`](../src/gpio.v) before software can read
-  it, resetting the chain high because the button is active low with a pull-up
 - synchronise `sda` in [`src/i2c_writeframe.v`](../src/i2c_writeframe.v) before
   the ACK sample, free running on `clk` rather than on the 1 MHz tick, since
   metastability settles in clock cycles
@@ -374,12 +392,9 @@ edges while the pin is held, does not move when the pin is released between
 edges, and rises only after the chain has clocked twice. It then repeats the
 whole cycle, so the chain is not one-shot.
 
-`tb/gpio_tb.sv` is new and covers the button path end to end, including that a
-pin change is invisible after one clock edge and visible after two.
-
 ```
 reset_sync_tb: PASS
-gpio_tb: PASS
+gpio_mmio_tb: PASS
 ```
 
 Board behaviour is unchanged, as expected: this removes a failure mode rather
@@ -413,15 +428,6 @@ the constraint with zero violations. But 7% is thin enough to record, and the
 lever for recovering it is the half-cycle memory read, not the reset.
 
 **Status** — Fixed.
-
-### Still open from this pass
-
-**No debounce.** Synchronising stops a metastable bit reaching the CPU; it does
-not stop a bouncing contact producing several clean transitions. For `rst_n`
-that is harmless, since each bounce simply re-asserts reset and the final
-release is still clean. For `btn_in` software sees the bounces and would have to
-filter them. Left deliberately: debouncing is a policy choice about how long a
-press must be held, and belongs with whatever eventually uses the button.
 
 ---
 

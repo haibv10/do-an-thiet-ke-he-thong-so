@@ -67,17 +67,16 @@ into the bitstream as ROM contents.
                             │ RAM 4K ││      ││ 8N1  ││        │
                             └────────┘└──┬───┘└──┬───┘└───┬────┘
                                          ▼       ▼        ▼
-                                    LED, button laptop  20x4 LCD
+                                    LED        laptop  20x4 LCD
                                                         (PCF8574)
 ```
 
 Branches resolve in EX, so a taken branch costs two cycles. There is no branch
 predictor; the design trades those cycles for a simpler control path.
 
-Nothing outside the design reaches a register directly. The reset button, the
-user button and the I2C data line each pass through a two-stage synchroniser
-first, and reset is released in step with the clock rather than whenever the
-contact happens to close.
+The reset input and I2C data line pass through their required clock-domain
+protection before the design uses them. Reset releases in step with the clock
+rather than whenever the contact happens to open.
 
 The ROM has a second read port wired to the same decoder, so loads from region
 `0x0` reach `.rodata` and the load image of `.data`. That is what lets the
@@ -89,7 +88,7 @@ firmware use string literals and initialised globals.
 |---|---|---|---|
 | `0x0` | `0x00000000` | Instruction memory, 4 KB | Fetch, plus read-only data access for `.rodata` and the `.data` load image |
 | `0x2` | `0x20000000` | Data memory, 4 KB | Globals and stack |
-| `0x4` | `0x40000000` | GPIO | LED output, button input |
+| `0x4` | `0x40000000` | GPIO | LED output |
 | `0x5` | `0x50000000` | UART | 115200 8N1, TX and RX |
 | `0x6` | `0x60000000` | I2C | 20x4 LCD through a PCF8574 |
 
@@ -201,7 +200,6 @@ ROM, and `00000000` is a `.bss` global, so it only reads back as zero if
 |---|---|---|
 | 52 | `clk` | 27 MHz onboard oscillator |
 | 3 | `rst_n` | Button S2 |
-| 4 | `btn_in` | Button S1 |
 | 10 | `led_out` | Onboard LED (active low) |
 | 34 | `uart_tx_out` | RXD on the external USB-UART module |
 | 33 | `uart_rx_in` | TXD on the external USB-UART module |
@@ -252,8 +250,6 @@ Measurements and the logs behind them are in
   base instructions; there is no trap or privilege machinery for them to hook into.
 - **Timing margin is 12%.** Fmax 30.210 MHz against the 27 MHz oscillator. The
   binding path is the half-cycle memory read into MEM/WB.
-- **The user button is synchronised but not debounced.** A press produces
-  several transitions; software has to filter them.
 
 Defects found and fixed, each with the evidence behind it, are recorded in
 [docs/fix_log.md](docs/fix_log.md).

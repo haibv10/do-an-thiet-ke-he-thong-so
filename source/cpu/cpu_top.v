@@ -4,7 +4,6 @@ module cpu_top #(
   input  wire clk,
   input  wire rst_n,
   output wire led_out,
-  input  wire btn_in,
   input  wire uart_rx_in,
   output wire uart_tx_out,
   inout wire i2c_sda,
@@ -256,7 +255,7 @@ module cpu_top #(
 
   gpio_mmio led_controller (
     .clk(clk), .rst_n(rst_n_sync), .we(we_gpio), .a(mem_alu_result),
-    .wd(mem_store_data), .rd(gpio_rd), .led(led_out), .btn_in(btn_in)
+    .wd(mem_store_data), .rd(gpio_rd), .led(led_out)
   );
 
   wire uart_read = mem_MemRead && (mem_alu_result[31:28] == 4'h5);

@@ -27,7 +27,6 @@ Decoded on `a[7:0]`.
 |---|---|---|---|
 | `0x00` | Write | `[0]` | LED output |
 | `0x00` | Read | `[0]` | Reads back the value last written |
-| `0x04` | Read | `[0]` | State of button S1 |
 
 The onboard LED on the Tang Nano 9K is **active low**: writing `1` turns it off.
 The register still holds exactly what was written, so this is a board convention
@@ -99,11 +98,6 @@ lcd_command(0x00);
 **UART RX has a finite FIFO.** The receiver holds 16 bytes and reports a
 sticky overrun flag, but has no hardware flow control. A stream that remains
 faster than software can consume will eventually fill the FIFO and lose bytes.
-
-**The button is synchronised, not debounced.** Reading offset `0x04` gives a
-value that passed through two flip-flops, so it is never metastable, but a
-mechanical press still produces several transitions. Software has to filter
-them.
 
 **Peripheral registers alias.** Each peripheral decodes only its low address
 bits — `a[7:0]` for GPIO and UART, `a[3:2]` for I2C — so `0x40000100` hits the

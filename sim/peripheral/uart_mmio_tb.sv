@@ -66,6 +66,16 @@ module uart_mmio_tb;
 
     @(negedge clk) begin
       a = 32'h5000_000c;
+      wd = 32'h0000_0004;
+      we = 1'b1;
+    end
+    @(negedge clk) we = 1'b0;
+    a = 32'h5000_0004;
+    #1;
+    if (rd[7:0] !== 8'h86) $fatal(1, "status bit 2 cleared W1C=%h", rd);
+
+    @(negedge clk) begin
+      a = 32'h5000_000c;
       wd = 32'h0000_0001;
       we = 1'b1;
     end

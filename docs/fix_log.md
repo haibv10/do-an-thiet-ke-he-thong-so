@@ -9,6 +9,8 @@ Entries are newest first.
 
 ## Contents
 
+- [2026-09-21 UART FIFO board test](#2026-09-21-uart-fifo-board-test)
+  - [18. Firmware wrote the status bit to the W1C control register](#18-firmware-wrote-the-status-bit-to-the-w1c-control-register)
 - [2026-09-20 UART RX FIFO](#2026-09-20-uart-rx-fifo)
   - [17. UART RX silently overwrote an unread byte](#17-uart-rx-silently-overwrote-an-unread-byte)
 - [2026-09-19 source layout](#2026-09-19-source-layout)
@@ -31,6 +33,45 @@ Entries are newest first.
   - [8. The ROM image left words undefined past the end of the firmware](#8-the-rom-image-left-words-undefined-past-the-end-of-the-firmware)
   - [9. Documentation described the I2C defect incorrectly](#9-documentation-described-the-i2c-defect-incorrectly)
   - [10. The PCF8574 address was recorded as `0x21`](#10-the-pcf8574-address-was-recorded-as-0x21)
+
+---
+
+## 2026-09-21 UART FIFO board test
+
+### 18. Firmware wrote the status bit to the W1C control register
+
+**Symptom.** The FIFO board protocol printed `RXFIFO CASE16`, `RXFIFO
+CASE17`, then `RXFIFO FAIL` in both
+[`logs/23-uart-rx-fifo-board-protocol.log`](../logs/23-uart-rx-fifo-board-protocol.log)
+and [`logs/27-uart-rx-fifo-board-test-firmware-protocol.log`](../logs/27-uart-rx-fifo-board-test-firmware-protocol.log).
+The second failure followed a firmware rebuild, so the earlier explanation
+that only a stale firmware image caused the first failure was not supported.
+These captures report only an aggregate result; they do not identify which
+case first failed.
+
+**Cause.** `UART_STAT_REG` reports `rx_overrun` in bit 2 (`0x04`), but the
+write-one-to-clear control at `UART_CTRL_REG` accepts bit 0 (`0x01`). The
+firmware wrote `0x04` when draining the FIFO and after the 17-byte case, so
+those writes could never clear the sticky overrun flag.
+
+**Fix.** Use a separate `UART_CTRL_CLEAR_OVERRUN` value of `0x01`. Report
+case 16 and case 17 results independently, and drain/clear the FIFO between
+cases. The MMIO test now confirms that writing `0x04` leaves overrun set and
+writing `0x01` clears it.
+
+**Simulation.** [`logs/28-uart-rx-fifo-w1c-fix-simulation.log`](../logs/28-uart-rx-fifo-w1c-fix-simulation.log)
+records 30/30 PASS; the rebuilt firmware image is 1024 ROM words.
+
+**Board verification.** [`logs/29-uart-rx-fifo-w1c-fix-build.log`](../logs/29-uart-rx-fifo-w1c-fix-build.log)
+records P&R, timing analysis and bitstream generation complete.
+[`logs/30-uart-rx-fifo-w1c-fix-program.log`](../logs/30-uart-rx-fifo-w1c-fix-program.log)
+records SRAM programming at 100% with `Finished.`. The protocol capture in
+[`logs/31-uart-rx-fifo-w1c-fix-protocol.log`](../logs/31-uart-rx-fifo-w1c-fix-protocol.log)
+records `CASE16 PASS`, `CASE17 PASS` and `RXFIFO PASS`.
+
+**Status** — Fixed and board-verified. Case 16 proves ordered receipt of a
+full FIFO without overrun. Case 17 proves that the FIFO retains its first 16
+bytes, records the 17th-byte drop, and clears overrun through W1C.
 
 ---
 
@@ -59,8 +100,14 @@ records P&R, timing analysis and bitstream generation complete at 30.210 MHz
 against the 27 MHz constraint with 0 setup/hold violations. The FIFO build uses
 3375/8640 logic cells, 1599/6693 registers and 6/26 BSRAM.
 
-**Status** — Simulation and FPGA build verified. SRAM programming and a new
-board throughput capture remain required before claiming physical validation.
+**Board boot.** [`logs/17-uart-rx-fifo-program-board.log`](../logs/17-uart-rx-fifo-program-board.log)
+records SRAM programming at 100% with `Finished.`. The reset capture in
+[`logs/18-uart-rx-fifo-board-uart.log`](../logs/18-uart-rx-fifo-board-uart.log)
+records `BOOT 5A5A5A5A 00000000` and `I2C 27` from the FIFO bitstream.
+
+**Status** — Simulation, FPGA build and board boot are verified. The first
+UART RX board workload failed because its firmware wrote the wrong W1C bit;
+physical FIFO validation remains pending after the firmware correction above.
 
 ---
 

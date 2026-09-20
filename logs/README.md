@@ -32,6 +32,21 @@ the evidence in [../docs/fix_log.md](../docs/fix_log.md).
 | `13-uart-rx-fifo-simulation.log` | `bash tools/run_tests.sh` | 29 / 29 testbenches pass, including UART FIFO order, full, overrun, pop and W1C coverage |
 | `14-uart-rx-fifo-full-simulation.log` | `bash tools/run_tests.sh` | 30 / 30 testbenches pass, including CPU-level FIFO pop coverage |
 | `15-uart-rx-fifo-fpga-build.log` | `bash tools/build_fpga.sh` | FIFO tree completes P&R, timing analysis and bitstream generation: Fmax 30.210 MHz, 0 setup/hold violations, 3375 logic cells, 1599 registers and 6 BSRAM |
+| `17-uart-rx-fifo-program-board.log` | `bash tools/program_fpga.sh` | FIFO bitstream reaches 100% SRAM programming and reports `Finished.` |
+| `18-uart-rx-fifo-board-uart.log` | `picocom` on the external USB-UART | FIFO bitstream boots with the `.data`/`.bss` banner and reports PCF8574 at `0x27`; it does not exercise UART RX |
+| `19-uart-rx-fifo-board-test-simulation.log` | `bash tools/run_tests.sh` | 30 / 30 tests pass after adding the first board-test firmware command |
+| `20-uart-rx-fifo-board-test-final-simulation.log` | `bash tools/run_tests.sh` | 30 / 30 tests pass after removing an impractically slow firmware simulation fixture |
+| `21-uart-rx-fifo-board-test-fpga-build.log` | `bash tools/build_fpga.sh` | First board-test firmware bitstream builds successfully |
+| `22-uart-rx-fifo-board-test-program.log` | `bash tools/program_fpga.sh` | First board-test bitstream reaches 100% SRAM programming and `Finished.` |
+| `23-uart-rx-fifo-board-protocol.log` | `tools/uart_fifo_board_test.py` | Both case markers appear, followed by `RXFIFO FAIL` |
+| `24-uart-rx-fifo-board-test-firmware-simulation.log` | `bash tools/run_tests.sh` | 30 / 30 tests pass after rebuilding firmware, before the W1C correction |
+| `25-uart-rx-fifo-board-test-firmware-build.log` | `bash tools/build_fpga.sh` | Rebuilt board-test firmware bitstream builds successfully |
+| `26-uart-rx-fifo-board-test-firmware-program.log` | `bash tools/program_fpga.sh` | Rebuilt bitstream reaches 100% SRAM programming and `Finished.` |
+| `27-uart-rx-fifo-board-test-firmware-protocol.log` | `tools/uart_fifo_board_test.py` | The rebuilt firmware still reports `RXFIFO FAIL` |
+| `28-uart-rx-fifo-w1c-fix-simulation.log` | `bash tools/run_tests.sh` | 30 / 30 tests pass; W1C regression checks that status bit `0x04` does not clear the flag |
+| `29-uart-rx-fifo-w1c-fix-build.log` | `bash tools/build_fpga.sh` | Corrected W1C firmware tree completes P&R, timing analysis and bitstream generation |
+| `30-uart-rx-fifo-w1c-fix-program.log` | `bash tools/program_fpga.sh` | Corrected bitstream reaches 100% SRAM programming and `Finished.` |
+| `31-uart-rx-fifo-w1c-fix-protocol.log` | `tools/uart_fifo_board_test.py` | Board test passes ordered 16-byte reception, 17-byte overrun handling and W1C clear |
 
 `05-board-uart.log` previously read `I2C 21` and was cited as proof the backpack
 answers at `0x21`. That reading was corrupted by the same register file defect;

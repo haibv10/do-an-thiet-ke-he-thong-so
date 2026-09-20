@@ -69,10 +69,16 @@ The generated SRAM bitstream is `build/gowin/impl/pnr/fpga_project.fs`.
 
 ## Hardware
 
-Gowin Programmer detects the Tang Nano 9K as `GW1NR-9C` with ID `0x1100481B`. The refactored tree was
-programmed into SRAM at 100% through the FT2CH JTAG channel; see `logs/11-source-layout-program-board.log`.
-The FT2232 UART interface 1 enumerates as `/dev/ttyUSB1`. No new UART/LCD capture was taken after that
-programming step, so the functional measurements below remain the prior board evidence.
+Gowin Programmer detects the Tang Nano 9K as `GW1NR-9C` with ID `0x1100481B`.
+The UART FIFO tree was programmed into SRAM at 100% through the FT2CH JTAG
+channel; see `logs/17-uart-rx-fifo-program-board.log`. The external USB-UART
+capture in `logs/18-uart-rx-fifo-board-uart.log` records `BOOT 5A5A5A5A
+00000000` and `I2C 27` after reset. It confirms that the FIFO bitstream boots
+and preserves the existing startup/I2C path. The corrected follow-up firmware
+test is built in `logs/29-uart-rx-fifo-w1c-fix-build.log`, programmed in
+`logs/30-uart-rx-fifo-w1c-fix-program.log`, and reports `CASE16 PASS`,
+`CASE17 PASS` and `RXFIFO PASS` in
+`logs/31-uart-rx-fifo-w1c-fix-protocol.log`.
 
 ### UART TX
 
@@ -84,10 +90,11 @@ repeated `0x48` bytes, confirming the UART TX path from CPU MMIO through FPGA pi
 The measurements below were taken with the earlier one-byte receiver. The
 current receiver has a 16-byte FIFO, a sticky overrun flag and simulation
 coverage for FIFO order, full handling, pop and W1C clear in
-`logs/14-uart-rx-fifo-full-simulation.log`. It has not yet received a new board
-capture. The historical echo firmware polls `rx_valid`, reads `UART_BASE +
-0x08`, transmits the byte back, and drives the LED from bit 0 of the received
-value. Measurements use 115200 baud, 8N1, raw mode, no flow control:
+`logs/28-uart-rx-fifo-w1c-fix-simulation.log`. The corrected board protocol
+passes all FIFO cases in `logs/31-uart-rx-fifo-w1c-fix-protocol.log`. The historical echo firmware polls
+`rx_valid`, reads `UART_BASE + 0x08`, transmits the byte back, and drives the
+LED from bit 0 of the received value. Measurements use 115200 baud, 8N1, raw
+mode, no flow control:
 
 | Stimulus | Result |
 |---|---|
@@ -109,8 +116,9 @@ the written value, so this is a board level polarity convention rather than a da
 The 16-byte FIFO prevents silent overwrite of queued bytes and records an
 overrun, but it has no hardware flow control. At 115200 baud, a sustained
 stream faster than the software service rate still eventually fills the FIFO.
-The current FIFO behavior is simulation-verified only; a new board capture is
-required before making a physical throughput claim.
+The board protocol verifies a 16-byte burst, a 17-byte overrun burst, FIFO
+ordering and W1C clear. It does not measure lossless sustained throughput;
+the FIFO has no hardware flow control.
 
 ### I2C and LCD
 

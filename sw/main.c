@@ -6,14 +6,22 @@
 #define UART_TX_REG   (*((volatile unsigned int *) UART_BASE))
 #define UART_STAT_REG (*((volatile unsigned int *) (UART_BASE + 4)))
 #define UART_RX_REG   (*((volatile unsigned int *) (UART_BASE + 8)))
+#define UART_CTRL_REG (*((volatile unsigned int *) (UART_BASE + 12)))
 #define LCD_WRITE_REG (*((volatile unsigned int *) I2C_BASE))
 #define LCD_STAT_REG  (*((volatile unsigned int *) (I2C_BASE + 4)))
 #define LCD_ADDR_REG  (*((volatile unsigned int *) (I2C_BASE + 8)))
 
 #define UART_TX_BUSY  0x01
 #define UART_RX_VALID 0x02
+#define UART_RX_OVERRUN 0x04
+#define UART_RX_LEVEL_MASK 0xf8
+#define UART_CTRL_CLEAR_OVERRUN 0x01
 #define LCD_BUSY      0x01
 #define LCD_ACK       0x02
+
+#ifndef UART_FIFO_TEST_TIMEOUT
+#define UART_FIFO_TEST_TIMEOUT 270000U
+#endif
 
 // Lives in .rodata, so reading it exercises the ROM window at region 0x0.
 static const char hex_digits[] = "0123456789ABCDEF";
@@ -53,6 +61,76 @@ static void uart_hex32(unsigned int value) {
   uart_hex8((unsigned char) (value >> 16));
   uart_hex8((unsigned char) (value >> 8));
   uart_hex8((unsigned char) value);
+}
+
+static void uart_fifo_drain(void) {
+  while (UART_STAT_REG & UART_RX_VALID) {
+    (void) UART_RX_REG;
+  }
+  UART_CTRL_REG = UART_CTRL_CLEAR_OVERRUN;
+}
+
+static int uart_fifo_wait(unsigned int mask, unsigned int expected) {
+  unsigned int timeout = UART_FIFO_TEST_TIMEOUT;
+
+  while (timeout != 0) {
+    if ((UART_STAT_REG & mask) == expected) return 1;
+    timeout--;
+  }
+
+  return 0;
+}
+
+static int uart_fifo_check(const unsigned char *expected,
+                           unsigned int count,
+                           unsigned int expected_overrun) {
+  unsigned int index;
+  unsigned int status = UART_STAT_REG;
+
+  if ((status & UART_RX_LEVEL_MASK) != (count << 3)) return 0;
+  if (((status & UART_RX_OVERRUN) != 0) != expected_overrun) return 0;
+
+  for (index = 0; index < count; index++) {
+    if ((UART_STAT_REG & UART_RX_VALID) == 0) return 0;
+    if ((unsigned char) UART_RX_REG != expected[index]) return 0;
+  }
+
+  if (UART_STAT_REG & UART_RX_VALID) return 0;
+
+  if (expected_overrun) {
+    UART_CTRL_REG = UART_CTRL_CLEAR_OVERRUN;
+    if (UART_STAT_REG & UART_RX_OVERRUN) return 0;
+  }
+
+  return 1;
+}
+
+static void uart_fifo_test(void) {
+  static const unsigned char case16[] = {
+    0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17,
+    0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f
+  };
+  static const unsigned char case17[] = {
+    0x80, 0x81, 0x82, 0x83, 0x84, 0x85, 0x86, 0x87,
+    0x88, 0x89, 0x8a, 0x8b, 0x8c, 0x8d, 0x8e, 0x8f, 0x90
+  };
+  int case16_passed;
+  int case17_passed;
+
+  uart_fifo_drain();
+
+  uart_puts("RXFIFO CASE16\r\n");
+  case16_passed = uart_fifo_wait(UART_RX_LEVEL_MASK, 16U << 3);
+  if (case16_passed) case16_passed = uart_fifo_check(case16, 16, 0);
+  uart_puts(case16_passed ? "RXFIFO CASE16 PASS\r\n" : "RXFIFO CASE16 FAIL\r\n");
+
+  uart_fifo_drain();
+  uart_puts("RXFIFO CASE17\r\n");
+  case17_passed = uart_fifo_wait(UART_RX_OVERRUN, UART_RX_OVERRUN);
+  if (case17_passed) case17_passed = uart_fifo_check(case17, 16, 1);
+  uart_puts(case17_passed ? "RXFIFO CASE17 PASS\r\n" : "RXFIFO CASE17 FAIL\r\n");
+
+  uart_puts(case16_passed && case17_passed ? "RXFIFO PASS\r\n" : "RXFIFO FAIL\r\n");
 }
 
 static void lcd_wait_ready(void) {
@@ -119,6 +197,7 @@ int main(void) {
   uart_hex32(bss_marker);
   uart_puts("\r\n");
 
+  lcd_address = -1;
   delay_cycles(1080000);
   lcd_address = lcd_find_address();
   if (lcd_address >= 0) {
@@ -128,6 +207,10 @@ int main(void) {
   }
 
   while (1) {
+    if (UART_STAT_REG & UART_RX_VALID) {
+      if ((unsigned char) UART_RX_REG == 'T') uart_fifo_test();
+    }
+
     uart_puts("I2C ");
     if (lcd_address >= 0) {
       uart_hex8((unsigned char) lcd_address);

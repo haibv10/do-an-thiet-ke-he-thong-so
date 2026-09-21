@@ -57,7 +57,7 @@ into the bitstream as ROM contents.
 ```text
    ┌──────────────┐          ┌────────────────────────────────┐
    │    IMEM      │  instr   │   RV32I CPU — 5-stage pipeline  │
-   │  ROM 4 KB    │ ───────► │      IF · ID · EX · MEM · WB    │
+   │  ROM 8 KB    │ ───────► │      IF · ID · EX · MEM · WB    │
    └──────────────┘          └────────────────┬───────────────┘
                                               │ addr · wdata · we_mask
                                               ▼
@@ -90,7 +90,7 @@ firmware use string literals and initialised globals.
 
 | `addr[31:28]` | Base | Device | Notes |
 |---|---|---|---|
-| `0x0` | `0x00000000` | Instruction memory, 4 KB | Fetch, plus read-only data access for `.rodata` and the `.data` load image |
+| `0x0` | `0x00000000` | Instruction memory, 8 KB | Fetch, plus read-only data access for `.rodata` and the `.data` load image |
 | `0x2` | `0x20000000` | Data memory, 4 KB | Globals and stack |
 | `0x4` | `0x40000000` | GPIO | LED output |
 | `0x5` | `0x50000000` | UART | 115200 8N1, TX and RX |

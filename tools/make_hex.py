@@ -7,7 +7,7 @@ than x in simulation, and it makes the synthesised BSRAM contents deterministic.
 import sys
 
 # Must match the ROM depth in source/cpu/mem_instruction_rom.v.
-ROM_WORDS = 1024
+ROM_WORDS = 2048
 
 
 def convert_bin_to_hex(bin_path, hex_path, rom_words=ROM_WORDS):

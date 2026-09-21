@@ -62,7 +62,7 @@ module cpu_hazard_tb;
 
   initial begin
     #1;
-    for (index = 0; index < 1024; index = index + 1)
+    for (index = 0; index < 2048; index = index + 1)
       dut.rom.rom[index] = NOP;
 
     dut.rom.rom[0]  = {20'h20000, 5'd20, 7'b0110111}; // lui x20, 0x20000

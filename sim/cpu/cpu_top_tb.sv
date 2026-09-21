@@ -131,7 +131,7 @@ module cpu_top_tb;
 
   initial begin
     #1;
-    for (index = 0; index < 1024; index = index + 1)
+    for (index = 0; index < 2048; index = index + 1)
       dut.rom.rom[index] = 32'h0000_0013;
 
     dut.rom.rom[0]  = encode_u(20'h20000, 5'd4, 7'b0110111);

@@ -155,6 +155,18 @@ them. `-flto` would recover most of it and is deliberately not used:
 `delay_loop` is calibrated against the five-instruction shape `-O1` emits, and
 the disassembly confirms that shape survives the split.
 
+On the board the behaviour is unchanged, which is what a layout change has to
+prove. Each line of the capture covers a different seam that the split could
+have broken. Raw log: `logs/15-sw-layout/03-board.log`.
+
+```text
+BOOT 5A5A5A5A 00000000     .rodata still reachable after hex_digits moved
+TFT INIT
+TFT BARS                   spi_set_control still works from spi_bus
+RTC OSF CLEAR              i2c_last_byte replaced the direct register read
+RTC 2026-09-21 17:15:01
+```
+
 ---
 
 ## 2026-09-21 panel interface

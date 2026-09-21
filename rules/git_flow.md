@@ -18,6 +18,8 @@ feat/* → develop → release/* → main
 | `feat/*` | One feature or subsystem. Branched from `develop`, merged back into `develop`. |
 | `release/*` | Release preparation. Branched from `develop`, merged into `main`. |
 | `fix/*` | Bug fix for an unreleased change. Same lifecycle as `feat/*`. |
+| `docs/*` | Documentation, diagrams or these guides, with no change to RTL, firmware or tooling. Same lifecycle as `feat/*`. |
+| `chore/*` | Repository setup, CI, ignore rules and build tooling. Same lifecycle as `feat/*`. |
 | `hotfix/*` | Urgent production fix. Branched from `main`, merged into both `main` and `develop`. |
 
 ## 3. Rules
@@ -27,6 +29,7 @@ feat/* → develop → release/* → main
 * Branch from `develop` only after it is synchronized with the remote.
 * Keep one subsystem per branch. Do not add an unrelated peripheral to a feature branch already in review.
 * Use a lowercase `snake_case` or hyphenated subsystem name after the prefix, for example `feat/uart-rx`.
+* A branch that touches anything besides documentation is not a `docs/*` branch, whatever else it also changes.
 
 ## 4. Starting a Feature
 

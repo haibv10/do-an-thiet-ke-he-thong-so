@@ -527,7 +527,7 @@ copies `.data` across through the ROM data window, clears `.bss`, and only then
 calls `main`. Every address it forms uses AUIPC.
 
 ```text
-  main.c  ──gcc + linker.ld──►  firmware.elf  ──objcopy──►  firmware.bin
+   sw/*.c  ──gcc + linker_script.ld──►  firmware.elf  ──objcopy──►  .bin
                                                                  │
                                                           make_hex.py
                                                                  ▼
@@ -632,7 +632,7 @@ Twenty-nine self-checking testbenches run under Icarus Verilog; all pass.
 | `cpu_uart_fifo_tb` | The RX FIFO protocol driven by the CPU |
 | `cpu_spi_tb` | A store reaching the SPI pins, with the state of `dc` recorded per byte |
 | `cpu_fence_tb` | FENCE retiring without disturbing the pipeline |
-| `cpu_firmware_boot_tb` | The real `sw/firmware.hex` image booted on the full SoC |
+| `cpu_firmware_boot_tb` | The real `rom/firmware.hex` image booted on the full SoC |
 
 `cpu_top_tb` is the most important integration test: it loads a short RV32I
 program exercising forwarding, load-use stalling, branch and JAL flushing,
@@ -772,7 +772,10 @@ libs/     Reusable I2C, UART and SPI RTL, each stored with its unit testbench
 constr/   Pin (.cst) and timing (.sdc) constraints
 sim/      Self-checking testbenches for source/, one sim/ directory per
           source/ directory. Library tests live beside their RTL in libs/
-sw/       C firmware: main.c, startup.s, linker.ld, firmware.hex
+sw/       Firmware source only: one module per bus, per device and per
+          screen, named the way the RTL is
+rom/      firmware.hex, the image the ROM loads at elaboration. Generated,
+          and committed because simulation and synthesis both read it
 tools/    Scripts for firmware, bitstream, programming and tests
 docs/     Design report, register map, bring-up notes, verification results
 logs/     Local verification output, ignored by Git. One folder per work

@@ -131,7 +131,7 @@ bash tools/run_tests.sh
 ```
 
 Runs 33 self-checking testbenches, ending with `firmware_boot_tb`, which boots
-the real `sw/firmware.hex` image on the full SoC and decodes its UART output.
+the real `rom/firmware.hex` image on the full SoC and decodes its UART output.
 Each prints `<name>: PASS`; the script stops at the first failure.
 
 ### Build the firmware
@@ -140,7 +140,7 @@ Each prints `<name>: PASS`; the script stops at the first failure.
 bash tools/build_firmware.sh
 ```
 
-Compiles `sw/main.c` and `sw/startup.s` into `sw/firmware.hex`. `mem_instruction_rom.v` reads
+Compiles the C and assembly in `sw/` into `rom/firmware.hex`. `mem_instruction_rom.v` reads
 that file with `$readmemh` at elaboration time, so rebuild the firmware before
 building a bitstream whenever the software changes.
 
@@ -254,7 +254,8 @@ FT2232 JTAG channel, are collected in [docs/bringup.md](docs/bringup.md).
 | `source/` | CPU RTL, peripherals and common modules. `source/cpu/cpu_top.v` is the top module |
 | `libs/` | Reusable protocol blocks. Each library keeps its RTL and unit testbench together |
 | `constr/` | Pin (`.cst`) and timing (`.sdc`) constraints |
-| `sw/` | C firmware, startup code, linker script and the built `firmware.hex` |
+| `sw/` | Firmware source only: one module per bus, per device and per screen |
+| `rom/` | `firmware.hex`, the image the ROM loads at elaboration. Generated, but committed because simulation and synthesis both read it |
 | `sim/` | Testbenches for `source/`, one `sim/` directory per `source/` directory; `sim/support/` holds shared fixtures |
 | `tools/` | Scripts for firmware, bitstream, programming and tests |
 | `docs/` | Design report, register map, bring-up notes, verification results |

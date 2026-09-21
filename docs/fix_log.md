@@ -9,6 +9,9 @@ Entries are newest first.
 
 ## Contents
 
+- [2026-09-21 firmware layout](#2026-09-21-firmware-layout)
+  - [40. Moving the ROM image quietly deleted the CPU](#40-moving-the-rom-image-quietly-deleted-the-cpu)
+  - [41. The firmware was one file and three kinds of thing](#41-the-firmware-was-one-file-and-three-kinds-of-thing)
 - [2026-09-21 panel interface](#2026-09-21-panel-interface)
   - [36. Two digits of BCD only converted between ten and nineteen](#36-two-digits-of-bcd-only-converted-between-ten-and-nineteen)
   - [37. The clock was set from the moment the compiler ran](#37-the-clock-was-set-from-the-moment-the-compiler-ran)
@@ -67,6 +70,102 @@ Entries are newest first.
   - [8. The ROM image left words undefined past the end of the firmware](#8-the-rom-image-left-words-undefined-past-the-end-of-the-firmware)
   - [9. Documentation described the I2C defect incorrectly](#9-documentation-described-the-i2c-defect-incorrectly)
   - [10. The PCF8574 address was recorded as `0x21`](#10-the-pcf8574-address-was-recorded-as-0x21)
+
+---
+
+## 2026-09-21 firmware layout
+
+### 40. Moving the ROM image quietly deleted the CPU
+
+**Defect.** `mem_instruction_rom.v` reads its image with a relative path, and
+that path resolves against the **synthesis** working directory rather than the
+repository, which is why `tools/build_fpga.sh` symlinks the directory holding
+it into `build/`. Moving the image from `sw/` to `rom/` updated the parameter
+and left the symlink pointing at `sw`.
+
+**Evidence before.** The build reported no errors and a better Fmax than it had
+ever managed:
+
+```text
+Fmax: 111.540(MHz), 0 setup and 0 hold violations
+Logic 234/8640 (3%), Register 112/6693 (2%)
+```
+
+The figures are the tell. Two warnings say what happened:
+
+```text
+WARN (EX3988) : Cannot open file 'rom/firmware.hex'
+WARN (NL0002) : The module "mem_instruction_rom" instantiated to "rom" is swept
+                in optimizing
+```
+
+With no image the ROM held nothing, so it was optimised away, and the CPU
+behind it went with it. What remained was 3% of the device running at 111 MHz,
+which is a meaningless number attached to an empty design.
+
+Simulation did not catch it: `tools/run_tests.sh` runs from the repository
+root, so `rom/firmware.hex` resolved there and all 33 testbenches passed.
+
+**Fix.** Point the symlink at `rom`, and say in the comment beside it that the
+path is relative to the synthesis working directory, which is the fact that
+makes the symlink necessary at all.
+
+**Evidence after.** Logic 3256, registers 1598, BSRAM 12/26, pROM 8 and Fmax
+31.317 MHz, matching the build before the move exactly. Two `swept in
+optimizing` warnings remain, for `core_control` and `core_immediate`; both are
+purely combinational, both appear identically in the build before this change,
+and the logic count shows the logic is still there.
+
+**Note.** A build that passes is not a build that is right. This is the second
+time in this tree that a green synthesis meant the design had quietly lost a
+module, after entry 22, and the second time the resource figures were what gave
+it away.
+
+### 41. The firmware was one file and three kinds of thing
+
+**Scope.** `sw/main.c` had grown to 778 lines holding the register map, two bus
+drivers, two device drivers, a font, the screen layout and the boot sequence.
+`sw/` also held the linker script, which is build configuration, and
+`firmware.hex`, which is a generated artifact committed only because the RTL
+reads it at elaboration.
+
+**Changes.** Split the source by layer, named the way the RTL is, subsystem
+first: `uart_io`, `i2c_bus`, `spi_bus`, `ds3231_rtc`, `st7735_panel`,
+`font_8x8`, `ui_clock`, `sys_delay`, `gpio_led`, and `main.c` for the boot and
+the loop. Each module owns the registers it drives, so changing the UART no
+longer means opening a header shared with SPI, and `main.c` reaches no
+peripheral directly.
+
+A first attempt kept a single `mmio_map.h` and a `sys_util` holding the delay
+loop and a digit table. Both were dropped: the map coupled four peripherals
+that have nothing to say to each other, and a file named for being a collection
+of leftovers cannot be said to have a responsibility. The digit table is now
+private to `uart_io`, because the panel only ever draws validated BCD and can
+get a digit from the value itself.
+
+`sw/` now holds source alone. The linker script moves to
+`tools/linker_script.ld` beside the script that invokes it, and the image to
+`rom/firmware.hex`, whose directory name says what it is.
+
+**Verification.** The suite passes 33/33 and the build is unchanged at Fmax
+31.317 MHz with no violated endpoints, which is the point: a layout change that
+moved a number would not be a layout change. `.text` grows from 5560 to 5984
+bytes, because separate translation units stop the compiler inlining across
+them. `-flto` would recover most of it and is deliberately not used:
+`delay_loop` is calibrated against the five-instruction shape `-O1` emits, and
+the disassembly confirms that shape survives the split.
+
+On the board the behaviour is unchanged, which is what a layout change has to
+prove. Each line of the capture covers a different seam that the split could
+have broken. Raw log: `logs/15-sw-layout/03-board.log`.
+
+```text
+BOOT 5A5A5A5A 00000000     .rodata still reachable after hex_digits moved
+TFT INIT
+TFT BARS                   spi_set_control still works from spi_bus
+RTC OSF CLEAR              i2c_last_byte replaced the direct register read
+RTC 2026-09-21 17:15:01
+```
 
 ---
 

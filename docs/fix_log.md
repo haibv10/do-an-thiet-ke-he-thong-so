@@ -68,7 +68,7 @@ rather than a deletion here.
 
 **Verification.** Simulation passes 34/34. On the board the banner, `TFT INIT`,
 `TFT BARS` and the repeating `ALIVE` line all appear in
-`logs/09-spi-st7735/55-board.log`.
+`logs/09-spi-st7735/04-board.log`.
 
 ---
 
@@ -93,9 +93,9 @@ GowinSynthesis finish
 **Fix.** Add `source/peripheral/spi_mmio.v` and `libs/spi/spi_master.v` to
 `tools/build_gowin.tcl`, and to `fpga_project.gprj` so the IDE flow matches.
 
-**Evidence after.** `logs/09-spi-st7735/53-firmware-build.log` completes with
+**Evidence after.** `logs/09-spi-st7735/02-firmware-build.log` completes with
 Fmax 30.880 MHz against the 27 MHz constraint, 0 setup and 0 hold violations,
-and `logs/09-spi-st7735/54-program.log` reaches 100%.
+and `logs/09-spi-st7735/03-program.log` reaches 100%.
 
 ### 23. The design had no SPI peripheral
 
@@ -194,8 +194,8 @@ one stall for its only true load-use dependency.
 
 **Symptom.** The FIFO board protocol printed `RXFIFO CASE16`, `RXFIFO
 CASE17`, then `RXFIFO FAIL` in both
-`logs/03-uart-rx-fifo/23-board-protocol.log`
-and `logs/03-uart-rx-fifo/27-board-test-firmware-protocol.log`.
+`logs/03-uart-rx-fifo/11-board-protocol.log`
+and `logs/03-uart-rx-fifo/15-board-test-firmware-protocol.log`.
 The second failure followed a firmware rebuild, so the earlier explanation
 that only a stale firmware image caused the first failure was not supported.
 These captures report only an aggregate result; they do not identify which
@@ -211,14 +211,14 @@ case 16 and case 17 results independently, and drain/clear the FIFO between
 cases. The MMIO test now confirms that writing `0x04` leaves overrun set and
 writing `0x01` clears it.
 
-**Simulation.** `logs/03-uart-rx-fifo/28-w1c-fix-simulation.log`
+**Simulation.** `logs/03-uart-rx-fifo/16-w1c-fix-simulation.log`
 records 30/30 PASS; the rebuilt firmware image is 1024 ROM words.
 
-**Board verification.** `logs/03-uart-rx-fifo/29-w1c-fix-build.log`
+**Board verification.** `logs/03-uart-rx-fifo/17-w1c-fix-build.log`
 records P&R, timing analysis and bitstream generation complete.
-`logs/03-uart-rx-fifo/30-w1c-fix-program.log`
+`logs/03-uart-rx-fifo/18-w1c-fix-program.log`
 records SRAM programming at 100% with `Finished.`. The protocol capture in
-`logs/03-uart-rx-fifo/31-w1c-fix-protocol.log`
+`logs/03-uart-rx-fifo/19-w1c-fix-protocol.log`
 records `CASE16 PASS`, `CASE17 PASS` and `RXFIFO PASS`.
 
 **Status** — Fixed and board-verified. Case 16 proves ordered receipt of a
@@ -242,19 +242,19 @@ Reading `0x50000008` pops the oldest byte; writing one to `0x5000000c` bit zero
 clears the overrun indication. A full FIFO drops the new byte and preserves the
 queued sequence.
 
-**Verification.** `logs/03-uart-rx-fifo/14-full-simulation.log`
+**Verification.** `logs/03-uart-rx-fifo/03-full-simulation.log`
 records 30/30 PASS. The UART unit and MMIO tests cover FIFO order, full state,
 drop-on-full, sticky overrun, W1C clear and pop behavior; `cpu_uart_fifo_tb`
 covers two CPU loads popping queued bytes in order.
 
-**Build.** `logs/03-uart-rx-fifo/15-fpga-build.log`
+**Build.** `logs/03-uart-rx-fifo/04-fpga-build.log`
 records P&R, timing analysis and bitstream generation complete at 30.210 MHz
 against the 27 MHz constraint with 0 setup/hold violations. The FIFO build uses
 3375/8640 logic cells, 1599/6693 registers and 6/26 BSRAM.
 
-**Board boot.** `logs/03-uart-rx-fifo/17-program-board.log`
+**Board boot.** `logs/03-uart-rx-fifo/05-program-board.log`
 records SRAM programming at 100% with `Finished.`. The reset capture in
-`logs/03-uart-rx-fifo/18-board-uart.log`
+`logs/03-uart-rx-fifo/06-board-uart.log`
 records `BOOT 5A5A5A5A 00000000` and `I2C 27` from the FIFO bitstream.
 
 **Status** — Superseded by finding 18. The initial board workload exposed the
@@ -283,16 +283,16 @@ grouped by ownership under `sim/`.
 the new paths and module names. README, design report, coding guide and firmware
 image helper now describe the same tree.
 
-**Simulation.** `logs/02-source-layout/09-refactor.log`
+**Simulation.** `logs/02-source-layout/01-refactor.log`
 records 29/29 PASS. The only warning is the intentional short-image fixture in
 `mem_instruction_rom_tb`; it proves that ROM words beyond the fixture are
 zero-filled.
 
 **Build and programming.** The refactored tree was built and programmed after the
-simulation run. `logs/02-source-layout/10-fpga-build.log`
+simulation run. `logs/02-source-layout/02-fpga-build.log`
 records P&R, timing analysis and bitstream generation complete with Fmax
 28.912 MHz, 0 setup/hold violations, 3321/8640 logic cells, 1594/6693 registers
-and 6/26 BSRAM. `logs/02-source-layout/11-program-board.log`
+and 6/26 BSRAM. `logs/02-source-layout/03-program-board.log`
 records SRAM programming at 100% with `Finished.`.
 
 **Status** — Fixed. This is a behavior-preserving refactor. Programming was

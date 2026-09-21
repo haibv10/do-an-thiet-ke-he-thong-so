@@ -503,13 +503,13 @@ and bitstream generation for the GW1NR-9C against the 27 MHz constraint in
 | BSRAM | 6 / 26 (24%) | IMEM dual-port, plus DMEM |
 | I/O ports | 8 / 71 (12%) | — |
 
-Raw log: `logs/03-uart-rx-fifo/29-w1c-fix-build.log`.
+Raw log: `logs/03-uart-rx-fifo/17-w1c-fix-build.log`.
 
 ### Layer 3 — Board measurement
 
 The bitstream is written into the Tang Nano 9K SRAM over JTAG. The corrected
 UART FIFO firmware was programmed successfully at 100%; see
-`logs/03-uart-rx-fifo/30-w1c-fix-program.log`. The laptop talks to the board
+`logs/03-uart-rx-fifo/18-w1c-fix-program.log`. The laptop talks to the board
 through an external USB-UART module at 115200 baud, 8N1, raw, no flow control.
 
 | Stimulus | Result | Evidence |
@@ -518,7 +518,7 @@ through an external USB-UART module at 115200 baud, 8N1, raw, no flow control.
 | Reset, firmware reading `.rodata` | `I2C ` followed by two `0x00` bytes | `logs/01-initial-bringup/07-fault-rodata-null.log` |
 | Reset, hex formatter using the A-F branch | `I2C 2>` instead of `I2C 27` | `logs/01-initial-bringup/08-fault-hex-branch.log` |
 | Reset, fixed firmware before the source-layout refactor | `I2C 27` repeated, LCD shows `HELLO FPGA` | `logs/01-initial-bringup/05-board-uart.log` |
-| UART FIFO protocol | `CASE16 PASS`, `CASE17 PASS`, `RXFIFO PASS` | `logs/03-uart-rx-fifo/31-w1c-fix-protocol.log` |
+| UART FIFO protocol | `CASE16 PASS`, `CASE17 PASS`, `RXFIFO PASS` | `logs/03-uart-rx-fifo/19-w1c-fix-protocol.log` |
 
 Earlier UART-only measurements with the echo firmware are recorded in
 `docs/verification/rv32i_pipeline.md`, including the finding that a 1024-byte
@@ -603,6 +603,6 @@ sw/       C firmware: main.c, startup.s, linker.ld, firmware.hex
 tools/    Scripts for firmware, bitstream, programming and tests
 docs/     Design report, register map, bring-up notes, verification results
 logs/     Local verification output, ignored by Git. One folder per work
-          item in the order the work happened; file names keep their original
-          global sequence number so a log stays citable after regrouping
+          item in the order the work happened, each folder numbering its own
+          files from 01 in capture order
 ```

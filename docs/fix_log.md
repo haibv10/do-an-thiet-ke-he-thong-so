@@ -9,6 +9,9 @@ Entries are newest first.
 
 ## Contents
 
+- [2026-09-21 DS3231](#2026-09-21-ds3231)
+  - [30. Every delay was nine times its intended length](#30-every-delay-was-nine-times-its-intended-length)
+  - [31. The clock could be read but never set](#31-the-clock-could-be-read-but-never-set)
 - [2026-09-21 I2C master](#2026-09-21-i2c-master)
   - [28. The repeated START emitted a stop condition](#28-the-repeated-start-emitted-a-stop-condition)
   - [29. The bus had no way back from a slave](#29-the-bus-had-no-way-back-from-a-slave)
@@ -51,6 +54,84 @@ Entries are newest first.
   - [8. The ROM image left words undefined past the end of the firmware](#8-the-rom-image-left-words-undefined-past-the-end-of-the-firmware)
   - [9. Documentation described the I2C defect incorrectly](#9-documentation-described-the-i2c-defect-incorrectly)
   - [10. The PCF8574 address was recorded as `0x21`](#10-the-pcf8574-address-was-recorded-as-0x21)
+
+---
+
+## 2026-09-21 DS3231
+
+### 30. Every delay was nine times its intended length
+
+**Defect.** `delay_cycles` counted loop iterations, not clocks, and its name
+invited the argument to be read as a cycle count. One volatile iteration costs
+nine clocks, so every delay ran nine times longer than written: the ST7735
+delays specified as 120 ms were 1.08 s each, and the main loop meant to print
+once a second printed every nine.
+
+**Evidence before.** `logs/11-i2c-master/04-board.log`, with the loop argument
+at 27000000 and the intent of one second:
+
+```text
+RTC 2000-01-01 00:08:30
+RTC 2000-01-01 00:08:39
+RTC 2000-01-01 00:08:48
+```
+
+**Fix.** Rename the helper to `delay_loop`, take `iterations`, and give callers
+`DELAY_MS`, built on the measured figure of 3000 iterations to the millisecond.
+
+**Evidence after.** `logs/11-i2c-master/07-board.log`, one second apart and
+rolling the minute correctly:
+
+```text
+RTC 2000-01-01 00:14:59
+RTC 2000-01-01 00:15:00
+RTC 2000-01-01 00:15:01
+```
+
+Boot drops from roughly 4.3 s of ST7735 delays to 0.5 s, still above every
+minimum the datasheet states.
+
+### 31. The clock could be read but never set
+
+**Scope.** The DS3231 answered and its oscillator ran, but it counted from the
+power-on default with the oscillator stop flag set, and nothing on the board
+could give it a real time.
+
+**Changes.** Add a write path to the driver, report the stop flag at boot, and
+add a UART command that writes `__DATE__` and `__TIME__` into the seven
+timekeeping registers. The compiler is the only time source this board has.
+
+Clear the stop flag only after the time is written, with a read, mask and
+write rather than a whole byte: bit 3 of that register enables the 32 kHz
+output and the alarm flags sit beside it. The flag says the registers have not
+been counting, so a known value in them is what makes it untrue.
+
+Parse the timestamp without division or modulo, which on RV32I would pull in a
+libcall that does not exist. `__DATE__` pads a day below the tenth with a space
+rather than a zero. The day of week register is written as 1 and not derived,
+because deriving it needs a modulo and nothing reads it.
+
+**Verification.** The conversion was checked on the host before it reached the
+board, covering a space-padded day and a two-digit month:
+
+```text
+date "Sep 21 2026" time "14:46:03"
+  sec=03 min=46 hour=14 date=21 month=09 year=26
+date "Jan  5 2027"   date=05    Dec=12 Oct=10
+```
+
+On the board the written time reads back field for field, in
+`logs/11-i2c-master/10-board.log`:
+
+```text
+RTC SET Sep 21 2026 14:47:18
+RTC 2026-09-21 14:47:18
+RTC 2026-09-21 14:47:19
+```
+
+Firmware grows to 3404 bytes of the 4 KB ROM. The stop flag reading after a
+reset is not yet captured, so clearing it is inferred from the write path
+rather than observed.
 
 ---
 

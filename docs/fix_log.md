@@ -9,6 +9,9 @@ Entries are newest first.
 
 ## Contents
 
+- [2026-09-21 I2C master](#2026-09-21-i2c-master)
+  - [28. The repeated START emitted a stop condition](#28-the-repeated-start-emitted-a-stop-condition)
+  - [29. The bus had no way back from a slave](#29-the-bus-had-no-way-back-from-a-slave)
 - [2026-09-21 tree layout](#2026-09-21-tree-layout)
   - [25. One source directory had its tests in three sim directories](#25-one-source-directory-had-its-tests-in-three-sim-directories)
   - [26. The LCD peripheral outlived the LCD](#26-the-lcd-peripheral-outlived-the-lcd)
@@ -48,6 +51,63 @@ Entries are newest first.
   - [8. The ROM image left words undefined past the end of the firmware](#8-the-rom-image-left-words-undefined-past-the-end-of-the-firmware)
   - [9. Documentation described the I2C defect incorrectly](#9-documentation-described-the-i2c-defect-incorrectly)
   - [10. The PCF8574 address was recorded as `0x21`](#10-the-pcf8574-address-was-recorded-as-0x21)
+
+---
+
+## 2026-09-21 I2C master
+
+### 28. The repeated START emitted a stop condition
+
+**Defect.** `PreStart` released SDA high and released SCL high in the same
+tick. On an idle bus that is harmless, because SDA is already high. On a
+chained frame SDA is held low by `AckDone`, so it rose while SCL was rising:
+a slave reads that as a STOP, not as a repeated START. The path had never been
+exercised, since the LCD only issued a START on its first frame and chained
+the rest.
+
+**Evidence before.** The first run of `i2c_master_tb`, against a slave model
+that counts bus conditions:
+
+```text
+FATAL: libs/i2c/i2c_master_tb.sv:218: 1 STOP conditions before the read finished
+```
+
+**Fix.** Split the setup in two. `PreStart` raises SDA while SCL is still held
+low, and a new `StartSetup` state then releases SCL. `Start` pulls SDA down
+with SCL high, which is the START condition.
+
+**Evidence after.** `i2c_master_tb` passes, with the slave counting two START
+conditions and no STOP until the read ends.
+
+### 29. The bus had no way back from a slave
+
+**Scope.** The I2C block could only write. The DS3231 has no command that
+returns a register: the pointer is set with a write, the bus is turned around
+with a repeated START, and the device transmits until the master refuses a
+byte.
+
+**Changes.** Replace `i2c_write_frame.v` with `libs/i2c/i2c_master.v`, which
+adds `rw`, `ack_out` and `data_out`. `rw` is latched when the frame begins, so
+changing it mid-transfer cannot turn the data phase around while it runs. A
+read releases SDA for the eight data bits and samples each one at the midpoint
+of the SCL high time, where the slave holds it steady. The acknowledge bit is
+driven by the master on a read and by the slave on a write.
+
+Add `source/peripheral/i2c_mmio.v` at region `0x6`: one store launches one
+frame, carrying the byte and the four flags that shape it. Framing stays in
+software because which pointer to set and where a read turns around are
+properties of the slave, not of the bus.
+
+Add `libs/i2c/i2c_slave_model.sv`, a behavioural slave with address match, a
+register pointer and auto-increment. It is deliberately not named after a part:
+that shape is common to register-mapped I2C devices, and tying the master's
+own tests to one device would misplace the scope.
+
+**Verification.** The suite passes 32/32. The build reaches Fmax 31.143 MHz
+against the 27 MHz constraint with 0 setup and 0 hold violated endpoints; logic
+rises from 3234 to 3256, registers from 1506 to 1598, and I/O ports from 10 to
+12 as pins 31 and 32 come back. Not yet exercised on hardware: no DS3231 has
+been wired.
 
 ---
 

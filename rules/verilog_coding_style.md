@@ -27,7 +27,7 @@ This repository uses two language standards, split by role.
 | Role | Files | Standard |
 |---|---|---|
 | Synthesizable RTL | `source/**/*.v`, `libs/**/*.v` | Verilog-2001 |
-| Verification | `sim/**/*.sv`, `libs/**/*_tb.sv` | SystemVerilog-2017 |
+| Verification | `sim/**/*.sv`, `libs/**/*.sv` | SystemVerilog-2017 |
 
 **Synthesizable RTL is Verilog-2001.** The target is a Gowin GW1NR-9C built with
 GowinSynthesis, whose Verilog-2001 path is the one this design is closed on;
@@ -50,6 +50,10 @@ module core_pc (
   end
 endmodule
 ```
+
+The split is by extension, not by directory: a `.v` file is synthesized and a
+`.sv` file is not, wherever it sits. `libs/` therefore holds both the RTL it
+exports and the testbenches and models that verify it.
 
 **Verification is SystemVerilog-2017.** Testbenches are never synthesized, so
 nothing is gained by holding them back. Use `logic`, `always_comb`/`always_ff`,

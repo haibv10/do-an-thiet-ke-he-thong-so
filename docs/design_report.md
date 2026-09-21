@@ -11,9 +11,9 @@
 | Metric | Result |
 |---|---|
 | Simulation | 31 / 31 testbenches pass |
-| Fmax after place and route | 30.299 MHz against a 27 MHz constraint |
+| Fmax after place and route | 31.143 MHz against a 27 MHz constraint |
 | Timing violations | 0 setup, 0 hold |
-| Logic utilisation | 3234 / 8640 (38%) |
+| Logic utilisation | 3256 / 8640 (38%) |
 | Hardware | Banner reads `BOOT 5A5A5A5A 00000000`; the ST7735 shows red, green and blue bars in that order |
 
 The hardware row is from a build carrying the fixes in [fix_log.md](fix_log.md).
@@ -31,7 +31,8 @@ peripherals, all connected to the CPU through a **memory-mapped I/O** bus.
 
 The result behaves like a simple microcontroller: a program written in C is
 compiled to RISC-V machine code, loaded into on-chip ROM, and executed to drive
-an LED, talk to a laptop over UART and drive an ST7735 TFT over SPI.
+an LED, talk to a laptop over UART, read a real-time clock over I2C and drive
+an ST7735 TFT over SPI.
 
 The design is validated in three independent layers — RTL simulation,
 post-synthesis timing analysis, and direct measurement on the board. Every
@@ -59,20 +60,20 @@ multiplexes read data back.
                               │        ADDRESS DECODER        │
                               │     selects on addr[31:28]    │
                               └──┬────────┬────────┬───────┬──┘
-                                0x2      0x4      0x5     0x7
-                                 ▼        ▼        ▼       ▼
-                            ┌────────┐┌──────┐┌──────┐┌────────┐
-                            │  DMEM  ││ GPIO ││ UART ││  SPI   │
-                            │ RAM 4K ││      ││ 8N1  ││ mode 0 │
-                            │ stack  ││      ││115200││6.75MHz │
-                            └────────┘└──┬───┘└──┬───┘└───┬────┘
-                                         │       │        │
-                                         ▼       ▼        ▼
-                                 ┌───────────┐┌────────┐┌──────────┐
-                                 │ LED pin10 ││ TX  34 ││ SCK   25 │
-                                 │           ││ RX  33 ││ SDA   26 │
-                                 └───────────┘│→ laptop││→ ST7735  │
-                                              └────────┘└──────────┘
+                            0x2     0x4     0x5      0x6      0x7
+                             ▼       ▼       ▼        ▼        ▼
+                        ┌───────┐┌──────┐┌──────┐┌────────┐┌────────┐
+                        │ DMEM  ││ GPIO ││ UART ││  I2C   ││  SPI   │
+                        │RAM 4K ││      ││ 8N1  ││ 50 kHz ││ mode 0 │
+                        │ stack ││      ││115200││ 1 MHz  ││6.75MHz │
+                        └───────┘└──┬───┘└──┬───┘└───┬────┘└───┬────┘
+                                    │       │        │         │
+                                    ▼       ▼        ▼         ▼
+                            ┌───────────┐┌────────┐┌────────┐┌────────┐
+                            │ LED pin10 ││ TX  34 ││ SDA 31 ││ SCK 25 │
+                            │           ││ RX  33 ││ SCL 32 ││ SDA 26 │
+                            └───────────┘│→ laptop││→ DS3231││→ST7735│
+                                         └────────┘└────────┘└────────┘
 ```
 
 ### Address map
@@ -87,6 +88,7 @@ bits select a register.
 | `0x2` | `0x20000000` | DMEM (RAM) | Globals and stack |
 | `0x4` | `0x40000000` | GPIO | LED output |
 | `0x5` | `0x50000000` | UART | Serial link to the laptop |
+| `0x6` | `0x60000000` | I2C | 50 kHz master, read and write |
 | `0x7` | `0x70000000` | SPI | ST7735 128x160 TFT, write only |
 
 Thanks to this scheme, the C statement `*(volatile int *)0x50000000 = 'A';`
@@ -309,12 +311,13 @@ section 9.
 
 ### I2C and the LCD
 
-This peripheral has been removed from the design. The 20x4 HD44780 panel is
-retired and a DS3231 real-time clock will take its place on the same bus, and
-the write-only frame engine described here cannot read a slave register. The
-section is kept because the state machines below are part of the work; nothing
-in it describes the current tree. `libs/i2c/i2c_write_frame.v` survives as the
-starting point for the read-capable master.
+The peripheral described in this section has been replaced. The 20x4 HD44780
+panel is retired, and a DS3231 real-time clock sits on the bus in its place
+behind `libs/i2c/i2c_master.v`, which carries frames in both directions and can
+issue the repeated START a register read needs. The nested state machines below
+are kept because they are part of the work, and because the new master grew out
+of the frame engine they describe; nothing in the section describes the current
+tree.
 
 The I2C master is built from two nested state machines. `i2c_writeframe` drives
 one 8-bit frame — START, eight data bits, ACK, optional STOP.
@@ -480,7 +483,8 @@ Twenty-nine self-checking testbenches run under Icarus Verilog; all pass.
 | `uart_tx_tb` | A captured 8N1 frame, and a write arriving mid-frame being dropped |
 | `uart_rx_tb` | Start and stop bits, LSB-first assembly, false start rejection, framing error recovery |
 | `uart_mmio_tb` | Status register, RX FIFO level and overrun, TX busy flag, write-one-to-clear |
-| `i2c_write_frame_tb` | START, eight data bits, ACK and NACK paths |
+| `i2c_master_tb` | START, repeated START, both directions, the master's own NACK ending a read, and an unanswered address |
+| `i2c_mmio_tb` | One store per frame, busy gating, a full turnaround read, and a store dropped mid-frame |
 | `spi_master_tb` | Mode 0 idle state, MSB first order, eight sck edges per byte, the half period, a start during a transfer |
 | `spi_mmio_tb` | Reset state, control persistence and readback, a data write during busy |
 | `cpu_top_tb` | Full system integration (below) |
@@ -506,10 +510,10 @@ and bitstream generation for the GW1NR-9C against the 27 MHz constraint in
 | Metric | Result | Assessment |
 |---|---|---|
 | Clock constraint | 27.000 MHz | Onboard oscillator |
-| Actual Fmax | 30.299 MHz | 12% margin |
+| Actual Fmax | 31.143 MHz | 15% margin |
 | Setup violated endpoints | 0 | Pass |
 | Hold violated endpoints | 0 | Pass |
-| Deepest logic level | 7 | Reported on the critical path to `clk` |
+| Deepest logic level | 14 | Reported on the critical path to `clk` |
 | Logic | 3375 / 8640 (40%) | — |
 | Registers | 1599 / 6693 (24%) | — |
 | Registers inferred as latch | 0 / 6480 (0%) | Every state machine has an explicit default arm |

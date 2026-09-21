@@ -11,8 +11,9 @@ module mem_instruction_rom_tb;
 
   // The fixture holds four words on purpose. $readmemh warns that the file is
   // shorter than the array, and that warning is the point: it is the condition
-  // under which the zero-fill loop in mem_instruction_rom.v has to do its job. Padding the
-  // fixture to 1024 words would silence the warning and delete the test.
+  // under which the zero-fill loop in mem_instruction_rom.v has to do its job.
+  // Padding the fixture to the full depth would silence the warning and delete
+  // the test.
   mem_instruction_rom #(.HEX_PATH("sim/support/imem_test.hex")) dut (.*);
 
   always #5 clk = ~clk;
@@ -40,12 +41,13 @@ module mem_instruction_rom_tb;
     // Past the end of the image the array must read as zero, not x, or a stray
     // load poisons the pipeline.
     fetch(32'h0000_0010, 32'h0000_0000, "past the end of the image");
-    fetch(32'h0000_0ffc, 32'h0000_0000, "last word of the ROM");
+    fetch(32'h0000_1ffc, 32'h0000_0000, "last word of the ROM");
 
-    // Only a[11:2] addresses the array: the byte offset and the region bits are
-    // both ignored, and 4 KB up wraps onto word 0.
+    // Only a[12:2] addresses the array: the byte offset and the region bits are
+    // both ignored, and 8 KB up wraps onto word 0.
     fetch(32'h0000_0002, 32'hdead_beef, "byte offset ignored");
-    fetch(32'h0000_1000, 32'hdead_beef, "wrap at 4 KB");
+    fetch(32'h0000_1000, 32'h0000_0000, "4 KB up is now inside the ROM, not a wrap");
+    fetch(32'h0000_2000, 32'hdead_beef, "wrap at 8 KB");
 
     // The two ports are independent and read in the same cycle.
     @(posedge clk);

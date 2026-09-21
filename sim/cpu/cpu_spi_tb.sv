@@ -60,7 +60,7 @@ module cpu_spi_tb;
 
   initial begin
     #1;
-    for (index = 0; index < 1024; index = index + 1)
+    for (index = 0; index < 2048; index = index + 1)
       dut.rom.rom[index] = 32'h0000_0013;
 
     // Select the panel in command mode, send 0x3a (COLMOD), poll busy, switch

@@ -9,6 +9,8 @@ Entries are newest first.
 
 ## Contents
 
+- [2026-09-21 ROM depth](#2026-09-21-rom-depth)
+  - [33. Firmware had outgrown the 4 KB instruction ROM](#33-firmware-had-outgrown-the-4-kb-instruction-rom)
 - [2026-09-21 panel clock](#2026-09-21-panel-clock)
   - [32. The panel said nothing after bring-up](#32-the-panel-said-nothing-after-bring-up)
 - [2026-09-21 DS3231](#2026-09-21-ds3231)
@@ -59,6 +61,80 @@ Entries are newest first.
 
 ---
 
+## 2026-09-21 ROM depth
+
+### 33. Firmware had outgrown the 4 KB instruction ROM
+
+**Scope.** An 8x8 ASCII font and the code that draws it overflowed the 4 KB
+ROM by 296 bytes, paid for once by retiring a board test and once by moving the
+build to `-Os`, which left 252 bytes. The device has room: 468 Kbit of BSRAM in
+26 blocks, of which the design used 8.
+
+**Changes.** Double the ROM to 8 KB. `mem_instruction_rom.v` takes 2048 words
+and indexes on `a[12:2]`, `linker.ld` gives region 0 a length of 8K, and
+`make_hex.py` pads to 2048 words. The testbenches that fill the array by hand
+cover the new depth, and `mem_instruction_rom_tb` moves its wrap case from 4 KB
+to 8 KB and adds one at 4 KB, which is now inside the ROM rather than a wrap.
+
+**Defect found while doing it.** The zero-fill loop stopped synthesising:
+
+```text
+ERROR (EX3934) : Loop count limit of 2000 exceeded, condition is never false
+                 (source/cpu/mem_instruction_rom.v:21)
+Module 'mem_instruction_rom' remains a black box due to errors in its contents
+```
+
+GowinSynthesis refuses to unroll a loop of more than 2000 iterations, and 2048
+crosses it. The loop only matters in simulation, where a fixture shorter than
+the array would leave words at x; synthesis always gets a full-depth image from
+`make_hex.py`. It is now bracketed by `translate_off`.
+
+**Verification.** The suite passes 33/33 and the build has no violated
+endpoints.
+
+A build alone would not have proved the new depth. Synthesis noticed the upper
+half of the current image is all zeros and did not spend memory on it: the
+netlist wires `AD` from `a[11:2]` only and drives the pROM `RESET` input from
+`a[12]`, forcing zeros above 4 KB. Correct, but the pROM count stays at 4 and
+the depth is never exercised.
+
+Building a deliberately oversized image settles it. With 5480 bytes of
+firmware, reaching past 4 KB:
+
+| | 4 KB ROM | 8 KB ROM, image under 4 KB | 8 KB ROM, image 5480 bytes |
+|---|---|---|---|
+| pROM blocks | 4 | 4 | 8 |
+| BSRAM | 8/26 | 8/26 | 12/26 |
+| Fmax | — | 30.371 MHz | 31.317 MHz |
+| Violated endpoints | — | 0 | 0 |
+
+The cost is the four extra blocks predicted, and timing closes with margin. The
+concern that doubling the depth would push the critical path negative, which
+runs from the ROM output into the load formatter, was unfounded. Raw log:
+`logs/13-rom-8k/02-over-4k-probe.log`.
+
+**Second defect, same shape.** The CI firmware job compared the image against
+a hardcoded 1024 words, so it went red the moment the ROM grew:
+
+```text
+firmware.hex is 2048 words, expected 1024
+```
+
+Nothing local caught it. `tools/run_tests.sh` does not look at the image size,
+and the depth already lived in three places that have to agree: the array in
+the RTL, `ROM_WORDS` in `make_hex.py` and the region length in `linker.ld`.
+The check was a hardcoded fourth copy. It now reads all three and fails if any
+disagrees, which also catches the other direction, where the RTL grows and the
+padding does not. This is the same defect as entry 22: a constant duplicated
+into a place that nobody updates.
+
+**Consequence.** `-Os` existed only to fit the font, so the build returns to
+`-O1` and `DELAY_MS` returns to the 3000 iterations a millisecond that entry 30
+measured. The disassembly confirms the five-instruction loop is back, which is
+the nine clocks that figure rests on. Firmware is 4392 bytes, genuinely past
+4 KB, so the shipped image is what exercises the new depth: pROM 8, BSRAM
+12/26, Fmax 31.317 MHz, no violated endpoints, in
+`logs/13-rom-8k/03-o1-clock-build.log`.
 ## 2026-09-21 panel clock
 
 ### 32. The panel said nothing after bring-up

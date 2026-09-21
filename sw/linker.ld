@@ -3,7 +3,7 @@
  * the on-chip RAM. See docs/hardware/register_map.md for the peripherals. */
 MEMORY
 {
-    ROM (rx)  : ORIGIN = 0x00000000, LENGTH = 4K
+    ROM (rx)  : ORIGIN = 0x00000000, LENGTH = 8K
     RAM (rwx) : ORIGIN = 0x20000000, LENGTH = 4K
 }
 

@@ -43,14 +43,36 @@ jobs:
       - name: Build the firmware
         run: bash tools/build_firmware.sh
 
+      # The ROM depth lives in three places that have to agree: the array in
+      # the RTL, the padding in make_hex.py and the region length in the
+      # linker script. Each is read here rather than repeated, because a
+      # hardcoded fourth copy is what broke this check when the ROM grew.
+      - name: Check the ROM depth agrees everywhere
+        run: |
+          depth=$(sed -n 's/.*reg \[31:0\] rom \[0:\([0-9]*\)\].*/\1/p' \
+                  source/cpu/mem_instruction_rom.v)
+          depth=$((depth + 1))
+          padded=$(sed -n 's/^ROM_WORDS = \([0-9]*\)$/\1/p' tools/make_hex.py)
+          linker=$(sed -n 's/.*ROM (rx).*LENGTH = \([0-9]*\)K.*/\1/p' sw/linker.ld)
+          echo "rtl $depth words, make_hex.py $padded words, linker ${linker}K"
+          if [ "$padded" -ne "$depth" ]; then
+            echo "make_hex.py pads to $padded words, the ROM holds $depth" >&2
+            exit 1
+          fi
+          if [ "$((linker * 256))" -ne "$depth" ]; then
+            echo "linker gives the ROM ${linker}K, the array holds $depth words" >&2
+            exit 1
+          fi
+
       # The image has to fill the ROM exactly, and _start has to sit at the
       # reset vector. Both break silently otherwise: an oversized image wraps
-      # inside rom[a[11:2]], and a misplaced _start runs whatever is at zero.
+      # inside the array index, and a misplaced _start runs whatever is at zero.
       - name: Check the image fits the ROM and starts at the reset vector
         run: |
+          depth=$(sed -n 's/^ROM_WORDS = \([0-9]*\)$/\1/p' tools/make_hex.py)
           words=$(wc -l < build/firmware/firmware.hex)
-          if [ "$words" -ne 1024 ]; then
-            echo "firmware.hex is $words words, expected 1024" >&2
+          if [ "$words" -ne "$depth" ]; then
+            echo "firmware.hex is $words words, the ROM holds $depth" >&2
             exit 1
           fi
           start=$(riscv64-unknown-elf-nm build/firmware/firmware.elf \

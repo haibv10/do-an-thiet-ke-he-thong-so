@@ -6,7 +6,7 @@ bits act as a register offset.
 
 | `addr[31:28]` | Base | Device | Module |
 |---|---|---|---|
-| `0x0` | `0x00000000` | Instruction ROM, 4 KB, read only | `mem_instruction_rom.v` |
+| `0x0` | `0x00000000` | Instruction ROM, 8 KB, read only | `mem_instruction_rom.v` |
 | `0x2` | `0x20000000` | Data memory, 4 KB | `mem_data_ram.v` |
 | `0x4` | `0x40000000` | GPIO | `gpio_mmio.v` |
 | `0x5` | `0x50000000` | UART | `uart_mmio.v` |

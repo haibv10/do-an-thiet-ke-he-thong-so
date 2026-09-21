@@ -51,7 +51,7 @@ multiplexes read data back.
 ```text
    ┌──────────────┐          ┌────────────────────────────────┐
    │    IMEM      │  instr   │   RV32I CPU — 5-stage pipeline  │
-   │  ROM 4 KB    │ ───────► │      IF · ID · EX · MEM · WB    │
+   │  ROM 8 KB    │ ───────► │      IF · ID · EX · MEM · WB    │
    │ firmware.hex │          └────────────────┬───────────────┘
    └──────────────┘                           │
                                               │ addr · wdata · we_mask
@@ -84,7 +84,7 @@ bits select a register.
 
 | `addr[31:28]` | Region | Device | Role |
 |---|---|---|---|
-| `0x0` | `0x00000000` | IMEM (ROM) | Machine code for the IF stage, plus read-only data for loads |
+| `0x0` | `0x00000000` | IMEM (ROM), 8 KB | Machine code for the IF stage, plus read-only data for loads |
 | `0x2` | `0x20000000` | DMEM (RAM) | Globals and stack |
 | `0x4` | `0x40000000` | GPIO | LED output |
 | `0x5` | `0x50000000` | UART | Serial link to the laptop |

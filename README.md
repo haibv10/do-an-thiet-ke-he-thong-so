@@ -48,7 +48,8 @@ into the bitstream as ROM contents.
 - **SPI** — write-only mode 0 master for an ST7735 128x160 TFT, with chip select,
   data/command and panel reset held in software
 - **Firmware** — reads the DS3231 over I2C and draws the date and time on the
-  panel from an 8x8 ASCII font in ROM
+  panel from an 8x8 ASCII font in ROM, and refuses to draw registers that do
+  not hold valid BCD
 - **Headless toolflow** — simulation, synthesis, place and route and programming
   all run from the command line
 
@@ -184,6 +185,17 @@ picocom -b 115200 --flow n /dev/serial/by-id/<external-usb-uart>
 
 Press the **S2** reset button on the board to catch the `BOOT` line. Exit with
 `Ctrl-A` then `Ctrl-X`.
+
+The board has no idea what time it is, so the host tells it. With the terminal
+closed:
+
+```bash
+stty -F /dev/ttyUSB0 115200 raw -echo
+printf 'W%s' "$(date +%y%m%d%H%M%S)" > /dev/ttyUSB0
+```
+
+`W` takes twelve digits, `YYMMDDhhmmss`. Until it has been given one, the panel
+shows `NOT SET` rather than whatever the registers happen to hold.
 
 The shipped firmware prints a banner, brings the ST7735 up and draws three
 colour bars, then repeats a liveness line once a second:

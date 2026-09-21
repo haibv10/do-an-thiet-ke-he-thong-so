@@ -30,6 +30,10 @@
 #define DS3231_STATUS 0x0f
 #define DS3231_OSF    0x80
 
+// Long enough for twelve characters at 115200 baud with room to spare, short
+// enough that a truncated line does not stop the clock.
+#define UART_SET_TIMEOUT 3000000U
+
 #define SPI_BUSY      0x01
 #define SPI_CS_N      0x01
 #define SPI_DC        0x02
@@ -52,6 +56,19 @@
 #define TFT_WHITE     0xffff
 #define TFT_BLACK     0x0000
 
+// RGB565, five bits of red and blue and six of green. One hue at three
+// brightnesses, over a neutral bar. Blue was tried first and reads badly: it
+// is the channel the eye is least sensitive to and the dimmest subpixel on the
+// panel, so small blue text on black washes out. Amber is what instrument
+// panels use for the same reason.
+#define TFT_BAR       0x18e3   // charcoal, the bar behind the title
+#define TFT_BRIGHT    0xfd80   // amber, the hours and minutes
+#define TFT_MID       0xc400   // amber at two thirds, the seconds and the date
+#define TFT_DIM       0x7280   // amber at a third, the weekday
+
+#define HEADER_HEIGHT 20
+#define FOOTER_TOP    152
+
 #define FONT_FIRST    0x20
 #define FONT_LAST     0x7e
 #define FONT_SIZE     8
@@ -59,11 +76,6 @@
 // Lives in .rodata, so reading it exercises the ROM window at region 0x0.
 static const char hex_digits[] = "0123456789ABCDEF";
 
-// The compiler knows when it ran, and that is the only time source this board
-// has apart from the part being set. Both live in .rodata.
-static const char build_date[] = __DATE__;   // "Sep 21 2026", day space-padded
-static const char build_time[] = __TIME__;   // "14:46:03"
-static const char month_names[] = "JanFebMarAprMayJunJulAugSepOctNovDec";
 
 // 8x8 glyphs for ASCII 32 through 126, lifted from the console font at
 // /usr/share/consolefonts/Uni2-VGA8.psf.gz, whose first 128 entries follow
@@ -321,51 +333,77 @@ static void tft_fill_rect(unsigned char x0, unsigned char y0,
   tft_deselect();
 }
 
+// Eight by eight like the font, so they go through the same drawing path and
+// need no code of their own beyond the table.
+static const unsigned char icon_clock[8] = {
+  0x3c, 0x42, 0x89, 0x89, 0x8e, 0x81, 0x42, 0x3c
+};
+static const unsigned char icon_calendar[8] = {
+  0x42, 0xff, 0x81, 0xa9, 0x81, 0xa9, 0x81, 0xff
+};
+
 // One glyph occupies its own address window, so a redraw touches 64 pixels
 // rather than a whole line. Both colours are written, which lets a character
 // replace the one under it without clearing first.
-static void tft_draw_char(unsigned char x, unsigned char y, char value,
-                          unsigned short fg, unsigned short bg) {
-  const unsigned char *glyph;
+// A scale of n repeats every glyph pixel n times across and n times down, so
+// one font serves both sizes and the ROM holds one copy of it.
+static void tft_draw_glyph(unsigned char x, unsigned char y,
+                           const unsigned char *glyph,
+                           unsigned short fg, unsigned short bg,
+                           unsigned int scale) {
   unsigned int row;
   unsigned int column;
+  unsigned int down;
+  unsigned int across;
+  unsigned int span = FONT_SIZE * scale;
   unsigned char bits;
   unsigned short colour;
 
-  if (value < FONT_FIRST || value > FONT_LAST) value = ' ';
-  glyph = &font8x8[(unsigned int) (value - FONT_FIRST) * FONT_SIZE];
-
-  tft_set_window(x, y, (unsigned char) (x + FONT_SIZE - 1),
-                 (unsigned char) (y + FONT_SIZE - 1));
+  tft_set_window(x, y, (unsigned char) (x + span - 1),
+                 (unsigned char) (y + span - 1));
   tft_control(SPI_RST_N | SPI_DC);
 
   for (row = 0; row < FONT_SIZE; row++) {
     bits = glyph[row];
-    for (column = 0; column < FONT_SIZE; column++) {
-      colour = (bits & (0x80 >> column)) ? fg : bg;
-      spi_write((unsigned char) (colour >> 8));
-      spi_write((unsigned char) colour);
+    for (down = 0; down < scale; down++) {
+      for (column = 0; column < FONT_SIZE; column++) {
+        colour = (bits & (0x80 >> column)) ? fg : bg;
+        for (across = 0; across < scale; across++) {
+          spi_write((unsigned char) (colour >> 8));
+          spi_write((unsigned char) colour);
+        }
+      }
     }
   }
 
   tft_deselect();
 }
 
+static void tft_draw_char(unsigned char x, unsigned char y, char value,
+                          unsigned short fg, unsigned short bg,
+                          unsigned int scale) {
+  if (value < FONT_FIRST || value > FONT_LAST) value = ' ';
+  tft_draw_glyph(x, y, &font8x8[(unsigned int) (value - FONT_FIRST) * FONT_SIZE],
+                 fg, bg, scale);
+}
+
 static void tft_draw_string(unsigned char x, unsigned char y, const char *text,
-                            unsigned short fg, unsigned short bg) {
+                            unsigned short fg, unsigned short bg,
+                            unsigned int scale) {
   while (*text != '\0') {
-    tft_draw_char(x, y, *text, fg, bg);
-    x = (unsigned char) (x + FONT_SIZE);
+    tft_draw_char(x, y, *text, fg, bg, scale);
+    x = (unsigned char) (x + FONT_SIZE * scale);
     text++;
   }
 }
 
 // Two hex digits of a BCD byte are its two decimal digits.
 static void tft_draw_bcd(unsigned char x, unsigned char y, unsigned char value,
-                         unsigned short fg, unsigned short bg) {
-  tft_draw_char(x, y, hex_digits[(value >> 4) & 0x0f], fg, bg);
-  tft_draw_char((unsigned char) (x + FONT_SIZE), y, hex_digits[value & 0x0f],
-                fg, bg);
+                         unsigned short fg, unsigned short bg,
+                         unsigned int scale) {
+  tft_draw_char(x, y, hex_digits[(value >> 4) & 0x0f], fg, bg, scale);
+  tft_draw_char((unsigned char) (x + FONT_SIZE * scale), y,
+                hex_digits[value & 0x0f], fg, bg, scale);
 }
 
 // Three vertical bars, not text. A bar shows byte order, MADCTL scan direction
@@ -431,31 +469,46 @@ static int ds3231_read(unsigned char first, unsigned char *buffer,
   return 1;
 }
 
-// Two ASCII digits to one BCD byte. A day below the tenth is space-padded in
-// __DATE__, not zero-padded.
-static unsigned char bcd_from_chars(char high, char low) {
-  unsigned char tens = (high == ' ') ? 0 : (unsigned char) (high - '0');
+// Days before the first of each month in a non-leap year.
+static const unsigned short month_days[12] =
+  {0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334};
 
-  return (unsigned char) ((tens << 4) | (unsigned char) (low - '0'));
+// Year counts from 2000, where every year divisible by four is a leap year;
+// 2100 is not, and is outside the range the two digit year can reach. The only
+// division is by four, which is a shift, and the remainder by seven is taken
+// by subtraction, since the core has neither instruction.
+static unsigned int weekday_of(unsigned int year, unsigned int month,
+                               unsigned int date) {
+  unsigned int days;
+
+  days = year * 365u + ((year + 3u) >> 2) + month_days[month - 1u] + (date - 1u);
+  if ((year & 3u) == 0u && month > 2u) days += 1u;
+
+  days += 6u;                        // 2000-01-01 was a Saturday
+  while (days >= 7u) days -= 7u;
+
+  return days + 1u;                  // 1 is Sunday through 7 is Saturday
 }
 
 // Division and modulo would pull in a libcall the core cannot satisfy, so the
-// only two-digit case is spelled out instead.
-static unsigned char build_month(void) {
-  unsigned int index;
-  unsigned int month;
+// tens digit is counted off by subtraction. Correct across 0 to 99, which is
+// the range every field here occupies.
+static unsigned char bcd_of(unsigned int value) {
+  unsigned int tens = 0;
 
-  for (index = 0; index < 12; index++) {
-    if (month_names[index * 3] == build_date[0] &&
-        month_names[index * 3 + 1] == build_date[1] &&
-        month_names[index * 3 + 2] == build_date[2]) {
-      month = index + 1;
-      if (month >= 10) return (unsigned char) (0x10 | (month - 10));
-      return (unsigned char) month;
-    }
+  while (value >= 10u) {
+    value -= 10u;
+    tens++;
   }
 
-  return 0x01;
+  return (unsigned char) ((tens << 4) | value);
+}
+
+// The registers hold BCD, so printing a byte as two hex digits already reads
+// as the decimal value and needs no conversion.
+static void uart_bcd(unsigned char value) {
+  uart_putc(hex_digits[(value >> 4) & 0x0f]);
+  uart_putc(hex_digits[value & 0x0f]);
 }
 
 static int ds3231_write(unsigned char first, const unsigned char *buffer,
@@ -498,20 +551,66 @@ static void ds3231_report_osf(void) {
   uart_puts((status & DS3231_OSF) ? "RTC OSF SET\r\n" : "RTC OSF CLEAR\r\n");
 }
 
-// Writing the time is what makes the oscillator stop flag safe to clear: the
-// flag says the registers have not been counting, and only a known value in
-// them makes that untrue again.
-static void ds3231_set_build_time(void) {
+// Waits for one character rather than returning what is not there yet. The
+// caller has already seen the command byte, so the rest of the line is on its
+// way; the bound exists so a truncated line cannot hang the clock.
+static int uart_getc(unsigned char *value) {
+  unsigned int timeout = UART_SET_TIMEOUT;
+
+  while (timeout != 0) {
+    if (UART_STAT_REG & UART_RX_VALID) {
+      *value = (unsigned char) UART_RX_REG;
+      return 1;
+    }
+    timeout--;
+  }
+
+  return 0;
+}
+
+// The host knows what time it is and this board does not. Twelve digits,
+// YYMMDDhhmmss, arrive behind the command byte and go straight into the
+// registers. An earlier version used __DATE__ and __TIME__, which set the
+// clock to the moment the compiler ran rather than the moment the command was
+// given, and ran minutes slow by the time the image had been built, programmed
+// and triggered.
+static void ds3231_set_from_uart(void) {
+  unsigned char digits[12];
   unsigned char time[DS3231_TIME_BYTES];
   unsigned char status;
+  unsigned int index;
+  unsigned int field[6];
 
-  time[0] = bcd_from_chars(build_time[6], build_time[7]);
-  time[1] = bcd_from_chars(build_time[3], build_time[4]);
-  time[2] = bcd_from_chars(build_time[0], build_time[1]);  // 24 hour: bit 6 clear
-  time[3] = 0x01;                                          // day of week is not derived
-  time[4] = bcd_from_chars(build_date[4], build_date[5]);
-  time[5] = build_month();
-  time[6] = bcd_from_chars(build_date[9], build_date[10]);
+  for (index = 0; index < 12; index++) {
+    if (!uart_getc(&digits[index])) {
+      uart_puts("RTC SET SHORT\r\n");
+      return;
+    }
+    if (digits[index] < '0' || digits[index] > '9') {
+      uart_puts("RTC SET BAD\r\n");
+      return;
+    }
+  }
+
+  // year, month, date, hours, minutes, seconds
+  for (index = 0; index < 6; index++) {
+    field[index] = (unsigned int) (digits[index * 2] - '0') * 10u
+                 + (unsigned int) (digits[index * 2 + 1] - '0');
+  }
+
+  if (field[1] < 1 || field[1] > 12 || field[2] < 1 || field[2] > 31 ||
+      field[3] > 23 || field[4] > 59 || field[5] > 59) {
+    uart_puts("RTC SET RANGE\r\n");
+    return;
+  }
+
+  time[0] = bcd_of(field[5]);
+  time[1] = bcd_of(field[4]);
+  time[2] = bcd_of(field[3]);                    // 24 hour: bit 6 clear
+  time[3] = (unsigned char) weekday_of(field[0], field[1], field[2]);
+  time[4] = bcd_of(field[2]);
+  time[5] = bcd_of(field[1]);
+  time[6] = bcd_of(field[0]);
 
   if (!ds3231_write(0x00, time, DS3231_TIME_BYTES)) {
     uart_puts("RTC SET FAIL\r\n");
@@ -519,7 +618,9 @@ static void ds3231_set_build_time(void) {
   }
 
   // Read back rather than write a whole byte: bit 3 enables the 32 kHz output
-  // and the alarm flags live here too.
+  // and the alarm flags live here too. Clearing the stop flag is what marks
+  // the registers as trustworthy again, so it happens only after a real time
+  // has been written over them.
   if (!ds3231_read(DS3231_STATUS, &status, 1)) {
     uart_puts("RTC SET FAIL\r\n");
     return;
@@ -530,18 +631,30 @@ static void ds3231_set_build_time(void) {
     return;
   }
 
-  uart_puts("RTC SET ");
-  uart_puts(build_date);
-  uart_putc(' ');
-  uart_puts(build_time);
-  uart_puts("\r\n");
+  uart_puts("RTC SET OK\r\n");
 }
 
-// The registers hold BCD, so printing a byte as two hex digits already reads
-// as the decimal value and needs no conversion.
-static void uart_bcd(unsigned char value) {
-  uart_putc(hex_digits[(value >> 4) & 0x0f]);
-  uart_putc(hex_digits[value & 0x0f]);
+// A BCD byte has two decimal digits, so neither nibble may exceed nine. A part
+// that has never been set, or one written by firmware that got the conversion
+// wrong, reads back values that fail this and would otherwise be drawn as if
+// they were real.
+static int bcd_is_valid(unsigned char value) {
+  return ((value & 0x0f) <= 9) && (((value >> 4) & 0x0f) <= 9);
+}
+
+static int ds3231_time_is_valid(const unsigned char *time) {
+  if (!bcd_is_valid(time[0] & 0x7f)) return 0;   // seconds
+  if (!bcd_is_valid(time[1] & 0x7f)) return 0;   // minutes
+  if (!bcd_is_valid(time[2] & 0x3f)) return 0;   // hours
+  if (!bcd_is_valid(time[4] & 0x3f)) return 0;   // date
+  if (!bcd_is_valid(time[5] & 0x1f)) return 0;   // month
+  if (!bcd_is_valid(time[6])) return 0;          // year
+
+  // A month or a date of zero is the other way the registers say they have
+  // never been given a real time.
+  if ((time[5] & 0x1f) == 0 || (time[4] & 0x3f) == 0) return 0;
+
+  return 1;
 }
 
 // Reading from register 0 snapshots the time into a second bank inside the
@@ -562,21 +675,49 @@ static void ds3231_print(const unsigned char *time) {
   uart_puts("\r\n");
 }
 
-// Both lines are centred across the 128 pixel width: ten glyphs of date and
-// eight of time, at eight pixels each.
-static void tft_show_time(const unsigned char *time) {
-  tft_draw_string(24, 60, "20", TFT_WHITE, TFT_BLACK);
-  tft_draw_bcd(40, 60, time[6], TFT_WHITE, TFT_BLACK);
-  tft_draw_char(56, 60, '-', TFT_WHITE, TFT_BLACK);
-  tft_draw_bcd(64, 60, time[5] & 0x1f, TFT_WHITE, TFT_BLACK);
-  tft_draw_char(80, 60, '-', TFT_WHITE, TFT_BLACK);
-  tft_draw_bcd(88, 60, time[4] & 0x3f, TFT_WHITE, TFT_BLACK);
+// Drawn once: the bar, the rule under it and the matching foot. Nothing in
+// them changes with the time, so they stay out of the per-second redraw.
+static void tft_draw_frame(void) {
+  tft_fill_rect(0, 0, TFT_WIDTH - 1, TFT_HEIGHT - 1, TFT_BLACK);
+  tft_fill_rect(0, 0, TFT_WIDTH - 1, HEADER_HEIGHT - 1, TFT_BAR);
+  tft_fill_rect(0, HEADER_HEIGHT, TFT_WIDTH - 1, HEADER_HEIGHT, TFT_MID);
+  tft_fill_rect(0, FOOTER_TOP, TFT_WIDTH - 1, TFT_HEIGHT - 1, TFT_BAR);
 
-  tft_draw_bcd(32, 76, time[2] & 0x3f, TFT_WHITE, TFT_BLACK);
-  tft_draw_char(48, 76, ':', TFT_WHITE, TFT_BLACK);
-  tft_draw_bcd(56, 76, time[1] & 0x7f, TFT_WHITE, TFT_BLACK);
-  tft_draw_char(72, 76, ':', TFT_WHITE, TFT_BLACK);
-  tft_draw_bcd(80, 76, time[0] & 0x7f, TFT_WHITE, TFT_BLACK);
+  // Icon, a gap, then twelve glyphs: 112 pixels with eight either side.
+  tft_draw_glyph(8, 6, icon_clock, TFT_MID, TFT_BAR, 1);
+  tft_draw_string(24, 6, "TANG NANO 9K", TFT_MID, TFT_BAR, 1);
+}
+
+// Two lines and nothing else. The weekday was drawn here for a while and came
+// out as a second way of saying what the date already says, so it went; the
+// register behind it is still written correctly, it is simply not shown.
+//
+// The time carries the screen at double size, where eight glyphs of sixteen
+// pixels fill the width exactly. The date sits under it at single size.
+// Drawn in place of the time when the registers do not hold valid BCD. Showing
+// the digits anyway would present a fault as a reading.
+static void tft_show_unset(void) {
+  tft_draw_string(0, 66, "--:--:--", TFT_DIM, TFT_BLACK, 2);
+  tft_draw_string(24, 98, " NOT SET  ", TFT_MID, TFT_BLACK, 1);
+}
+
+static void tft_show_time(const unsigned char *time) {
+  // Hours and minutes carry the reading; the seconds step back a shade so the
+  // eye settles on the part that matters.
+  tft_draw_bcd(0, 66, time[2] & 0x3f, TFT_BRIGHT, TFT_BLACK, 2);
+  tft_draw_char(32, 66, ':', TFT_MID, TFT_BLACK, 2);
+  tft_draw_bcd(48, 66, time[1] & 0x7f, TFT_BRIGHT, TFT_BLACK, 2);
+  tft_draw_char(80, 66, ':', TFT_MID, TFT_BLACK, 2);
+  tft_draw_bcd(96, 66, time[0] & 0x7f, TFT_MID, TFT_BLACK, 2);
+
+  // Icon, a gap, then ten glyphs of date: 96 pixels with sixteen either side.
+  tft_draw_glyph(16, 98, icon_calendar, TFT_DIM, TFT_BLACK, 1);
+  tft_draw_string(32, 98, "20", TFT_MID, TFT_BLACK, 1);
+  tft_draw_bcd(48, 98, time[6], TFT_MID, TFT_BLACK, 1);
+  tft_draw_char(64, 98, '-', TFT_DIM, TFT_BLACK, 1);
+  tft_draw_bcd(72, 98, time[5] & 0x1f, TFT_MID, TFT_BLACK, 1);
+  tft_draw_char(88, 98, '-', TFT_DIM, TFT_BLACK, 1);
+  tft_draw_bcd(96, 98, time[4] & 0x3f, TFT_MID, TFT_BLACK, 1);
 }
 
 int main(void) {
@@ -603,11 +744,11 @@ int main(void) {
 
   // The bars stay up long enough to be read, then the panel becomes the clock.
   delay_loop(DELAY_MS(1000));
-  tft_fill_rect(0, 0, TFT_WIDTH - 1, TFT_HEIGHT - 1, TFT_BLACK);
+  tft_draw_frame();
 
   while (1) {
     if (UART_STAT_REG & UART_RX_VALID) {
-      if ((unsigned char) UART_RX_REG == 'S') ds3231_set_build_time();
+      if ((unsigned char) UART_RX_REG == 'W') ds3231_set_from_uart();
     }
 
     if (!ds3231_read(0x00, time, DS3231_TIME_BYTES)) {
@@ -621,8 +762,13 @@ int main(void) {
     // capture showed as 00:14:52 followed by 00:14:54.
     if (time[0] != last_second) {
       last_second = time[0];
-      ds3231_print(time);
-      tft_show_time(time);
+      if (ds3231_time_is_valid(time)) {
+        ds3231_print(time);
+        tft_show_time(time);
+      } else {
+        uart_puts("RTC INVALID\r\n");
+        tft_show_unset();
+      }
       led = led ^ 1u;
       LED_REG = led;
     }

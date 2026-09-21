@@ -113,6 +113,21 @@ concern that doubling the depth would push the critical path negative, which
 runs from the ROM output into the load formatter, was unfounded. Raw log:
 `logs/13-rom-8k/02-over-4k-probe.log`.
 
+**Second defect, same shape.** The CI firmware job compared the image against
+a hardcoded 1024 words, so it went red the moment the ROM grew:
+
+```text
+firmware.hex is 2048 words, expected 1024
+```
+
+Nothing local caught it. `tools/run_tests.sh` does not look at the image size,
+and the depth already lived in three places that have to agree: the array in
+the RTL, `ROM_WORDS` in `make_hex.py` and the region length in `linker.ld`.
+The check was a hardcoded fourth copy. It now reads all three and fails if any
+disagrees, which also catches the other direction, where the RTL grows and the
+padding does not. This is the same defect as entry 22: a constant duplicated
+into a place that nobody updates.
+
 **Consequence.** `-Os` existed only to fit the font, so the build returns to
 `-O1` and `DELAY_MS` returns to the 3000 iterations a millisecond that entry 30
 measured. The disassembly confirms the five-instruction loop is back, which is

@@ -204,13 +204,12 @@ static void uart_hex32(unsigned int value) {
   uart_hex8((unsigned char) value);
 }
 
-// delay_loop counts iterations, not clocks. One iteration costs its six
-// instructions plus two cycles for each taken branch and one for each
-// load-use stall, which is twelve. The same count over the five-instruction
-// loop the previous optimisation level produced gives nine, and nine is what
-// the board measured as the gap between RTC lines, so the model is calibrated
-// rather than assumed. Changing optimisation level changes this number.
-#define DELAY_MS(ms) ((ms) * 2250U)
+// delay_loop counts iterations, not clocks. One iteration costs its five
+// instructions plus two cycles for the taken branch and one for each load-use
+// stall, which is nine, and nine is what the board measured as the gap between
+// RTC lines. Changing optimisation level changes this number: the
+// six-instruction loop -Os emits costs twelve.
+#define DELAY_MS(ms) ((ms) * 3000U)
 
 static void spi_wait_idle(void) {
   while (SPI_STAT_REG & SPI_BUSY) {

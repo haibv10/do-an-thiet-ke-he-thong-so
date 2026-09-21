@@ -112,6 +112,14 @@ The cost is the four extra blocks predicted, and timing closes with margin. The
 concern that doubling the depth would push the critical path negative, which
 runs from the ROM output into the load formatter, was unfounded. Raw log:
 `logs/13-rom-8k/02-over-4k-probe.log`.
+
+**Consequence.** `-Os` existed only to fit the font, so the build returns to
+`-O1` and `DELAY_MS` returns to the 3000 iterations a millisecond that entry 30
+measured. The disassembly confirms the five-instruction loop is back, which is
+the nine clocks that figure rests on. Firmware is 4392 bytes, genuinely past
+4 KB, so the shipped image is what exercises the new depth: pROM 8, BSRAM
+12/26, Fmax 31.317 MHz, no violated endpoints, in
+`logs/13-rom-8k/03-o1-clock-build.log`.
 ## 2026-09-21 panel clock
 
 ### 32. The panel said nothing after bring-up

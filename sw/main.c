@@ -38,11 +38,13 @@
 #define TFT_WIDTH     128
 #define TFT_HEIGHT    160
 
-// D7 MY and D6 MX set the scan direction, D3 selects BGR over RGB subpixel
-// order. Panels sold on identical breakouts differ in subpixel order, so if
-// the first colour bar comes up blue instead of red, clear D3 to make this
-// 0xc0. Nothing else in the driver changes.
-#define TFT_MADCTL    0xc8
+// D7 MY and D6 MX mirror the row and column order, D3 selects BGR over RGB
+// subpixel order. Clearing MY and MX together turns the image through 180
+// degrees, which is what puts the panel the right way up on this board; the
+// bars come out red, green and blue in that order, so D3 stays set. Setting
+// D5 MV as well would give landscape, but the panel is then 160 by 128 and the
+// layout coordinates have to move with it.
+#define TFT_MADCTL    0x08
 
 #define TFT_RED       0xf800
 #define TFT_GREEN     0x07e0

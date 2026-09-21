@@ -68,7 +68,7 @@ rather than a deletion here.
 
 **Verification.** Simulation passes 34/34. On the board the banner, `TFT INIT`,
 `TFT BARS` and the repeating `ALIVE` line all appear in
-`logs/55-spi-st7735-board.log`.
+`logs/09-spi-st7735/55-board.log`.
 
 ---
 
@@ -93,9 +93,9 @@ GowinSynthesis finish
 **Fix.** Add `source/peripheral/spi_mmio.v` and `libs/spi/spi_master.v` to
 `tools/build_gowin.tcl`, and to `fpga_project.gprj` so the IDE flow matches.
 
-**Evidence after.** `logs/53-spi-st7735-firmware-build.log` completes with
+**Evidence after.** `logs/09-spi-st7735/53-firmware-build.log` completes with
 Fmax 30.880 MHz against the 27 MHz constraint, 0 setup and 0 hold violations,
-and `logs/54-spi-st7735-program.log` reaches 100%.
+and `logs/09-spi-st7735/54-program.log` reaches 100%.
 
 ### 23. The design had no SPI peripheral
 
@@ -194,8 +194,8 @@ one stall for its only true load-use dependency.
 
 **Symptom.** The FIFO board protocol printed `RXFIFO CASE16`, `RXFIFO
 CASE17`, then `RXFIFO FAIL` in both
-`logs/23-uart-rx-fifo-board-protocol.log`
-and `logs/27-uart-rx-fifo-board-test-firmware-protocol.log`.
+`logs/03-uart-rx-fifo/23-board-protocol.log`
+and `logs/03-uart-rx-fifo/27-board-test-firmware-protocol.log`.
 The second failure followed a firmware rebuild, so the earlier explanation
 that only a stale firmware image caused the first failure was not supported.
 These captures report only an aggregate result; they do not identify which
@@ -211,14 +211,14 @@ case 16 and case 17 results independently, and drain/clear the FIFO between
 cases. The MMIO test now confirms that writing `0x04` leaves overrun set and
 writing `0x01` clears it.
 
-**Simulation.** `logs/28-uart-rx-fifo-w1c-fix-simulation.log`
+**Simulation.** `logs/03-uart-rx-fifo/28-w1c-fix-simulation.log`
 records 30/30 PASS; the rebuilt firmware image is 1024 ROM words.
 
-**Board verification.** `logs/29-uart-rx-fifo-w1c-fix-build.log`
+**Board verification.** `logs/03-uart-rx-fifo/29-w1c-fix-build.log`
 records P&R, timing analysis and bitstream generation complete.
-`logs/30-uart-rx-fifo-w1c-fix-program.log`
+`logs/03-uart-rx-fifo/30-w1c-fix-program.log`
 records SRAM programming at 100% with `Finished.`. The protocol capture in
-`logs/31-uart-rx-fifo-w1c-fix-protocol.log`
+`logs/03-uart-rx-fifo/31-w1c-fix-protocol.log`
 records `CASE16 PASS`, `CASE17 PASS` and `RXFIFO PASS`.
 
 **Status** — Fixed and board-verified. Case 16 proves ordered receipt of a
@@ -242,19 +242,19 @@ Reading `0x50000008` pops the oldest byte; writing one to `0x5000000c` bit zero
 clears the overrun indication. A full FIFO drops the new byte and preserves the
 queued sequence.
 
-**Verification.** `logs/14-uart-rx-fifo-full-simulation.log`
+**Verification.** `logs/03-uart-rx-fifo/14-full-simulation.log`
 records 30/30 PASS. The UART unit and MMIO tests cover FIFO order, full state,
 drop-on-full, sticky overrun, W1C clear and pop behavior; `cpu_uart_fifo_tb`
 covers two CPU loads popping queued bytes in order.
 
-**Build.** `logs/15-uart-rx-fifo-fpga-build.log`
+**Build.** `logs/03-uart-rx-fifo/15-fpga-build.log`
 records P&R, timing analysis and bitstream generation complete at 30.210 MHz
 against the 27 MHz constraint with 0 setup/hold violations. The FIFO build uses
 3375/8640 logic cells, 1599/6693 registers and 6/26 BSRAM.
 
-**Board boot.** `logs/17-uart-rx-fifo-program-board.log`
+**Board boot.** `logs/03-uart-rx-fifo/17-program-board.log`
 records SRAM programming at 100% with `Finished.`. The reset capture in
-`logs/18-uart-rx-fifo-board-uart.log`
+`logs/03-uart-rx-fifo/18-board-uart.log`
 records `BOOT 5A5A5A5A 00000000` and `I2C 27` from the FIFO bitstream.
 
 **Status** — Superseded by finding 18. The initial board workload exposed the
@@ -283,21 +283,21 @@ grouped by ownership under `sim/`.
 the new paths and module names. README, design report, coding guide and firmware
 image helper now describe the same tree.
 
-**Simulation.** `logs/09-source-layout-refactor.log`
+**Simulation.** `logs/02-source-layout/09-refactor.log`
 records 29/29 PASS. The only warning is the intentional short-image fixture in
 `mem_instruction_rom_tb`; it proves that ROM words beyond the fixture are
 zero-filled.
 
 **Build and programming.** The refactored tree was built and programmed after the
-simulation run. `logs/10-source-layout-fpga-build.log`
+simulation run. `logs/02-source-layout/10-fpga-build.log`
 records P&R, timing analysis and bitstream generation complete with Fmax
 28.912 MHz, 0 setup/hold violations, 3321/8640 logic cells, 1594/6693 registers
-and 6/26 BSRAM. `logs/11-source-layout-program-board.log`
+and 6/26 BSRAM. `logs/02-source-layout/11-program-board.log`
 records SRAM programming at 100% with `Finished.`.
 
 **Status** — Fixed. This is a behavior-preserving refactor. Programming was
 verified, but no new UART/LCD capture was taken after the refactored bitstream
-was loaded; the functional board evidence remains `logs/05-board-uart.log`.
+was loaded; the functional board evidence remains `logs/01-initial-bringup/05-board-uart.log`.
 
 ---
 
@@ -838,7 +838,7 @@ removed from both documents rather than reworded.
 **Severity** — Low in the RTL, high in the documentation. Five documents stated
 the wrong address as measured fact.
 
-**Symptom.** `logs/05-board-uart.log` captured `I2C 21` repeatedly, and that was
+**Symptom.** `logs/01-initial-bringup/05-board-uart.log` captured `I2C 21` repeatedly, and that was
 written up as "`0x21` is the real PCF8574 address on this backpack rather than
 the more common `0x27`". A PCF8574 with A0, A1 and A2 left open answers at
 `0x27`; `0x21` needs A0 strapped, which this backpack does not do.
@@ -898,7 +898,7 @@ firmware_boot_tb: PASS (banner "BOOT 5A5A5A5A 00000000")
 
 Gowin V1.9.12.03 completes the flow for `GW1NR-LV9QN88PC6/I5` with no errors and
 no registers inferred as latches. Full output in
-`logs/02-fpga-build.log`.
+`logs/01-initial-bringup/02-fpga-build.log`.
 
 | Metric | Before this pass | After |
 |---|---|---|
@@ -921,7 +921,7 @@ memory rather than duplicating the 4 KB image, so the cost is one block, not two
 
 Board measurement has been repeated on the bitstream built from this tree.
 Programming reports `User Code is: 0x000003D3` and `Finished.`, and the capture
-in `logs/05-board-uart.log` closes the loop on
+in `logs/01-initial-bringup/05-board-uart.log` closes the loop on
 four of the findings at once:
 
 ```

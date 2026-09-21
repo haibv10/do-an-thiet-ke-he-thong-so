@@ -62,7 +62,7 @@ Post-route summary:
 | I/O ports | 8 / 71 (12%) |
 
 These figures are from the current UART FIFO tree. Zero registers are inferred as latches, confirming the two I2C
-FSMs have explicit default states. Raw log: `logs/15-uart-rx-fifo-fpga-build.log`.
+FSMs have explicit default states. Raw log: `logs/03-uart-rx-fifo/15-fpga-build.log`.
 
 The board measurements further down are from a build carrying the fixes in [docs/fix_log.md](../fix_log.md),
 except where a row is explicitly labelled as a fault capture.
@@ -73,14 +73,14 @@ The generated SRAM bitstream is `build/gowin/impl/pnr/fpga_project.fs`.
 
 Gowin Programmer detects the Tang Nano 9K as `GW1NR-9C` with ID `0x1100481B`.
 The UART FIFO tree was programmed into SRAM at 100% through the FT2CH JTAG
-channel; see `logs/17-uart-rx-fifo-program-board.log`. The external USB-UART
-capture in `logs/18-uart-rx-fifo-board-uart.log` records `BOOT 5A5A5A5A
+channel; see `logs/03-uart-rx-fifo/17-program-board.log`. The external USB-UART
+capture in `logs/03-uart-rx-fifo/18-board-uart.log` records `BOOT 5A5A5A5A
 00000000` and `I2C 27` after reset. It confirms that the FIFO bitstream boots
 and preserves the existing startup/I2C path. The corrected follow-up firmware
-test is built in `logs/29-uart-rx-fifo-w1c-fix-build.log`, programmed in
-`logs/30-uart-rx-fifo-w1c-fix-program.log`, and reports `CASE16 PASS`,
+test is built in `logs/03-uart-rx-fifo/29-w1c-fix-build.log`, programmed in
+`logs/03-uart-rx-fifo/30-w1c-fix-program.log`, and reports `CASE16 PASS`,
 `CASE17 PASS` and `RXFIFO PASS` in
-`logs/31-uart-rx-fifo-w1c-fix-protocol.log`.
+`logs/03-uart-rx-fifo/31-w1c-fix-protocol.log`.
 
 ### UART TX
 
@@ -144,10 +144,10 @@ the current module takes `clk` and `tick`.*
 
 | Stimulus | Result | Evidence |
 |---|---|---|
-| Reset with no device wired | repeated `I2C NACK` | `logs/06-fault-i2c-nack.log` |
-| Reset, firmware reading `.rodata` | `I2C ` followed by two `0x00` bytes | `logs/07-fault-rodata-null.log` |
-| Reset, hex formatter using the A-F branch | `I2C 2>` instead of `I2C 27` | `logs/08-fault-hex-branch.log` |
-| Reset, historical faulty firmware | `I2C 21` repeated, LCD shows `HELLO FPGA` | `logs/05-board-uart.log` |
+| Reset with no device wired | repeated `I2C NACK` | `logs/01-initial-bringup/06-fault-i2c-nack.log` |
+| Reset, firmware reading `.rodata` | `I2C ` followed by two `0x00` bytes | `logs/01-initial-bringup/07-fault-rodata-null.log` |
+| Reset, hex formatter using the A-F branch | `I2C 2>` instead of `I2C 27` | `logs/01-initial-bringup/08-fault-hex-branch.log` |
+| Reset, historical faulty firmware | `I2C 21` repeated, LCD shows `HELLO FPGA` | `logs/01-initial-bringup/05-board-uart.log` |
 
 Rows two and three are CPU faults, not UART faults, and both are now fixed — see
 [docs/fix_log.md](../fix_log.md) findings 6 and 1. In row three `'0' + 14` is `0x3e` and `'A' - 10 + 7` is also

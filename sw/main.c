@@ -1,6 +1,5 @@
 #define GPIO_BASE     0x40000000
 #define UART_BASE     0x50000000
-#define I2C_BASE      0x60000000
 #define SPI_BASE      0x70000000
 
 #define LED_REG       (*((volatile unsigned int *) GPIO_BASE))
@@ -8,21 +7,15 @@
 #define UART_STAT_REG (*((volatile unsigned int *) (UART_BASE + 4)))
 #define UART_RX_REG   (*((volatile unsigned int *) (UART_BASE + 8)))
 #define UART_CTRL_REG (*((volatile unsigned int *) (UART_BASE + 12)))
-#define LCD_WRITE_REG (*((volatile unsigned int *) I2C_BASE))
-#define LCD_STAT_REG  (*((volatile unsigned int *) (I2C_BASE + 4)))
-#define LCD_ADDR_REG  (*((volatile unsigned int *) (I2C_BASE + 8)))
 #define SPI_DATA_REG  (*((volatile unsigned int *) SPI_BASE))
 #define SPI_STAT_REG  (*((volatile unsigned int *) (SPI_BASE + 4)))
 #define SPI_CTRL_REG  (*((volatile unsigned int *) (SPI_BASE + 8)))
-
 
 #define UART_TX_BUSY  0x01
 #define UART_RX_VALID 0x02
 #define UART_RX_OVERRUN 0x04
 #define UART_RX_LEVEL_MASK 0xf8
 #define UART_CTRL_CLEAR_OVERRUN 0x01
-#define LCD_BUSY      0x01
-#define LCD_ACK       0x02
 #define SPI_BUSY      0x01
 #define SPI_CS_N      0x01
 #define SPI_DC        0x02
@@ -40,7 +33,6 @@
 #define TFT_RED       0xf800
 #define TFT_GREEN     0x07e0
 #define TFT_BLUE      0x001f
-
 
 #ifndef UART_FIFO_TEST_TIMEOUT
 #define UART_FIFO_TEST_TIMEOUT 270000U
@@ -154,57 +146,6 @@ static void uart_fifo_test(void) {
   uart_puts(case17_passed ? "RXFIFO CASE17 PASS\r\n" : "RXFIFO CASE17 FAIL\r\n");
 
   uart_puts(case16_passed && case17_passed ? "RXFIFO PASS\r\n" : "RXFIFO FAIL\r\n");
-}
-
-static void lcd_wait_ready(void) {
-  while (LCD_STAT_REG & LCD_BUSY) {
-  }
-}
-
-static void lcd_command(unsigned char value) {
-  lcd_wait_ready();
-  LCD_WRITE_REG = value;
-}
-
-static void lcd_data(unsigned char value) {
-  lcd_wait_ready();
-  LCD_WRITE_REG = 0x100 | value;
-}
-
-static void lcd_puts(const char *text) {
-  while (*text != '\0') {
-    lcd_data((unsigned char) *text);
-    text++;
-  }
-}
-
-static void lcd_init(void) {
-  delay_cycles(1080000);
-  lcd_command(0x02); // return home, 4-bit interface
-  lcd_command(0x28); // 4-bit bus, two display lines, 5x8 font
-  lcd_command(0x0C); // display on, cursor off, blink off
-  lcd_command(0x06); // entry mode: increment, no shift
-  lcd_command(0x01); // clear display
-}
-
-static int lcd_probe(unsigned char address) {
-  LCD_ADDR_REG = address;
-  lcd_command(0x00);
-  lcd_wait_ready();
-  return (LCD_STAT_REG & LCD_ACK) != 0;
-}
-
-static int lcd_find_address(void) {
-  unsigned char address;
-
-  // PCF8574 answers in 0x20-0x27, PCF8574A in 0x38-0x3f.
-  for (address = 0x20; address <= 0x27; address++) {
-    if (lcd_probe(address)) return address;
-  }
-  for (address = 0x38; address <= 0x3f; address++) {
-    if (lcd_probe(address)) return address;
-  }
-  return -1;
 }
 
 // delay_cycles counts loop iterations, and the loop body is several
@@ -332,7 +273,7 @@ static void tft_colour_bars(void) {
 }
 
 int main(void) {
-  int lcd_address;
+  unsigned int led = 0;
 
   LED_REG = 0;
 
@@ -349,27 +290,16 @@ int main(void) {
   tft_colour_bars();
   uart_puts("TFT BARS\r\n");
 
-  lcd_address = -1;
-  delay_cycles(1080000);
-  lcd_address = lcd_find_address();
-  if (lcd_address >= 0) {
-    lcd_init();
-    lcd_command(0x80); // move the cursor to the start of line 1
-    lcd_puts("HELLO FPGA");
-  }
-
   while (1) {
     if (UART_STAT_REG & UART_RX_VALID) {
       if ((unsigned char) UART_RX_REG == 'T') uart_fifo_test();
     }
 
-    uart_puts("I2C ");
-    if (lcd_address >= 0) {
-      uart_hex8((unsigned char) lcd_address);
-    } else {
-      uart_puts("NACK");
-    }
-    uart_puts("\r\n");
+    // A periodic line separates a CPU that hung from a capture that never
+    // reached the terminal. The LED is the same evidence without a terminal.
+    uart_puts("ALIVE\r\n");
+    led = led ^ 1u;
+    LED_REG = led;
     delay_cycles(27000000);
   }
 }

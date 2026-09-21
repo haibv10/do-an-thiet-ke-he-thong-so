@@ -1,6 +1,6 @@
 `timescale 1ns/1ps
 
-// End-to-end check of the real sw/firmware.hex image on the real SoC.
+// End-to-end check of the real rom/firmware.hex image on the real SoC.
 //
 // The banner the firmware prints is a self-check of the startup code:
 //   "BOOT "     comes from a .rodata string, so the ROM data window works

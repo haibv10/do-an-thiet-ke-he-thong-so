@@ -2,7 +2,7 @@
 // of logic. HEX_PATH resolves against the working directory, which both the
 // simulation and synthesis flows set to the repository root.
 module mem_instruction_rom #(
-  parameter HEX_PATH = "sw/firmware.hex"
+  parameter HEX_PATH = "rom/firmware.hex"
 ) (
   input  wire        clk,
   input  wire [31:0] a,

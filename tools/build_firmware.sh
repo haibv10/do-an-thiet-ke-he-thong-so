@@ -26,12 +26,23 @@ cd "$build_dir"
   -nostdlib \
   -O1 \
   -msmall-data-limit=0 \
-  -T "$sw_dir/linker.ld" \
+  -T "$repo_dir/tools/linker_script.ld" \
   -Wl,-Map=firmware.map \
-  "$sw_dir/startup.s" "$sw_dir/main.c" \
+  "$sw_dir/startup.s" \
+  "$sw_dir/main.c" \
+  "$sw_dir/sys_delay.c" \
+  "$sw_dir/gpio_led.c" \
+  "$sw_dir/uart_io.c" \
+  "$sw_dir/i2c_bus.c" \
+  "$sw_dir/ds3231_rtc.c" \
+  "$sw_dir/spi_bus.c" \
+  "$sw_dir/font_8x8.c" \
+  "$sw_dir/st7735_panel.c" \
+  "$sw_dir/ui_clock.c" \
   -o firmware.elf
 
 "$objcopy_bin" -O binary firmware.elf firmware.bin
 "$objdump_bin" -d firmware.elf > firmware.asm
 python3 "$repo_dir/tools/make_hex.py" firmware.bin firmware.hex
-cp firmware.hex "$sw_dir/firmware.hex"
+mkdir -p "$repo_dir/rom"
+cp firmware.hex "$repo_dir/rom/firmware.hex"

@@ -20,7 +20,7 @@ Six tests are CPU-level programs rather than unit tests:
 | `cpu_uart_hex_tb` | The `sltiu` plus branch sequence the hex formatter depends on |
 | `cpu_uart_fifo_tb` | Two UART frames queued before CPU loads, then popped in FIFO order through `0x50000008` |
 | `cpu_fence_tb` | Store, FENCE, then load; confirms the fence decode and preserved memory order |
-| `firmware_boot_tb` | The real `sw/firmware.hex` image booting on the full SoC, decoded off the UART pin |
+| `firmware_boot_tb` | The real `rom/firmware.hex` image booting on the full SoC, decoded off the UART pin |
 
 `firmware_boot_tb` is the end-to-end case. It checks the banner byte by byte:
 

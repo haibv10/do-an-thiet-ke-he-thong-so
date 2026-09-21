@@ -55,7 +55,7 @@ jobs:
                   source/cpu/mem_instruction_rom.v)
           depth=$((depth + 1))
           padded=$(sed -n 's/^ROM_WORDS = \([0-9]*\)$/\1/p' tools/make_hex.py)
-          linker=$(sed -n 's/.*ROM (rx).*LENGTH = \([0-9]*\)K.*/\1/p' sw/linker.ld)
+          linker=$(sed -n 's/.*ROM (rx).*LENGTH = \([0-9]*\)K.*/\1/p' tools/linker_script.ld)
           echo "rtl $depth words, make_hex.py $padded words, linker ${linker}K"
           if [ "$padded" -ne "$depth" ]; then
             echo "make_hex.py pads to $padded words, the ROM holds $depth" >&2
@@ -90,8 +90,8 @@ jobs:
       # runs the committed image on the SoC and checks what it prints.
       - name: Report whether the rebuild matches the committed image
         run: |
-          if git diff --quiet -- sw/firmware.hex; then
-            echo "sw/firmware.hex reproduces with $(riscv64-unknown-elf-gcc -dumpversion)"
+          if git diff --quiet -- rom/firmware.hex; then
+            echo "rom/firmware.hex reproduces with $(riscv64-unknown-elf-gcc -dumpversion)"
           else
-            echo "sw/firmware.hex differs from a rebuild with $(riscv64-unknown-elf-gcc -dumpversion)"
+            echo "rom/firmware.hex differs from a rebuild with $(riscv64-unknown-elf-gcc -dumpversion)"
           fi

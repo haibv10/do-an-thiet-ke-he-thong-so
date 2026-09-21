@@ -59,6 +59,12 @@
 // Lives in .rodata, so reading it exercises the ROM window at region 0x0.
 static const char hex_digits[] = "0123456789ABCDEF";
 
+// The compiler knows when it ran, and that is the only time source this board
+// has apart from the part being set. Both live in .rodata.
+static const char build_date[] = __DATE__;   // "Sep 21 2026", day space-padded
+static const char build_time[] = __TIME__;   // "14:46:03"
+static const char month_names[] = "JanFebMarAprMayJunJulAugSepOctNovDec";
+
 // Both markers have external linkage so the compiler must emit the objects and
 // load them back, instead of folding the initialiser into an immediate.
 unsigned int data_marker = 0x5a5a5a5a;  // .data, copied out of ROM by startup.s
@@ -345,6 +351,59 @@ static int ds3231_read(unsigned char first, unsigned char *buffer,
   return 1;
 }
 
+// Two ASCII digits to one BCD byte. A day below the tenth is space-padded in
+// __DATE__, not zero-padded.
+static unsigned char bcd_from_chars(char high, char low) {
+  unsigned char tens = (high == ' ') ? 0 : (unsigned char) (high - '0');
+
+  return (unsigned char) ((tens << 4) | (unsigned char) (low - '0'));
+}
+
+// Division and modulo would pull in a libcall the core cannot satisfy, so the
+// only two-digit case is spelled out instead.
+static unsigned char build_month(void) {
+  unsigned int index;
+  unsigned int month;
+
+  for (index = 0; index < 12; index++) {
+    if (month_names[index * 3] == build_date[0] &&
+        month_names[index * 3 + 1] == build_date[1] &&
+        month_names[index * 3 + 2] == build_date[2]) {
+      month = index + 1;
+      if (month >= 10) return (unsigned char) (0x10 | (month - 10));
+      return (unsigned char) month;
+    }
+  }
+
+  return 0x01;
+}
+
+static int ds3231_write(unsigned char first, const unsigned char *buffer,
+                        unsigned int count) {
+  unsigned int index;
+  unsigned int flags;
+
+  if (!i2c_frame(I2C_START | DS3231_WRITE)) {
+    i2c_release();
+    return 0;
+  }
+  if (!i2c_frame(first)) {
+    i2c_release();
+    return 0;
+  }
+
+  for (index = 0; index < count; index++) {
+    flags = buffer[index];
+    if (index == count - 1) flags |= I2C_STOP;
+    if (!i2c_frame(flags)) {
+      i2c_release();
+      return 0;
+    }
+  }
+
+  return 1;
+}
+
 // Sticky from the first time the part is powered, and cleared only by writing
 // zero over it. Set means the oscillator stopped at some point, so whatever
 // the timekeeping registers hold has not been counting since it was last set.
@@ -357,6 +416,45 @@ static void ds3231_report_osf(void) {
   }
 
   uart_puts((status & DS3231_OSF) ? "RTC OSF SET\r\n" : "RTC OSF CLEAR\r\n");
+}
+
+// Writing the time is what makes the oscillator stop flag safe to clear: the
+// flag says the registers have not been counting, and only a known value in
+// them makes that untrue again.
+static void ds3231_set_build_time(void) {
+  unsigned char time[DS3231_TIME_BYTES];
+  unsigned char status;
+
+  time[0] = bcd_from_chars(build_time[6], build_time[7]);
+  time[1] = bcd_from_chars(build_time[3], build_time[4]);
+  time[2] = bcd_from_chars(build_time[0], build_time[1]);  // 24 hour: bit 6 clear
+  time[3] = 0x01;                                          // day of week is not derived
+  time[4] = bcd_from_chars(build_date[4], build_date[5]);
+  time[5] = build_month();
+  time[6] = bcd_from_chars(build_date[9], build_date[10]);
+
+  if (!ds3231_write(0x00, time, DS3231_TIME_BYTES)) {
+    uart_puts("RTC SET FAIL\r\n");
+    return;
+  }
+
+  // Read back rather than write a whole byte: bit 3 enables the 32 kHz output
+  // and the alarm flags live here too.
+  if (!ds3231_read(DS3231_STATUS, &status, 1)) {
+    uart_puts("RTC SET FAIL\r\n");
+    return;
+  }
+  status &= (unsigned char) ~DS3231_OSF;
+  if (!ds3231_write(DS3231_STATUS, &status, 1)) {
+    uart_puts("RTC SET FAIL\r\n");
+    return;
+  }
+
+  uart_puts("RTC SET ");
+  uart_puts(build_date);
+  uart_putc(' ');
+  uart_puts(build_time);
+  uart_puts("\r\n");
 }
 
 // The registers hold BCD, so printing a byte as two hex digits already reads
@@ -413,7 +511,10 @@ int main(void) {
 
   while (1) {
     if (UART_STAT_REG & UART_RX_VALID) {
-      if ((unsigned char) UART_RX_REG == 'T') uart_fifo_test();
+      unsigned char command = (unsigned char) UART_RX_REG;
+
+      if (command == 'T') uart_fifo_test();
+      if (command == 'S') ds3231_set_build_time();
     }
 
     // The line is also the liveness signal: a CPU that hung prints nothing,

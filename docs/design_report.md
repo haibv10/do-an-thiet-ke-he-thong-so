@@ -10,11 +10,12 @@
 
 | Metric | Result |
 |---|---|
-| Simulation | 31 / 31 testbenches pass |
-| Fmax after place and route | 31.143 MHz against a 27 MHz constraint |
+| Simulation | 33 / 33 testbenches pass |
+| Fmax after place and route | 31.317 MHz against a 27 MHz constraint |
 | Timing violations | 0 setup, 0 hold |
 | Logic utilisation | 3256 / 8640 (38%) |
-| Hardware | Banner reads `BOOT 5A5A5A5A 00000000`; the ST7735 shows red, green and blue bars in that order |
+| Memory | BSRAM 12 / 26; firmware 4392 bytes of an 8 KB ROM |
+| Hardware | Banner reads `BOOT 5A5A5A5A 00000000`; the ST7735 shows colour bars and then the date and time read from a DS3231 |
 
 The hardware row is from a build carrying the fixes in [fix_log.md](fix_log.md).
 An earlier capture read the address as `0x21`; that reading was itself corrupted
@@ -273,8 +274,9 @@ both modules.
 | Address | Access | Function |
 |---|---|---|
 | `0x50000000` | Write | Write a byte in `data[7:0]` to start transmission, provided `tx_busy` is 0 |
-| `0x50000004` | Read | Status — bit 0 is `tx_busy`, bit 1 is `rx_valid` |
-| `0x50000008` | Read | Received byte in `data[7:0]`; the read clears `rx_valid` |
+| `0x50000004` | Read | Status — bit 0 `tx_busy`, bit 1 `rx_valid`, bit 2 `rx_overrun`, bits 7:3 `rx_level` |
+| `0x50000008` | Read | Oldest received byte; the read pops one byte from the FIFO |
+| `0x5000000c` | Write | Write one to bit 0 to clear `rx_overrun` |
 
 The transmitter is a four-phase state machine — idle, start bit, eight data
 bits, stop bit — counting a full 234 cycles per bit before advancing.
@@ -305,40 +307,94 @@ unsynchronised to the FPGA clock. The design addresses three problems:
    `rx_valid` is only raised once the stop bit is confirmed high, so a malformed
    frame is discarded rather than reported as data.
 
-The receiver holds **exactly one byte**. There is no FIFO and no overrun flag: a
-new byte overwrites the previous one if software has not read it yet. See
-section 9.
+4. **A receive queue.** The receiver holds **16 bytes**. An earlier version held
+   one, and a byte that arrived before software read the previous one
+   overwrote it silently, which is the defect recorded as finding 17 in
+   [fix_log.md](fix_log.md). The queue is a circular buffer whose read port is
+   asynchronous, so a pop presents the next byte in the same cycle.
 
-### I2C and the LCD
+   When the queue is full a new byte is dropped rather than displacing a queued
+   one, and `rx_overrun` latches. The flag is sticky and cleared by writing one
+   to `0x5000000c`, so software learns that data was lost even if it was not
+   watching at the moment it happened. `rx_level` reports the count, which is
+   what lets a test distinguish a queue that filled from one that never
+   received.
 
-The peripheral described in this section has been replaced. The 20x4 HD44780
-panel is retired, and a DS3231 real-time clock sits on the bus in its place
-behind `libs/i2c/i2c_master.v`, which carries frames in both directions and can
-issue the repeated START a register read needs. The nested state machines below
-are kept because they are part of the work, and because the new master grew out
-of the frame engine they describe; nothing in the section describes the current
-tree.
+There is still no hardware flow control, so a sender that stays faster than
+software will eventually overrun. See section 9.
 
-The I2C master is built from two nested state machines. `i2c_writeframe` drives
-one 8-bit frame — START, eight data bits, ACK, optional STOP.
-`lcd_write_cmd_data` sits above it and turns one LCD byte into the five frames a
-PCF8574 backpack needs: the slave address, then the high nibble twice and the
-low nibble twice, toggling the LCD enable line between them.
+### I2C and the real-time clock
+
+`libs/i2c/i2c_master.v` carries one frame in either direction: an optional
+START, eight data bits most significant first, one acknowledge bit, and an
+optional STOP. A frame that leaves STOP off does not release the bus, which is
+how several frames chain into one transaction.
 
 | Address | Access | Function |
 |---|---|---|
-| `0x60000000` | Write | `data[7:0]` is the byte; `data[8]` selects command (0) or display data (1) |
-| `0x60000004` | Read | Bit 0 is `busy`, bit 1 is the `ack` result |
-| `0x60000008` | Write | 7-bit slave address, defaults to `0x27` |
+| `0x60000000` | Write | `data[7:0]` is the byte; `[8]` START, `[9]` STOP, `[10]` read, `[11]` refuse the byte read |
+| `0x60000004` | Read | Bit 0 `busy`, bit 1 `ack` from the last write frame |
+| `0x60000008` | Read | Byte received by the last read frame |
 
-Both state machines run in the **CPU's 27 MHz clock domain** and step on a 1 MHz
-tick enable from `clock_enable_divider`. An earlier version clocked them from a
-separately divided 1 MHz clock, which meant a one-cycle CPU write strobe could
-be missed entirely. Keeping a single clock domain removes that class of bug.
+One store launches one frame, so a transaction is a sequence of stores rather
+than a mode the peripheral remembers. Framing is left to software on purpose:
+which register pointer to set, how many bytes follow and where a read turns
+around are properties of the slave, not of the bus, and a peripheral that
+encoded them would only fit one device.
+
+The state machine runs in the **CPU's 27 MHz clock domain** and steps on a 1 MHz
+tick enable from `clock_enable`. Each state is held for ten ticks, so SCL runs
+at 50 kHz. An earlier version clocked it from a separately divided 1 MHz clock,
+which meant a one-cycle CPU write strobe could be missed entirely. Keeping a
+single clock domain removes that class of bug.
 
 SCL and SDA are driven **open-drain**: the master either pulls the line low or
 releases it to high-Z and lets the pull-up do the rest, as the I2C standard
 requires.
+
+#### Reading a register takes the bus in both directions
+
+The DS3231 has no command that returns a register. The pointer is set with a
+write, the bus is turned around with a **repeated START**, and the device then
+transmits until the master refuses a byte. Reading the seven timekeeping
+registers is therefore ten frames:
+
+```text
+  frame  START  dir    byte   ACK by    STOP
+    1     yes   write  0xd0   slave      no     address, write
+    2     no    write  0x00   slave      no     register pointer
+    3     yes   write  0xd1   slave      no     repeated START, address, read
+   4-9    no    read     -    master     no     six bytes, each acknowledged
+   10     no    read     -    master     yes    refused, which ends the read
+```
+
+Two details decide whether this works at all.
+
+The acknowledge bit changes owner with direction. On a write the slave drives
+it and the master samples it; on a read the master drives it from `ack_out`.
+A read that acknowledges every byte never ends, because the slave goes on
+transmitting until it is refused.
+
+The repeated START is not a second START on an idle bus. A chained frame
+arrives with SDA held low from the previous acknowledge, so SDA has to be
+released high **while SCL is still low**, and only then may SCL rise. Releasing
+both together makes SDA rise while SCL is high, which is the definition of a
+STOP. That was a real defect in the engine this master grew from, recorded as
+finding 28 in [fix_log.md](fix_log.md); it had never been exercised because the
+LCD issued a START only on its first frame.
+
+#### The earlier design — an LCD over a port expander
+
+The bus first carried a 20x4 HD44780 panel behind a PCF8574 port expander. That
+peripheral has been removed, and the figures below describe it rather than the
+current tree. They are kept because the master above grew out of the frame
+engine they show, and because the STOP-condition finding they illustrate is the
+same class of defect as the repeated START one.
+
+The older design was two nested state machines. `i2c_write_frame` drove one
+8-bit frame; `i2c_pcf8574_lcd_write` sat above it and turned one LCD byte into
+the five frames a PCF8574 needs: the slave address, then the high nibble twice
+and the low nibble twice, toggling the LCD enable line between them.
 
 #### The frame, state by state
 
@@ -376,6 +432,70 @@ drawing shows a 16x2 display; this project drives a 20x4 through the same
 backpack.*
 
 ---
+
+### SPI and the TFT panel
+
+`libs/spi/spi_master.v` shifts one byte in SPI mode 0: SCK idles low, MOSI
+changes while SCK is low, and the slave samples on the rising edge. `CLK_DIV`
+sets the half period in clock cycles and defaults to 2, so SCK runs at
+27 MHz / 4 = 6.75 MHz, inside the ST7735 write cycle limit with margin for
+jumper wiring.
+
+| Address | Access | Function |
+|---|---|---|
+| `0x70000000` | Write | Byte to shift out; dropped while `busy` is 1 |
+| `0x70000004` | Read | Bit 0 `busy` |
+| `0x70000008` | Write | Bit 0 `cs_n`, bit 1 `dc`, bit 2 panel `rst_n`; reads back |
+
+The link is **write only**. The breakout brings only SDA out to its header, so
+nothing can be read back from the panel and a receive path would be logic with
+nothing driving it. The consequence is that firmware cannot poll the controller
+for readiness and relies on the delays the datasheet specifies.
+
+Three signals besides the data are held in the control register rather than
+sequenced by the shift engine. One ST7735 command and its parameters form a
+single chip select frame with `dc` changing partway through, which the hardware
+cannot infer from the byte stream; the panel reset is a plain output whose
+timing belongs to the boot sequence. Out of reset the panel is **deselected and
+held in reset** until firmware releases it, so it never sees traffic before it
+has been configured.
+
+The shift engine has one state that exists purely for a timing contract. After
+the last bit it holds `busy` for one further half period with SCK low. Software
+moves `cs_n` and `dc` as soon as `busy` clears, and without that trailing state
+either line could change while SCK was still high, inside the slave's sampling
+window.
+
+#### Bringing the panel up
+
+The initialisation sequence is deliberately limited to commands the ST7735
+datasheet defines: `SWRESET`, `SLPOUT` with the 120 ms wait its section 10.1.11
+requires, `COLMOD` set to `0x55` as section 10.1.29 mandates for 16-bit writes,
+`MADCTL`, `INVOFF`, `NORON` and `DISPON`. The power control and frame rate
+registers are left at their reset defaults, because their recommended values
+come from the panel vendor rather than from the controller datasheet and
+nothing so far needs them.
+
+The first frame drawn is three vertical colour bars, not text. A bar reports
+byte order, scan direction and column addressing at once, while text stays
+readable when any of the three is wrong. That reasoning has one blind spot,
+found later: three vertical bars look identical upside down, so they cannot
+report a 180 degree rotation. Only text did, and the correction is finding 34
+in [fix_log.md](fix_log.md).
+
+#### Drawing the clock
+
+Each glyph is written into its own address window, so a redraw touches 64
+pixels rather than a whole line, and both the foreground and background colours
+are written so a character replaces the one under it without a clear first.
+
+The display is redrawn when the **seconds byte of the RTC changes**, not on a
+timer. A timer cannot keep step: the loop waits its interval and then spends
+further time reading I2C and printing, so it drifts against the clock and
+eventually skips a second. A capture taken before the change shows exactly
+that, `00:14:52` followed by `00:14:54`. Polling the part and comparing the
+byte cannot drift, and a five minute capture afterwards contains 373
+consecutive readings with no repeated and no skipped second.
 
 ## 7. Software and build flow
 
@@ -582,6 +702,22 @@ new byte arrives while the buffer is full. This absorbs short service delays,
 but cannot sustain an unbounded stream faster than firmware can consume it.
 Lossless sustained streaming still requires hardware flow control, a larger
 buffer sized for the workload, or non-blocking software service.
+
+### The SPI link cannot be read
+
+The ST7735 breakout brings only SDA out to its header, so the master has no
+`miso` port and nothing can be read back from the panel. Firmware cannot poll
+the controller for readiness or read its identification registers, and relies
+entirely on the delays the datasheet specifies. Adding the path would mean a
+wire to the panel's unpopulated pad as well as RTL.
+
+### The I2C peripheral has no stop-only operation
+
+Every store to `0x60000000` carries eight data bits and an acknowledge, so
+there is no way to emit a bare STOP. Releasing the bus after a frame that was
+refused therefore costs one throwaway byte, which is harmless because a slave
+that did not acknowledge is not listening to it, but it is a wart. A spare bit
+in the frame register could mark a frame as stop-only.
 
 ### ECALL and EBREAK are not implemented
 

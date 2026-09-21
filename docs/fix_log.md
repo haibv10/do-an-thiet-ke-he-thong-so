@@ -9,6 +9,11 @@ Entries are newest first.
 
 ## Contents
 
+- [2026-09-21 LCD scope removal](#2026-09-21-lcd-scope-removal)
+  - [24. Firmware still drove an LCD that is leaving the design](#24-firmware-still-drove-an-lcd-that-is-leaving-the-design)
+- [2026-09-21 SPI and ST7735](#2026-09-21-spi-and-st7735)
+  - [22. New RTL was left out of synthesis without failing a test](#22-new-rtl-was-left-out-of-synthesis-without-failing-a-test)
+  - [23. The design had no SPI peripheral](#23-the-design-had-no-spi-peripheral)
 - [2026-09-21 GPIO button scope removal](#2026-09-21-gpio-button-scope-removal)
   - [21. GPIO included an unused button input](#21-gpio-included-an-unused-button-input)
 - [2026-09-21 FENCE](#2026-09-21-fence)
@@ -39,6 +44,85 @@ Entries are newest first.
   - [8. The ROM image left words undefined past the end of the firmware](#8-the-rom-image-left-words-undefined-past-the-end-of-the-firmware)
   - [9. Documentation described the I2C defect incorrectly](#9-documentation-described-the-i2c-defect-incorrectly)
   - [10. The PCF8574 address was recorded as `0x21`](#10-the-pcf8574-address-was-recorded-as-0x21)
+
+---
+
+## 2026-09-21 LCD scope removal
+
+### 24. Firmware still drove an LCD that is leaving the design
+
+**Scope.** The 20x4 HD44780 LCD is being retired and a DS3231 will take its
+place on the I2C bus. The shipped firmware no longer talks to it.
+
+**Changes.** Remove `lcd_wait_ready`, `lcd_command`, `lcd_data`, `lcd_puts`,
+`lcd_init`, `lcd_probe`, `lcd_find_address`, the `LCD_*` register defines and
+`I2C_BASE` from `sw/main.c`. The main loop now prints `ALIVE` once a second and
+toggles the LED instead of reporting the PCF8574 address. Firmware drops from
+2412 to 2000 bytes of the 4 KB ROM.
+
+The I2C RTL is untouched: `source/peripheral/pcf8574_lcd_mmio.v`, `libs/i2c/`,
+region `0x6` and the four I2C testbenches all remain. `rules/git_flow.md`
+keeps one subsystem per branch, and the DS3231 needs register reads that the
+present write-only frame engine cannot do, so replacing it is its own branch
+rather than a deletion here.
+
+**Verification.** Simulation passes 34/34. On the board the banner, `TFT INIT`,
+`TFT BARS` and the repeating `ALIVE` line all appear in
+`logs/55-spi-st7735-board.log`.
+
+---
+
+## 2026-09-21 SPI and ST7735
+
+### 22. New RTL was left out of synthesis without failing a test
+
+**Defect.** `tools/run_tests.sh` collects CPU sources with a glob, but
+`tools/build_gowin.tcl` names every file explicitly. A new module therefore
+simulates and passes its testbenches while never reaching synthesis, and the
+only symptom is the top module quietly becoming a black box.
+
+**Evidence before.** The first FPGA build after adding the SPI peripheral,
+with all 33 testbenches passing:
+
+```text
+ERROR (EX3937) : Instantiating unknown module 'spi_mmio'(".../source/cpu/cpu_top.v":294)
+Module 'cpu_top' remains a black box due to errors in its contents(".../source/cpu/cpu_top.v":1)
+GowinSynthesis finish
+```
+
+**Fix.** Add `source/peripheral/spi_mmio.v` and `libs/spi/spi_master.v` to
+`tools/build_gowin.tcl`, and to `fpga_project.gprj` so the IDE flow matches.
+
+**Evidence after.** `logs/53-spi-st7735-firmware-build.log` completes with
+Fmax 30.880 MHz against the 27 MHz constraint, 0 setup and 0 hold violations,
+and `logs/54-spi-st7735-program.log` reaches 100%.
+
+### 23. The design had no SPI peripheral
+
+**Scope.** Add a write-only SPI master at region `0x7` and drive an ST7735
+128x160 TFT from firmware.
+
+**Changes.** New `libs/spi/spi_master.v`, a mode 0 MSB-first shift engine with
+no `miso` port, since the breakout brings only `SDA` to its header. New
+`source/peripheral/spi_mmio.v` holding `cs_n`, `dc` and the panel reset as
+software state, because one ST7735 command and its parameters form a single
+chip select frame with `dc` changing partway through. `cpu_address_decoder`
+gains region `0x7`; `cpu_top` gains five output pins bound to 25 through 29,
+the only run of bank 2 header pins with no onboard component on them.
+
+`sw/main.c` gains an ST7735 driver whose init sequence is limited to commands
+the datasheet specifies: `SWRESET`, `SLPOUT`, `COLMOD` = `0x55` per 10.1.29
+note 2, `MADCTL`, `INVOFF`, `NORON`, `DISPON`. Power control and frame rate
+registers are left at their reset defaults. The fill loop is nested rather
+than `columns * rows` because the core is RV32I with no multiply instruction
+and `-nostdlib` leaves no `__mulsi3`.
+
+**Verification.** Simulation passes 34/34, including `spi_master_tb`,
+`spi_mmio_tb` and `cpu_spi_tb`, which boots a handwritten program and decodes
+the byte stream off the pins with the state of `dc` recorded per byte. On the
+board the panel shows three vertical bars in red, green and blue in that
+order, which confirms RGB565 byte order, the `MADCTL 0xc8` subpixel order and
+`CASET`/`RASET` addressing together.
 
 ---
 

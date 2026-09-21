@@ -22,6 +22,15 @@ run_test() {
   vvp "$test_build_dir/$top.vvp"
 }
 
+run_firmware_test() {
+  local test_name=$1
+  shift
+  local output="$test_build_dir/$test_name"
+
+  cc -std=c11 -Wall -Wextra -Werror -Isw -o "$output" "$@"
+  "$output"
+}
+
 # --- CPU core and datapath ---
 run_test core_alu_tb       source/cpu/core_alu.v       sim/cpu/core_alu_tb.sv
 run_test core_control_tb   source/cpu/core_control.v   sim/cpu/core_control_tb.sv
@@ -66,3 +75,4 @@ run_test cpu_i2c_tb "${cpu_sources[@]}" libs/i2c/i2c_slave_model.sv sim/cpu/cpu_
 run_test cpu_spi_tb "${cpu_sources[@]}" sim/cpu/cpu_spi_tb.sv
 run_test cpu_fence_tb "${cpu_sources[@]}" sim/cpu/cpu_fence_tb.sv
 run_test cpu_firmware_boot_tb "${cpu_sources[@]}" sim/cpu/cpu_firmware_boot_tb.sv
+run_firmware_test ds3231_rtc_tb sim/firmware/ds3231_rtc_tb.c sw/ds3231_rtc.c

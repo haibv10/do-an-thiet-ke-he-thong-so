@@ -1,6 +1,7 @@
 // 8 KB instruction ROM. Reads are registered so the tool infers BSRAM instead
-// of logic. HEX_PATH resolves against the working directory, which both the
-// simulation and synthesis flows set to the repository root.
+// of logic. HEX_PATH resolves against the working directory: simulation runs
+// from the repository root, while synthesis runs from build/ and uses its rom
+// symlink to reach the image.
 module mem_instruction_rom #(
   parameter HEX_PATH = "rom/firmware.hex"
 ) (

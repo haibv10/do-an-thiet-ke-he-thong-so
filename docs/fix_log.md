@@ -9,6 +9,8 @@ Entries are newest first.
 
 ## Contents
 
+- [2026-09-21 DS3231 validation](#2026-09-21-ds3231-validation)
+  - [42. A stopped or impossible clock was still displayed as real](#42-a-stopped-or-impossible-clock-was-still-displayed-as-real)
 - [2026-09-21 firmware layout](#2026-09-21-firmware-layout)
   - [40. Moving the ROM image quietly deleted the CPU](#40-moving-the-rom-image-quietly-deleted-the-cpu)
   - [41. The firmware was one file and three kinds of thing](#41-the-firmware-was-one-file-and-three-kinds-of-thing)
@@ -70,6 +72,37 @@ Entries are newest first.
   - [8. The ROM image left words undefined past the end of the firmware](#8-the-rom-image-left-words-undefined-past-the-end-of-the-firmware)
   - [9. Documentation described the I2C defect incorrectly](#9-documentation-described-the-i2c-defect-incorrectly)
   - [10. The PCF8574 address was recorded as `0x21`](#10-the-pcf8574-address-was-recorded-as-0x21)
+
+---
+
+## 2026-09-21 DS3231 validation
+
+### 42. A stopped or impossible clock was still displayed as real
+
+**Defect.** The DS3231 oscillator-stop flag was printed at boot but did not
+participate in the decision to draw the clock. After power loss, a part can
+retain BCD-shaped registers while OSF says their contents are untrustworthy,
+and the panel presented them as real time. The BCD check also accepted values
+outside their field ranges, including `0x69` seconds, `0x29` hours, `0x19`
+month, 12-hour mode and dates that do not exist. The UART setter independently
+accepted dates through 31 for every month.
+
+**Fix.** `ds3231_report_osf()` now returns trust state to the main loop, and a
+successful UART set operation is the only path that restores it after OSF.
+Validation requires a clear OSF, 24-hour mode, field ranges, weekday range and
+the actual number of days in the selected month, including leap years. The
+setter uses the same month-length rule before it writes a calendar date.
+
+Add `sim/firmware/ds3231_rtc_tb.c`, a host-side test for the pure C validation
+path. It covers an end-of-day valid time, leap day, invalid seconds, 12-hour
+mode, 30 February, a non-leap 29 February and weekday zero. `run_tests.sh`
+builds it with warnings as errors; CI now installs `build-essential` explicitly
+for that host compiler.
+
+**Verification.** The complete suite passes 34/34. The updated bitstream
+builds at Fmax 31.317 MHz with 0 setup and 0 hold violations, using 3256 logic
+cells, 1598 registers and 12 BSRAM blocks. Hardware validation is not yet run
+for this change.
 
 ---
 

@@ -108,17 +108,46 @@ static int bcd_is_valid(unsigned char value) {
   return ((value & 0x0f) <= 9) && (((value >> 4) & 0x0f) <= 9);
 }
 
-int ds3231_time_is_valid(const unsigned char *time) {
-  if (!bcd_is_valid(time[0] & 0x7f)) return 0;   // seconds
-  if (!bcd_is_valid(time[1] & 0x7f)) return 0;   // minutes
-  if (!bcd_is_valid(time[2] & 0x3f)) return 0;   // hours
-  if (!bcd_is_valid(time[4] & 0x3f)) return 0;   // date
-  if (!bcd_is_valid(time[5] & 0x1f)) return 0;   // month
-  if (!bcd_is_valid(time[6])) return 0;          // year
+static unsigned int bcd_to_uint(unsigned char value) {
+  unsigned int result = value & 0x0f;
+  unsigned int tens = value >> 4;
 
-  // A month or a date of zero is the other way the registers say they have
-  // never been given a real time.
-  if ((time[5] & 0x1f) == 0 || (time[4] & 0x3f) == 0) return 0;
+  while (tens != 0) {
+    result += 10u;
+    tens--;
+  }
+
+  return result;
+}
+
+static unsigned int days_in_month(unsigned int year, unsigned int month) {
+  if (month == 2u) return (year & 3u) == 0u ? 29u : 28u;
+  if (month == 4u || month == 6u || month == 9u || month == 11u) return 30u;
+  return 31u;
+}
+
+int ds3231_time_is_valid(const unsigned char *time) {
+  unsigned int year;
+  unsigned int month;
+  unsigned int date;
+
+  if ((time[0] & 0x80) || !bcd_is_valid(time[0] & 0x7f) ||
+      (time[0] & 0x7f) > 0x59) return 0;
+  if ((time[1] & 0x80) || !bcd_is_valid(time[1] & 0x7f) ||
+      (time[1] & 0x7f) > 0x59) return 0;
+  if (time[2] & 0xc0 || !bcd_is_valid(time[2] & 0x3f) ||
+      (time[2] & 0x3f) > 0x23) return 0;
+  if (time[3] == 0 || time[3] > 7) return 0;
+  if (time[5] & 0xe0 || !bcd_is_valid(time[5] & 0x1f) ||
+      (time[5] & 0x1f) == 0 || (time[5] & 0x1f) > 0x12) return 0;
+  if (time[4] & 0xc0 || !bcd_is_valid(time[4] & 0x3f) ||
+      (time[4] & 0x3f) == 0) return 0;
+  if (!bcd_is_valid(time[6])) return 0;
+
+  year = bcd_to_uint(time[6]);
+  month = bcd_to_uint(time[5] & 0x1f);
+  date = bcd_to_uint(time[4] & 0x3f);
+  if (date > days_in_month(year, month)) return 0;
 
   return 1;
 }
@@ -144,15 +173,16 @@ void ds3231_print(const unsigned char *time) {
 // Sticky from the first time the part is powered, and cleared only by writing
 // zero over it. Set means the oscillator stopped at some point, so whatever
 // the timekeeping registers hold has not been counting since it was last set.
-void ds3231_report_osf(void) {
+int ds3231_report_osf(void) {
   unsigned char status;
 
   if (!ds3231_read(DS3231_STATUS, &status, 1)) {
     uart_puts("RTC NACK\r\n");
-    return;
+    return 0;
   }
 
   uart_puts((status & DS3231_OSF) ? "RTC OSF SET\r\n" : "RTC OSF CLEAR\r\n");
+  return (status & DS3231_OSF) == 0;
 }
 
 // The host knows what time it is and this board does not. Twelve digits,
@@ -161,7 +191,7 @@ void ds3231_report_osf(void) {
 // clock to the moment the compiler ran rather than the moment the command was
 // given, and ran minutes slow by the time the image had been built, programmed
 // and triggered.
-void ds3231_set_from_uart(void) {
+int ds3231_set_from_uart(void) {
   unsigned char digits[12];
   unsigned char time[DS3231_TIME_BYTES];
   unsigned char status;
@@ -171,11 +201,11 @@ void ds3231_set_from_uart(void) {
   for (index = 0; index < 12; index++) {
     if (!uart_getc(&digits[index])) {
       uart_puts("RTC SET SHORT\r\n");
-      return;
+      return 0;
     }
     if (digits[index] < '0' || digits[index] > '9') {
       uart_puts("RTC SET BAD\r\n");
-      return;
+      return 0;
     }
   }
 
@@ -185,10 +215,11 @@ void ds3231_set_from_uart(void) {
                  + (unsigned int) (digits[index * 2 + 1] - '0');
   }
 
-  if (field[1] < 1 || field[1] > 12 || field[2] < 1 || field[2] > 31 ||
+  if (field[1] < 1 || field[1] > 12 || field[2] < 1 ||
+      field[2] > days_in_month(field[0], field[1]) ||
       field[3] > 23 || field[4] > 59 || field[5] > 59) {
     uart_puts("RTC SET RANGE\r\n");
-    return;
+    return 0;
   }
 
   time[0] = bcd_of(field[5]);
@@ -201,7 +232,7 @@ void ds3231_set_from_uart(void) {
 
   if (!ds3231_write(0x00, time, DS3231_TIME_BYTES)) {
     uart_puts("RTC SET FAIL\r\n");
-    return;
+    return 0;
   }
 
   // Read back rather than write a whole byte: bit 3 enables the 32 kHz output
@@ -210,15 +241,16 @@ void ds3231_set_from_uart(void) {
   // has been written over them.
   if (!ds3231_read(DS3231_STATUS, &status, 1)) {
     uart_puts("RTC SET FAIL\r\n");
-    return;
+    return 0;
   }
   status &= (unsigned char) ~DS3231_OSF;
   if (!ds3231_write(DS3231_STATUS, &status, 1)) {
     uart_puts("RTC SET FAIL\r\n");
-    return;
+    return 0;
   }
 
   uart_puts("RTC SET OK\r\n");
+  return 1;
 }
 
 

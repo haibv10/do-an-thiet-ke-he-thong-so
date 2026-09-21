@@ -49,7 +49,7 @@ into the bitstream as ROM contents.
   data/command and panel reset held in software
 - **Firmware** — reads the DS3231 over I2C and draws the date and time on the
   panel from an 8x8 ASCII font in ROM, and refuses to draw registers that do
-  not hold valid BCD
+  not form a trusted 24-hour calendar time
 - **Headless toolflow** — simulation, synthesis, place and route and programming
   all run from the command line
 
@@ -130,7 +130,7 @@ export GOWIN_ROOT=/home/haihbv/tools/Gowin_V1.9.12.03
 bash tools/run_tests.sh
 ```
 
-Runs 33 self-checking testbenches, ending with `firmware_boot_tb`, which boots
+Runs 34 self-checking tests, ending with `firmware_boot_tb`, which boots
 the real `rom/firmware.hex` image on the full SoC and decodes its UART output.
 Each prints `<name>: PASS`; the script stops at the first failure.
 
@@ -194,8 +194,9 @@ stty -F /dev/ttyUSB0 115200 raw -echo
 printf 'W%s' "$(date +%y%m%d%H%M%S)" > /dev/ttyUSB0
 ```
 
-`W` takes twelve digits, `YYMMDDhhmmss`. Until it has been given one, the panel
-shows `NOT SET` rather than whatever the registers happen to hold.
+`W` takes twelve digits, `YYMMDDhhmmss`. The panel shows `NOT SET` until the
+DS3231 reports its oscillator never stopped and its registers form a valid
+24-hour calendar time.
 
 The shipped firmware prints a banner, brings the ST7735 up and draws three
 colour bars, then repeats a liveness line once a second:
@@ -269,9 +270,9 @@ testbenches. It is verification only and is never synthesized.
 
 | Layer | Result |
 |---|---|
-| Simulation | 33 / 33 testbenches pass on Icarus Verilog 12.0 |
-| Timing | Fmax 27.678 MHz against a 27 MHz constraint, 0 setup and 0 hold violations. The critical path is the ROM data window through the load formatter, and it moves with the firmware image |
-| Resources | Logic 3256 / 8640 (38%), registers 1598 / 6693 (24%), BSRAM 6 / 26 (24%) |
+| Simulation | 34 / 34 tests pass: 33 RTL testbenches on Icarus Verilog 12.0 and one host-side DS3231 calendar validation test |
+| Timing | Fmax 31.317 MHz against a 27 MHz constraint, 0 setup and 0 hold violations. The critical path is the ROM data window through the load formatter, and it moves with the firmware image |
+| Resources | Logic 3256 / 8640 (38%), registers 1598 / 6693 (24%), BSRAM 12 / 26 (47%) |
 | Hardware | Banner reads `BOOT 5A5A5A5A 00000000`, the ST7735 shows red, green and blue bars and then the date and time from the DS3231, whose oscillator stop flag reads clear and whose time survives reprogramming. The 4392-byte image runs from beyond the old 4 KB ROM boundary. The RX FIFO board protocol passed its 16-byte, overrun and W1C cases when it was run; that firmware has since been retired to make ROM room and the result is kept in the fix log |
 
 Measurements and the logs behind them are in

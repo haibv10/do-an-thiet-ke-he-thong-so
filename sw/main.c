@@ -1,7 +1,6 @@
 // Boot and the loop that keeps the panel showing what the clock holds. Every
-// layer below is in a file of its own: the register map in mmio_map.h, the two
-// buses in i2c_bus and spi_bus, the devices on them in ds3231_rtc and
-// st7735_panel, and the screen itself in ui_clock.
+// layer below is in a file of its own: the buses in i2c_bus and spi_bus, the
+// devices on them in ds3231_rtc and st7735_panel, and the screen in ui_clock.
 #include "sys_delay.h"
 #include "gpio_led.h"
 #include "uart_io.h"
@@ -17,6 +16,7 @@ int main(void) {
   unsigned char time[DS3231_TIME_BYTES];
   unsigned char last_second = 0xff;
   unsigned int led = 0;
+  unsigned int rtc_time_trusted;
   unsigned char command;
 
   led_set(0);
@@ -34,14 +34,15 @@ int main(void) {
   tft_colour_bars();
   uart_puts("TFT BARS\r\n");
 
-  ds3231_report_osf();
+  rtc_time_trusted = ds3231_report_osf();
 
   // The bars stay up long enough to be read, then the panel becomes the clock.
   delay_loop(DELAY_MS(1000));
   ui_draw_frame();
 
   while (1) {
-    if (uart_poll(&command) && command == 'W') ds3231_set_from_uart();
+    if (uart_poll(&command) && command == 'W')
+      rtc_time_trusted = ds3231_set_from_uart();
 
     if (!ds3231_read_time(time)) {
       uart_puts("RTC NACK\r\n");
@@ -54,7 +55,7 @@ int main(void) {
     // capture showed as 00:14:52 followed by 00:14:54.
     if (time[0] != last_second) {
       last_second = time[0];
-      if (ds3231_time_is_valid(time)) {
+      if (rtc_time_trusted && ds3231_time_is_valid(time)) {
         ds3231_print(time);
         ui_show_time(time);
       } else {

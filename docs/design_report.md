@@ -10,7 +10,7 @@
 
 | Metric | Result |
 |---|---|
-| Simulation | 33 / 33 testbenches pass |
+| Simulation | 34 / 34 tests pass: 33 RTL testbenches and one host-side DS3231 calendar validation test |
 | Fmax after place and route | 31.317 MHz against a 27 MHz constraint |
 | Timing violations | 0 setup, 0 hold |
 | Logic utilisation | 3256 / 8640 (38%) |
@@ -499,10 +499,11 @@ the panel, so small blue text on black washes out. Hours and minutes take the
 brightest shade and the seconds step back one, so the eye settles on the part
 that matters.
 
-Nothing is drawn until the registers are checked. A field whose nibbles exceed
-nine is not BCD, and a month or date of zero means the part has never been
-given a time; either way the panel shows `NOT SET` rather than presenting a
-fault as a reading.
+Nothing is drawn until the registers are checked. The oscillator-stop flag must
+be clear, the RTC must be in 24-hour mode, and every field must form a valid
+calendar date: BCD alone admits values such as 69 seconds and 30 February.
+Otherwise the panel shows `NOT SET` rather than presenting a fault as a
+reading.
 
 The display is redrawn when the **seconds byte of the RTC changes**, not on a
 timer. A timer cannot keep step: the loop waits its interval and then spends

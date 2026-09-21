@@ -9,6 +9,11 @@ Entries are newest first.
 
 ## Contents
 
+- [2026-09-21 panel interface](#2026-09-21-panel-interface)
+  - [36. Two digits of BCD only converted between ten and nineteen](#36-two-digits-of-bcd-only-converted-between-ten-and-nineteen)
+  - [37. The clock was set from the moment the compiler ran](#37-the-clock-was-set-from-the-moment-the-compiler-ran)
+  - [38. Invalid registers were drawn as if they were a reading](#38-invalid-registers-were-drawn-as-if-they-were-a-reading)
+  - [39. The panel was two lines of white text](#39-the-panel-was-two-lines-of-white-text)
 - [2026-09-21 branch prefixes](#2026-09-21-branch-prefixes)
   - [35. The branch model and the CI triggers disagreed](#35-the-branch-model-and-the-ci-triggers-disagreed)
 - [2026-09-21 panel orientation](#2026-09-21-panel-orientation)
@@ -62,6 +67,125 @@ Entries are newest first.
   - [8. The ROM image left words undefined past the end of the firmware](#8-the-rom-image-left-words-undefined-past-the-end-of-the-firmware)
   - [9. Documentation described the I2C defect incorrectly](#9-documentation-described-the-i2c-defect-incorrectly)
   - [10. The PCF8574 address was recorded as `0x21`](#10-the-pcf8574-address-was-recorded-as-0x21)
+
+---
+
+## 2026-09-21 panel interface
+
+### 36. Two digits of BCD only converted between ten and nineteen
+
+**Defect.** `bcd_of` was written while the only caller was the month, which
+never exceeds twelve, and it encoded the tens digit as a literal `0x10`:
+
+```c
+if (value >= 10) return (unsigned char) (0x10 | (value - 10));
+```
+
+It was then reused for the date and the year, which reach 31 and 99.
+
+**Evidence before.** Setting the clock and reading it straight back, from
+`logs/14-tft-ui/03-board.log`:
+
+```text
+RTC SET Sep 21 2026 16:34:24
+RTC 2010-09-1B 16:34:24
+```
+
+The month is right, the date is `0x1b` instead of `0x21` and the year is `0x10`
+instead of `0x26`.
+
+**Fix.** Count the tens digit off by subtraction, which the core can do and
+which is correct across the full range every field occupies.
+
+**Evidence after.** Checked on the host over all of 0 to 99 against
+`((v / 10) << 4) | (v % 10)`, with the four values the board showed reproduced
+exactly by the old version:
+
+```text
+bcd_fixed over 0..99: all correct
+   21 -> broken 1b   fixed 21
+   26 -> broken 10   fixed 26
+   31 -> broken 15   fixed 31
+   99 -> broken 59   fixed 99
+```
+
+No testbench covers this. Nothing in the suite executes firmware C, so the
+board and the host check are the whole of the verification.
+
+### 37. The clock was set from the moment the compiler ran
+
+**Defect.** The set command wrote `__DATE__` and `__TIME__`, so the clock was
+given the time the image was compiled, not the time the command was issued.
+Between the two sit a firmware build, a bitstream build, programming and a
+keypress. Measured on the board, the clock ran about three minutes slow.
+
+Embedding the timestamp had a second cost recorded as a known consequence of
+entry 31: the image differed on every build, so `sw/firmware.hex` never
+reproduced and always showed as modified after a build.
+
+**Fix.** Let the host say what time it is. The command is now `W` followed by
+twelve digits, `YYMMDDhhmmss`, which a shell produces directly:
+
+```bash
+printf 'W%s' "$(date +%y%m%d%H%M%S)" > /dev/ttyUSB0
+```
+
+Each character is checked to be a digit and each field checked against its
+range, so a truncated or malformed line is refused rather than written. The
+residual error is the transmission time of thirteen characters at 115200 baud.
+
+**Evidence after.** Building twice and comparing shows the image is
+reproducible again, which is the second defect closing with the first:
+
+```text
+firmware.hex reproduces across builds
+```
+
+### 38. Invalid registers were drawn as if they were a reading
+
+**Defect.** Whatever the timekeeping registers held was drawn on the panel.
+When entry 36 left `0x1b` in the date register, the panel displayed `1B` as
+though it were a date, and reprogramming the FPGA did not clear it: the part
+keeps its registers on its backup cell, so a bad value survives until something
+writes over it.
+
+**Fix.** Check every field is valid BCD before it is used, with neither nibble
+above nine, and reject a month or a date of zero. When the check fails the
+panel shows `--:--:--` and `NOT SET`, and the serial link prints `RTC INVALID`.
+
+A fault that presents itself as a reading is worse than one that stops, because
+nothing about the display says which it is.
+
+### 39. The panel was two lines of white text
+
+**Scope.** The panel showed the time and the date in white on black at one
+size, which proved the path and looked like a test fixture.
+
+**Changes.** Draw the time at double size, where eight glyphs of sixteen pixels
+fill the 128 pixel width exactly, and the date under it at single size. Add a
+title bar and a matching foot, and a clock and a calendar icon. The icons are
+eight by eight like the font, so they pass through the same drawing routine and
+cost only their sixteen bytes of table; the scale factor repeats each glyph
+pixel rather than storing a second font.
+
+**Colour.** The first palette was a blue bar with a light blue rule and date.
+It read badly: blue is the channel the eye is least sensitive to and the
+dimmest subpixel on the panel, so small blue text on black washes out, and
+three hues competed. The second is one hue at three brightnesses over a neutral
+bar, which is what instrument panels use. Hours and minutes take the brightest
+shade and the seconds step back one, so the eye settles on the part that
+matters.
+
+**What came off again.** The weekday was drawn under the date for a while and
+removed: it is derived from the date, so it added a second way of saying what
+was already there. The register behind it is still written correctly, because
+the write covers a contiguous block and leaving a knowingly wrong value in a
+device is worse than computing the right one.
+
+**Verification.** The suite passes 33/33 and the build has no violated
+endpoints. Layout arithmetic was checked rather than eyeballed: the time spans
+0 to 127 exactly, the date and its icon sit at 16 to 111, and the title and its
+icon at 8 to 119. Confirmed on the board.
 
 ---
 

@@ -487,7 +487,22 @@ in [fix_log.md](fix_log.md).
 
 Each glyph is written into its own address window, so a redraw touches 64
 pixels rather than a whole line, and both the foreground and background colours
-are written so a character replaces the one under it without a clear first.
+are written so a character replaces the one under it without a clear first. A
+scale factor repeats every glyph pixel, so the time is drawn at double size
+from the same font, and the two icons are eight by eight like a glyph and take
+the same path.
+
+The palette is one hue at three brightnesses over a neutral bar. An earlier
+attempt used a blue bar with a light blue rule and date, which reads badly:
+blue is the channel the eye is least sensitive to and the dimmest subpixel on
+the panel, so small blue text on black washes out. Hours and minutes take the
+brightest shade and the seconds step back one, so the eye settles on the part
+that matters.
+
+Nothing is drawn until the registers are checked. A field whose nibbles exceed
+nine is not BCD, and a month or date of zero means the part has never been
+given a time; either way the panel shows `NOT SET` rather than presenting a
+fault as a reading.
 
 The display is redrawn when the **seconds byte of the RTC changes**, not on a
 timer. A timer cannot keep step: the loop waits its interval and then spends

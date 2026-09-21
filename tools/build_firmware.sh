@@ -24,7 +24,7 @@ cd "$build_dir"
   -march=rv32i \
   -mabi=ilp32 \
   -nostdlib \
-  -O1 \
+  -Os \
   -msmall-data-limit=0 \
   -T "$sw_dir/linker.ld" \
   -Wl,-Map=firmware.map \

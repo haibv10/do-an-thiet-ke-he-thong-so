@@ -9,6 +9,10 @@ Entries are newest first.
 
 ## Contents
 
+- [2026-09-21 tree layout](#2026-09-21-tree-layout)
+  - [25. One source directory had its tests in three sim directories](#25-one-source-directory-had-its-tests-in-three-sim-directories)
+  - [26. The LCD peripheral outlived the LCD](#26-the-lcd-peripheral-outlived-the-lcd)
+  - [27. The design report listed testbenches that do not exist](#27-the-design-report-listed-testbenches-that-do-not-exist)
 - [2026-09-21 LCD scope removal](#2026-09-21-lcd-scope-removal)
   - [24. Firmware still drove an LCD that is leaving the design](#24-firmware-still-drove-an-lcd-that-is-leaving-the-design)
 - [2026-09-21 SPI and ST7735](#2026-09-21-spi-and-st7735)
@@ -44,6 +48,75 @@ Entries are newest first.
   - [8. The ROM image left words undefined past the end of the firmware](#8-the-rom-image-left-words-undefined-past-the-end-of-the-firmware)
   - [9. Documentation described the I2C defect incorrectly](#9-documentation-described-the-i2c-defect-incorrectly)
   - [10. The PCF8574 address was recorded as `0x21`](#10-the-pcf8574-address-was-recorded-as-0x21)
+
+---
+
+## 2026-09-21 tree layout
+
+### 25. One source directory had its tests in three sim directories
+
+**Defect.** `sim/` divided the tests for `source/cpu/` by filename prefix
+rather than by anything structural. A test for `source/cpu/core_alu.v` lived
+in `sim/core/`, one for `source/cpu/mem_data_ram.v` in `sim/memory/`, and one
+for `source/cpu/cpu_address_decoder.v` in `sim/cpu/`: three directories for
+one source directory. The split could not be stated as a rule, so it could not
+be checked.
+
+**Fix.** Merge `sim/core/` and `sim/memory/` into `sim/cpu/`, so that `sim/`
+holds one directory per `source/` directory and nothing else. `sim/cpu/` now
+holds 22 files, the same cost `source/cpu/` already pays with 15; both rely on
+the `core_`, `pipe_`, `mem_` and `cpu_` prefixes to group them.
+`sim/support/` keeps the shared fixtures, which belong to no module.
+
+A library keeps its unit testbench beside its RTL, as it did before. `libs/`
+is meant to be liftable into another project, and a block that travels without
+its tests arrives unverifiable.
+
+**Verification.** No RTL and no testbench content changed. The suite passes
+34/34 before and after the move.
+
+### 26. The LCD peripheral outlived the LCD
+
+**Scope.** Firmware stopped driving the HD44780 panel in entry 24, leaving the
+RTL instantiated and synthesized with nothing to talk to. A DS3231 will take
+region `0x6` over, and it needs register reads that a write-only frame engine
+cannot perform.
+
+**Changes.** Delete `pcf8574_lcd_mmio.v`, `i2c_pcf8574_lcd_write.v`,
+`i2c_lcd_20x4_refresh.v` and their testbenches. Remove the I2C instance, its
+clock enable, the `i2c_sda` and `i2c_scl` ports and the two pin constraints;
+remove `we_i2c` and `rd_i2c` from the decoder, so region `0x6` reads zero as
+unmapped until the DS3231 lands. Eight CPU testbenches drop the two `tri1`
+nets they declared for those ports.
+
+`libs/i2c/i2c_write_frame.v` and its testbench survive. The module is a plain
+I2C write frame with START, eight data bits, ACK and optional STOP, chainable
+through `start_frame` and `stop_frame`. It is the starting point for the
+read-capable master, so deleting it would throw away a board-verified FSM.
+
+**Verification.** The suite passes 31/31, which is 34 minus exactly the three
+LCD testbenches. The build in `logs/10-tree-layout/01-build.log` reaches Fmax
+30.299 MHz with 0 setup and 0 hold violated endpoints. Logic drops from 3372
+to 3234, registers from 1632 to 1506 and I/O ports from 12 to 10, the last
+being the two I2C pins; a peripheral that had really been removed had to show
+up as a reduction.
+
+### 27. The design report listed testbenches that do not exist
+
+**Defect.** The verification table in `docs/design_report.md` named
+`regfile_tb`, `gpio_tb`, `address_decoder_tb`, `dmem_tb`, `imem_tb`,
+`forwarding_unit_tb`, `hazard_detection_unit_tb`, `clock_enable_divider_tb`,
+`i2c_writeframe_tb`, `i2c_mmio_tb` and `lcd_display_tb`. None of those files
+exist in this repository; they are names from the project this one was derived
+from. The table also omitted every testbench added since, so it described
+neither the tree nor the suite.
+
+**Fix.** Rebuild the table from `tools/run_tests.sh`, which is the list the
+suite actually runs, and correct the timing figures and the latch note beside
+it.
+
+**Verification.** Every row now names a file present in `sim/`, and the row
+count matches the 31 testbenches `run_tests.sh` executes.
 
 ---
 

@@ -70,14 +70,13 @@ belongs in the repository.
 
 ## I2C logic levels
 
-The I2C bus runs at 3.3 V (`LVCMOS33`). The LCD may need its own 5 V supply, but
-SDA and SCL **must not** be pulled up to 5 V — level-shift them or use 3.3 V
-pull-ups.
+The I2C pins sit in bank 2, which runs at 3.3 V (`LVCMOS33`). A slave may need
+its own 5 V supply, but SDA and SCL **must not** be pulled up to 5 V —
+level-shift them or use 3.3 V pull-ups.
 
-The PCF8574 address is set by pins A0/A1/A2 within `0x20-0x27` for the PCF8574
-and `0x38-0x3F` for the PCF8574A. The backpack in use leaves all three straps
-open and acknowledges at **`0x27`**, the usual default. The firmware scans both
-ranges, so swapping backpacks needs no code change.
+No I2C device is wired at present. The HD44780 panel has been removed and the
+DS3231 that replaces it is a 3.3 V part, so the same rule holds when it is
+fitted: pull SDA and SCL to 3.3 V, never to 5 V.
 
 An earlier capture reported `0x21` and was written up as the real address. It
 was not: the reading itself was corrupted by the register file defect recorded

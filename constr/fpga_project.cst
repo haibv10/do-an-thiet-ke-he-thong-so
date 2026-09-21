@@ -20,13 +20,6 @@ IO_PORT "uart_tx_out" IO_TYPE=LVCMOS33 PULL_MODE=UP DRIVE=8;
 IO_LOC "uart_rx_in" 33;
 IO_PORT "uart_rx_in" IO_TYPE=LVCMOS33 PULL_MODE=UP;
 
-// I2C to the PCF8574 LCD backpack, open-drain with 3.3 V pull-ups
-IO_LOC "i2c_sda" 31;
-IO_PORT "i2c_sda" IO_TYPE=LVCMOS33 PULL_MODE=UP DRIVE=8;
-
-IO_LOC "i2c_scl" 32;
-IO_PORT "i2c_scl" IO_TYPE=LVCMOS33 PULL_MODE=UP;
-
 // SPI to the ST7735 1.8" TFT module, wired to the header by jumper.
 // Pins 25 through 30 are the only run of bank 2 header pins with no onboard
 // component on them; 36 through 39 next to them belong to the TF card slot.

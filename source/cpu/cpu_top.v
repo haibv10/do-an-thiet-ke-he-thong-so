@@ -7,8 +7,6 @@ module cpu_top #(
   output wire led_out,
   input  wire uart_rx_in,
   output wire uart_tx_out,
-  inout wire i2c_sda,
-  inout wire i2c_scl,
   output wire spi_sck_out,
   output wire spi_mosi_out,
   output wire spi_cs_n_out,
@@ -215,11 +213,9 @@ module cpu_top #(
   );
 
   // --- MEM: memory, byte alignment and MMIO ---
-  wire we_gpio, we_uart, we_i2c, we_spi;
+  wire we_gpio, we_uart, we_spi;
   wire [3:0]  we_dmem;
-  wire [31:0] dmem_rd, gpio_rd, uart_rd, i2c_rd, spi_rd, mem_read_data;
-
-  wire i2c_tick;
+  wire [31:0] dmem_rd, gpio_rd, uart_rd, spi_rd, mem_read_data;
 
   // Sub-word stores replicate the payload across the bus and pick the target
   // byte lanes with the write mask, so the RAM needs no read-modify-write.
@@ -249,10 +245,9 @@ module cpu_top #(
 
   cpu_address_decoder bus_matrix (
     .addr(mem_alu_result), .we_mask(mem_we_mask),
-    .we_dmem(we_dmem), .we_gpio(we_gpio), .we_uart(we_uart), .we_i2c(we_i2c),
-    .we_spi(we_spi),
+    .we_dmem(we_dmem), .we_gpio(we_gpio), .we_uart(we_uart), .we_spi(we_spi),
     .rd_rom(rom_rd), .rd_dmem(dmem_rd), .rd_gpio(gpio_rd), .rd_uart(uart_rd),
-    .rd_i2c(i2c_rd), .rd_spi(spi_rd), .rd_out(mem_read_data)
+    .rd_spi(spi_rd), .rd_out(mem_read_data)
   );
 
   mem_data_ram ram (
@@ -275,14 +270,6 @@ module cpu_top #(
     .rd(uart_rd), .tx(uart_tx_out)
   );
 
-  clock_enable #(.divider(27)) i2c_clock_enable (
-    .clk(clk), .rst_n(rst_n_sync), .tick(i2c_tick)
-  );
-
-  pcf8574_lcd_mmio lcd_port (
-    .clk(clk), .tick(i2c_tick), .rst_n(rst_n_sync), .we(we_i2c), .a(mem_alu_result),
-    .wd(mem_store_data), .rd(i2c_rd), .sda(i2c_sda), .scl(i2c_scl)
-  );
 
   spi_mmio #(
     .CLK_DIV(SPI_CLK_DIV)

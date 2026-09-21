@@ -7,7 +7,7 @@
 
 The core is a five-stage RV32I pipeline with full forwarding, load-use
 interlocking and branch flushing. Around it sit on-chip instruction and data
-memory plus four peripherals — GPIO, UART, I2C and SPI — all reachable through a
+memory plus three peripherals — GPIO, UART and SPI — all reachable through a
 single memory-mapped bus. The CPU has no special instructions for hardware: an
 address decoder turns ordinary `lw` and `sw` into peripheral access.
 
@@ -40,11 +40,9 @@ into the bitstream as ROM contents.
   file bypass, one-cycle load-use stall, two-cycle branch flush
 - **Sub-word memory access** — `LB`, `LBU`, `LH`, `LHU`, `LW`, `SB`, `SH`, `SW`
   through a byte-alignment stage
-- **Memory-mapped I/O** — one address decoder, six regions, no peripheral-specific
+- **Memory-mapped I/O** — one address decoder, five regions, no peripheral-specific
   CPU instructions
 - **UART** — 115200 8N1, memory-mapped transmit and 16-byte receive FIFO
-- **I2C** — bit-banged master, hardware in place but no longer driven by the
-  shipped firmware
 - **SPI** — write-only mode 0 master for an ST7735 128x160 TFT, with chip select,
   data/command and panel reset held in software
 - **Headless toolflow** — simulation, synthesis, place and route and programming
@@ -63,23 +61,23 @@ into the bitstream as ROM contents.
                               │        ADDRESS DECODER        │
                               │     selects on addr[31:28]    │
                               └──┬────────┬────────┬───────┬──┘
-                                0x2      0x4      0x5     0x6
+                                0x2      0x4      0x5     0x7
                                  ▼        ▼        ▼       ▼
                             ┌────────┐┌──────┐┌──────┐┌────────┐
-                            │  DMEM  ││ GPIO ││ UART ││  I2C   │
-                            │ RAM 4K ││      ││ 8N1  ││        │
+                            │  DMEM  ││ GPIO ││ UART ││  SPI   │
+                            │ RAM 4K ││      ││ 8N1  ││ mode 0 │
                             └────────┘└──┬───┘└──┬───┘└───┬────┘
                                          ▼       ▼        ▼
-                                    LED        laptop  20x4 LCD
-                                                        (PCF8574)
+                                    LED        laptop  ST7735 TFT
+                                                        (128x160)
 ```
 
 Branches resolve in EX, so a taken branch costs two cycles. There is no branch
 predictor; the design trades those cycles for a simpler control path.
 
-The reset input and I2C data line pass through their required clock-domain
-protection before the design uses them. Reset releases in step with the clock
-rather than whenever the contact happens to open.
+The reset input passes through its required clock-domain protection before the
+design uses it. Reset releases in step with the clock rather than whenever the
+contact happens to open.
 
 The ROM has a second read port wired to the same decoder, so loads from region
 `0x0` reach `.rodata` and the load image of `.data`. That is what lets the
@@ -93,7 +91,6 @@ firmware use string literals and initialised globals.
 | `0x2` | `0x20000000` | Data memory, 4 KB | Globals and stack |
 | `0x4` | `0x40000000` | GPIO | LED output |
 | `0x5` | `0x50000000` | UART | 115200 8N1, TX and RX |
-| `0x6` | `0x60000000` | I2C | 20x4 LCD through a PCF8574 |
 | `0x7` | `0x70000000` | SPI | ST7735 128x160 TFT, write only |
 
 Per-register details are in [docs/hardware/register_map.md](docs/hardware/register_map.md).
@@ -212,16 +209,13 @@ ROM, and `00000000` is a `.bss` global, so it only reads back as zero if
 | 10 | `led_out` | Onboard LED (active low) |
 | 34 | `uart_tx_out` | RXD on the external USB-UART module |
 | 33 | `uart_rx_in` | TXD on the external USB-UART module |
-| 31 | `i2c_sda` | SDA on the PCF8574 backpack |
-| 32 | `i2c_scl` | SCL on the PCF8574 backpack |
 | 25 | `spi_sck_out` | SCK on the ST7735 module |
 | 26 | `spi_mosi_out` | SDA on the ST7735 module |
 | 27 | `spi_cs_n_out` | CS on the ST7735 module |
 | 28 | `spi_dc_out` | AO on the ST7735 module |
 | 29 | `spi_rst_n_out` | RESET on the ST7735 module |
 
-Cross UART TX and RX, and share a ground. The I2C bus runs at 3.3 V — do not
-pull SDA or SCL up to 5 V even if the LCD itself is powered from 5 V.
+Cross UART TX and RX, and share a ground.
 
 Power the ST7735 module from 3V3, not the 5V pin: bank 2 drives 3.3 V logic.
 Tie its `LED` pin straight to 3V3 — the backlight draws more than the 8 mA the
@@ -247,16 +241,17 @@ FT2232 JTAG channel, are collected in [docs/bringup.md](docs/bringup.md).
 | `rules/` | Coding style, commit and branching conventions |
 | `build/` | Generated output, not committed |
 
-`libs/i2c/i2c_lcd_20x4_refresh.v` is a standalone 20x4 LCD sequencer kept for reference. It is
-**not** instantiated by `cpu_top` and is not synthesized.
+`libs/i2c/i2c_write_frame.v` is not instantiated by `cpu_top` and is not
+synthesized. It is kept as the starting point for the read-capable I2C master
+the DS3231 needs.
 
 ## Verification
 
 | Layer | Result |
 |---|---|
-| Simulation | 34 / 34 testbenches pass on Icarus Verilog 12.0 |
-| Timing | Fmax 30.880 MHz against a 27 MHz constraint, 0 setup and 0 hold violations |
-| Resources | Logic 3372 / 8640 (40%), registers 1632 / 6693 (25%), BSRAM 6 / 26 (24%) |
+| Simulation | 31 / 31 testbenches pass on Icarus Verilog 12.0 |
+| Timing | Fmax 30.299 MHz against a 27 MHz constraint, 0 setup and 0 hold violations |
+| Resources | Logic 3234 / 8640 (38%), registers 1506 / 6693 (23%), BSRAM 6 / 26 (24%) |
 | Hardware | Banner reads `BOOT 5A5A5A5A 00000000`, the ST7735 shows red, green and blue bars in that order; RX FIFO board protocol passes 16-byte, overrun and W1C cases |
 
 Measurements and the logs behind them are in

@@ -7,8 +7,8 @@ immediate generation, register file read/write/bypass behavior, reset synchronis
 detection, pipeline register reset/stall/flush behavior, branch and JAL flushing, subword memory accesses,
 GPIO MMIO, an UART TX frame containing `0x48`, UART RX framing with start/stop validation and LSB-first
 assembly, UART RX FIFO order/full/overrun behavior, UART MMIO pop and W1C semantics, and a CPU-level echo that drives `0xA5` into the RX pin
-and checks that the CPU transmits the same byte back, plus the I2C frame FSM, the PCF8574 LCD write sequence
-and the I2C MMIO handshake. Decoder source-use flags suppress false load-use
+and checks that the CPU transmits the same byte back, plus the I2C write frame FSM, the SPI shift engine, its
+MMIO wrapper and a CPU-level SPI transfer. Decoder source-use flags suppress false load-use
 stalls when U-type and J-type immediate fields match a preceding load destination.
 
 Six tests are CPU-level programs rather than unit tests:
@@ -61,8 +61,8 @@ Post-route summary:
 | BSRAM | 6 / 26 (24%) |
 | I/O ports | 8 / 71 (12%) |
 
-These figures are from the current UART FIFO tree. Zero registers are inferred as latches, confirming the two I2C
-FSMs have explicit default states. Raw log: `logs/03-uart-rx-fifo/04-fpga-build.log`.
+These figures are from the UART FIFO tree. Zero registers are inferred as latches, confirming every state
+machine has an explicit default arm. Raw log: `logs/03-uart-rx-fifo/04-fpga-build.log`.
 
 The board measurements further down are from a build carrying the fixes in [docs/fix_log.md](../fix_log.md),
 except where a row is explicitly labelled as a fault capture.
@@ -122,6 +122,10 @@ ordering and W1C clear. It does not measure lossless sustained throughput;
 the FIFO has no hardware flow control.
 
 ### I2C and LCD
+
+This peripheral is no longer in the design; the observations below are the
+record from when it was. The firmware that produced them has been removed, and
+a DS3231 will take the bus over.
 
 The scan firmware sweeps `0x20-0x27` and `0x38-0x3f`, reports the acknowledging address over UART and writes
 `HELLO FPGA` to the display. On a build carrying the register file fix the capture repeats `I2C 27` byte for

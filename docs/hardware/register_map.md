@@ -10,7 +10,6 @@ bits act as a register offset.
 | `0x2` | `0x20000000` | Data memory, 4 KB | `mem_data_ram.v` |
 | `0x4` | `0x40000000` | GPIO | `gpio_mmio.v` |
 | `0x5` | `0x50000000` | UART | `uart_mmio.v` |
-| `0x6` | `0x60000000` | I2C/LCD | `pcf8574_lcd_mmio.v` |
 | `0x7` | `0x70000000` | SPI/TFT | `spi_mmio.v` |
 
 Region `0x0` answers loads through a second read port on `mem_instruction_rom.v`. It has no
@@ -64,33 +63,6 @@ A write while `tx_busy` is 1 is dropped silently — there is no error flag.
 The RX FIFO holds 16 bytes. When full, a new byte is dropped without changing
 the queued order and sets `rx_overrun`. Reading `0x08` while empty returns zero
 and does not change the FIFO.
-
----
-
-## I2C — `0x60000000`
-
-The frame FSM lives in the CPU 27 MHz clock domain and advances on a 1 MHz tick
-produced by `clock_enable_divider`.
-
-Decoded on **`a[3:2]` only**, so the registers alias every 16 bytes:
-`0x60000010` also hits the register at offset `0x00`.
-
-| Offset | Access | Bits | Function |
-|---|---|---|---|
-| `0x00` | Write | `[7:0]` | Byte to send to the PCF8574 |
-| `0x00` | Write | `[8]` | `cmd_data` — `0` selects an LCD command, `1` display data |
-| `0x04` | Read | `[0]` | `busy` — a transaction is in flight |
-| `0x04` | Read | `[1]` | `ack` — ACK result of the transaction that just finished |
-| `0x08` | Write | `[6:0]` | 7-bit slave address, defaults to `0x27`, which is also what the board in use answers at; the firmware scans anyway |
-
-Both write registers are **only sampled while `busy` is 0**. Writing during a
-transaction is dropped silently, so wait first:
-
-```c
-lcd_wait_ready();          /* wait for busy = 0 FIRST */
-LCD_ADDR_REG = address;    /* only then set the address */
-lcd_command(0x00);
-```
 
 ---
 
@@ -151,7 +123,7 @@ firmware cannot poll the ST7735 for readiness and must rely on the delays the
 datasheet specifies.
 
 **Peripheral registers alias.** Each peripheral decodes only its low address
-bits — `a[7:0]` for GPIO, UART and SPI, `a[3:2]` for I2C — so `0x40000100` hits the
+bits — `a[7:0]` for GPIO, UART and SPI — so `0x40000100` hits the
 same LED register as `0x40000000`. Address the documented offsets only.
 
 Defects that have been fixed, including the three that used to make `.rodata`,

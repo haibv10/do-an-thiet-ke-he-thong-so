@@ -48,18 +48,11 @@ run_test uart_tx_tb libs/uart/uart_tx.v libs/uart/uart_tx_tb.sv
 run_test uart_rx_tb libs/uart/uart_rx.v libs/uart/uart_rx_tb.sv
 run_test uart_mmio_tb libs/uart/uart_tx.v libs/uart/uart_rx.v source/peripheral/uart_mmio.v sim/peripheral/uart_mmio_tb.sv
 run_test i2c_write_frame_tb source/common/clock_enable.v libs/i2c/i2c_write_frame.v libs/i2c/i2c_write_frame_tb.sv
-run_test i2c_pcf8574_lcd_write_tb \
-  source/common/clock_enable.v libs/i2c/i2c_write_frame.v libs/i2c/i2c_pcf8574_lcd_write.v \
-  libs/i2c/i2c_pcf8574_lcd_write_tb.sv
-run_test pcf8574_lcd_mmio_tb \
-  source/common/clock_enable.v libs/i2c/i2c_write_frame.v libs/i2c/i2c_pcf8574_lcd_write.v \
-  source/peripheral/pcf8574_lcd_mmio.v sim/peripheral/pcf8574_lcd_mmio_tb.sv
 run_test spi_master_tb libs/spi/spi_master.v libs/spi/spi_master_tb.sv
 run_test spi_mmio_tb libs/spi/spi_master.v source/peripheral/spi_mmio.v sim/peripheral/spi_mmio_tb.sv
-run_test i2c_lcd_20x4_refresh_tb libs/i2c/i2c_lcd_20x4_refresh.v libs/i2c/i2c_lcd_20x4_refresh_tb.sv
 
 # --- CPU integration ---
-cpu_sources=(source/cpu/*.v source/peripheral/*.v source/common/*.v libs/i2c/*.v libs/uart/*.v libs/spi/*.v)
+cpu_sources=(source/cpu/*.v source/peripheral/*.v source/common/*.v libs/uart/*.v libs/spi/*.v)
 run_test cpu_top_tb "${cpu_sources[@]}" sim/cpu/cpu_top_tb.sv
 run_test cpu_hazard_tb "${cpu_sources[@]}" sim/cpu/cpu_hazard_tb.sv
 run_test cpu_auipc_tb "${cpu_sources[@]}" sim/cpu/cpu_auipc_tb.sv

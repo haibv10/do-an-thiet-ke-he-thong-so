@@ -11,10 +11,10 @@
 | Metric | Result |
 |---|---|
 | Simulation | 31 / 31 testbenches pass |
-| Fmax after place and route | 30.210 MHz against a 27 MHz constraint |
+| Fmax after place and route | 30.299 MHz against a 27 MHz constraint |
 | Timing violations | 0 setup, 0 hold |
-| Logic utilisation | 3375 / 8640 (40%) |
-| Hardware | Banner reads `BOOT 5A5A5A5A 00000000`; 20x4 LCD displays `HELLO FPGA`; UART reports the PCF8574 at `0x27` |
+| Logic utilisation | 3234 / 8640 (38%) |
+| Hardware | Banner reads `BOOT 5A5A5A5A 00000000`; the ST7735 shows red, green and blue bars in that order |
 
 The hardware row is from a build carrying the fixes in [fix_log.md](fix_log.md).
 An earlier capture read the address as `0x21`; that reading was itself corrupted
@@ -31,7 +31,7 @@ peripherals, all connected to the CPU through a **memory-mapped I/O** bus.
 
 The result behaves like a simple microcontroller: a program written in C is
 compiled to RISC-V machine code, loaded into on-chip ROM, and executed to drive
-an LED, read a button, talk to a laptop over UART and write to an LCD over I2C.
+an LED, talk to a laptop over UART and drive an ST7735 TFT over SPI.
 
 The design is validated in three independent layers — RTL simulation,
 post-synthesis timing analysis, and direct measurement on the board. Every
@@ -59,19 +59,19 @@ multiplexes read data back.
                               │        ADDRESS DECODER        │
                               │     selects on addr[31:28]    │
                               └──┬────────┬────────┬───────┬──┘
-                                0x2      0x4      0x5     0x6
+                                0x2      0x4      0x5     0x7
                                  ▼        ▼        ▼       ▼
                             ┌────────┐┌──────┐┌──────┐┌────────┐
-                            │  DMEM  ││ GPIO ││ UART ││  I2C   │
-                            │ RAM 4K ││      ││ 8N1  ││ 1 MHz  │
-                            │ stack  ││      ││115200││  tick  │
+                            │  DMEM  ││ GPIO ││ UART ││  SPI   │
+                            │ RAM 4K ││      ││ 8N1  ││ mode 0 │
+                            │ stack  ││      ││115200││6.75MHz │
                             └────────┘└──┬───┘└──┬───┘└───┬────┘
                                          │       │        │
                                          ▼       ▼        ▼
                                  ┌───────────┐┌────────┐┌──────────┐
-                                 │ LED pin10 ││ TX  34 ││ SDA   31 │
-                                 │ btn pin 4 ││ RX  33 ││ SCL   32 │
-                                 └───────────┘│→ laptop││→ PCF8574 │
+                                 │ LED pin10 ││ TX  34 ││ SCK   25 │
+                                 │           ││ RX  33 ││ SDA   26 │
+                                 └───────────┘│→ laptop││→ ST7735  │
                                               └────────┘└──────────┘
 ```
 
@@ -87,7 +87,7 @@ bits select a register.
 | `0x2` | `0x20000000` | DMEM (RAM) | Globals and stack |
 | `0x4` | `0x40000000` | GPIO | LED output |
 | `0x5` | `0x50000000` | UART | Serial link to the laptop |
-| `0x6` | `0x60000000` | I2C | 20x4 LCD through a PCF8574 backpack |
+| `0x7` | `0x70000000` | SPI | ST7735 128x160 TFT, write only |
 
 Thanks to this scheme, the C statement `*(volatile int *)0x50000000 = 'A';`
 executes as an ordinary memory write, but the decoder recognises region `0x5`
@@ -220,10 +220,10 @@ adding a branch predictor.
 
 ## 5. The boundary with the outside world
 
-Everything inside the SoC runs on one 27 MHz clock. The reset input and I2C
-data line have no relationship to it. Sampling either directly can capture a
-register mid-transition, and the resulting metastable value takes an unbounded
-time to settle.
+Everything inside the SoC runs on one 27 MHz clock. The reset input has no
+relationship to it. Sampling it directly can capture a register
+mid-transition, and the resulting metastable value takes an unbounded time to
+settle.
 
 Each one therefore passes through two flip-flops before anything else sees it.
 The first may go metastable; the second has a full clock period to settle, which
@@ -309,6 +309,13 @@ section 9.
 
 ### I2C and the LCD
 
+This peripheral has been removed from the design. The 20x4 HD44780 panel is
+retired and a DS3231 real-time clock will take its place on the same bus, and
+the write-only frame engine described here cannot read a slave register. The
+section is kept because the state machines below are part of the work; nothing
+in it describes the current tree. `libs/i2c/i2c_write_frame.v` survives as the
+starting point for the read-capable master.
+
 The I2C master is built from two nested state machines. `i2c_writeframe` drives
 one 8-bit frame — START, eight data bits, ACK, optional STOP.
 `lcd_write_cmd_data` sits above it and turns one LCD byte into the five frames a
@@ -392,24 +399,22 @@ calls `main`. Every address it forms uses AUIPC.
 The demo program exercises all three MMIO blocks:
 
 ```c
-/* sw/main.c - boot banner, I2C scan, LCD output */
+/* sw/main.c - boot banner, ST7735 bring-up, liveness loop */
 uart_puts("BOOT ");
-uart_hex32(data_marker);                 /* .data  -> 5A5A5A5A */
+uart_hex32(data_marker);            /* .data  -> 5A5A5A5A */
 uart_putc(' ');
-uart_hex32(bss_marker);                  /* .bss   -> 00000000 */
+uart_hex32(bss_marker);             /* .bss   -> 00000000 */
 uart_puts("\r\n");
 
-lcd_address = lcd_find_address();        /* scan 0x20-0x27 and 0x38-0x3f */
-if (lcd_address >= 0) {
-  lcd_init();
-  lcd_command(0x80);                     /* cursor to row 1 */
-  lcd_puts("HELLO FPGA");
-}
+uart_puts("TFT INIT\r\n");
+tft_init();                         /* SWRESET, SLPOUT, COLMOD, MADCTL, DISPON */
+tft_colour_bars();                  /* three CASET/RASET/RAMWR windows */
+uart_puts("TFT BARS\r\n");
 
 while (1) {
-  uart_puts("I2C ");
-  uart_hex8((unsigned char)lcd_address); /* digits come from a .rodata table */
-  uart_puts("\r\n");
+  uart_puts("ALIVE\r\n");           /* digits come from a .rodata table */
+  led = led ^ 1u;
+  LED_REG = led;
   delay_cycles(27000000);
 }
 ```
@@ -455,28 +460,37 @@ Twenty-nine self-checking testbenches run under Icarus Verilog; all pass.
 | `alu_tb` | All arithmetic, logic and shift operations |
 | `control_unit_tb` | Opcode decoding into control signals |
 | `imm_gen_tb` | Immediate generation for every instruction format |
-| `regfile_tb` | Write, read, `x0` behaviour and the write-first bypass |
+| `core_alu_tb` | Every ALU operation, including the shift and comparison cases |
+| `core_control_tb` | Control signal decode for each opcode, and FENCE as an explicit no-op |
+| `core_immediate_tb` | I, S, B, U and J immediate assembly and sign extension |
+| `core_regfile_tb` | Write, read, `x0` behaviour and the write-first bypass |
+| `core_pc_tb` | Reset value, sequential increment and stall hold |
 | `reset_sync_tb` | Asynchronous assert, synchronous release, and that the chain is not one-shot |
-| `gpio_tb` | LED register, read-only button offset, and the two-stage button synchroniser |
-| `address_decoder_tb` | Region select, unmapped regions, byte mask pass-through, stores into the ROM window |
-| `dmem_tb` | Each byte lane, halfword masks, the 4 KB wrap, and a read concurrent with a write |
-| `imem_tb` | Both read ports, independently and on the same word; zero fill past the image |
-| `uart_tx_tb` | A captured 8N1 frame, and a write arriving mid-frame being dropped |
-| `forwarding_unit_tb` | MEM-before-WB priority |
-| `hazard_detection_unit_tb` | Correct detection of the load-use case |
+| `clock_enable_tb` | Tick period of the enable divider |
+| `pipe_forwarding_tb` | MEM-before-WB priority |
+| `pipe_hazard_tb` | Correct detection of the load-use case |
 | `pipe_if_id_tb` | Reset, stall and flush behaviour |
 | `pipe_id_ex_tb` | Control signal propagation and clearing on flush |
 | `pipe_ex_mem_tb` | Latching of the ALU result and branch target |
 | `pipe_mem_wb_tb` | Selection between memory data and ALU result |
+| `cpu_address_decoder_tb` | Region select, unmapped regions, byte mask pass-through, stores into the ROM window |
+| `mem_data_ram_tb` | Each byte lane, halfword masks, the 4 KB wrap, and a read concurrent with a write |
+| `mem_instruction_rom_tb` | Both read ports, independently and on the same word; zero fill past the image |
+| `gpio_mmio_tb` | LED register and the unmapped offsets |
+| `uart_tx_tb` | A captured 8N1 frame, and a write arriving mid-frame being dropped |
 | `uart_rx_tb` | Start and stop bits, LSB-first assembly, false start rejection, framing error recovery |
-| `uart_mmio_tb` | Status register, RX read-clear semantics, TX busy flag |
-| `clock_enable_divider_tb` | Tick period |
-| `i2c_writeframe_tb` | START, eight data bits, ACK and NACK paths |
-| `lcd_write_cmd_data_tb` | The five-frame nibble sequence for one LCD byte |
-| `i2c_mmio_tb` | MMIO handshake, busy flag, ACK capture |
-| `lcd_display_tb` | The standalone 20x4 sequencer, all 89 output bytes |
+| `uart_mmio_tb` | Status register, RX FIFO level and overrun, TX busy flag, write-one-to-clear |
+| `i2c_write_frame_tb` | START, eight data bits, ACK and NACK paths |
+| `spi_master_tb` | Mode 0 idle state, MSB first order, eight sck edges per byte, the half period, a start during a transfer |
+| `spi_mmio_tb` | Reset state, control persistence and readback, a data write during busy |
 | `cpu_top_tb` | Full system integration (below) |
+| `cpu_hazard_tb` | Load-use interlocking through the full pipeline |
+| `cpu_auipc_tb` | AUIPC with the PC as the first operand |
 | `cpu_uart_hex_tb` | The `sltiu` plus branch sequence used by hex formatting |
+| `cpu_uart_fifo_tb` | The RX FIFO protocol driven by the CPU |
+| `cpu_spi_tb` | A store reaching the SPI pins, with the state of `dc` recorded per byte |
+| `cpu_fence_tb` | FENCE retiring without disturbing the pipeline |
+| `cpu_firmware_boot_tb` | The real `sw/firmware.hex` image booted on the full SoC |
 
 `cpu_top_tb` is the most important integration test: it loads a short RV32I
 program exercising forwarding, load-use stalling, branch and JAL flushing,
@@ -492,13 +506,13 @@ and bitstream generation for the GW1NR-9C against the 27 MHz constraint in
 | Metric | Result | Assessment |
 |---|---|---|
 | Clock constraint | 27.000 MHz | Onboard oscillator |
-| Actual Fmax | 30.210 MHz | 12% margin |
+| Actual Fmax | 30.299 MHz | 12% margin |
 | Setup violated endpoints | 0 | Pass |
 | Hold violated endpoints | 0 | Pass |
-| Deepest logic level | 12 | FIFO-enabled build |
+| Deepest logic level | 7 | Reported on the critical path to `clk` |
 | Logic | 3375 / 8640 (40%) | — |
 | Registers | 1599 / 6693 (24%) | — |
-| Registers inferred as latch | 0 / 6480 (0%) | Both I2C state machines have explicit default states |
+| Registers inferred as latch | 0 / 6480 (0%) | Every state machine has an explicit default arm |
 | CLS | 2746 / 4320 (64%) | — |
 | BSRAM | 6 / 26 (24%) | IMEM dual-port, plus DMEM |
 | I/O ports | 8 / 71 (12%) | — |
@@ -596,7 +610,7 @@ negligible, but it is the clearest performance improvement available.
 ```text
 source/   CPU RTL, peripherals and common modules. CPU files use the core_,
           pipe_, mem_ and cpu_ prefixes by responsibility.
-libs/     Reusable I2C, UART and SPI RTL, each stored with its unit testbench.
+libs/     Reusable I2C, UART and SPI RTL, each stored with its unit testbench
 constr/   Pin (.cst) and timing (.sdc) constraints
 sim/      Self-checking testbenches for source/, one sim/ directory per
           source/ directory. Library tests live beside their RTL in libs/

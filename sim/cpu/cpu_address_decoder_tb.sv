@@ -6,12 +6,11 @@ module cpu_address_decoder_tb;
   logic [31:0] addr = 32'd0;
   logic [3:0]  we_mask = 4'b0000;
   wire  [3:0]  we_dmem;
-  wire         we_gpio, we_uart, we_i2c, we_spi;
+  wire         we_gpio, we_uart, we_spi;
   logic [31:0] rd_rom  = 32'h0000_0000;
   logic [31:0] rd_dmem = 32'h1111_1111;
   logic [31:0] rd_gpio = 32'h2222_2222;
   logic [31:0] rd_uart = 32'h3333_3333;
-  logic [31:0] rd_i2c  = 32'h4444_4444;
   logic [31:0] rd_spi  = 32'h5555_5555;
   wire  [31:0] rd_out;
 
@@ -36,7 +35,6 @@ module cpu_address_decoder_tb;
     input logic [3:0] dmem_en,
     input logic gpio_en,
     input logic uart_en,
-    input logic i2c_en,
     input logic spi_en,
     input string label
   );
@@ -45,9 +43,9 @@ module cpu_address_decoder_tb;
       we_mask = 4'b1111;
       #1;
       if (we_dmem !== dmem_en || we_gpio !== gpio_en ||
-          we_uart !== uart_en || we_i2c !== i2c_en || we_spi !== spi_en)
-        $fatal(1, "%s: write to %h gave mem_data_ram=%b gpio_mmio=%b uart=%b i2c=%b spi=%b",
-               label, address, we_dmem, we_gpio, we_uart, we_i2c, we_spi);
+          we_uart !== uart_en || we_spi !== spi_en)
+        $fatal(1, "%s: write to %h gave mem_data_ram=%b gpio_mmio=%b uart=%b spi=%b",
+               label, address, we_dmem, we_gpio, we_uart, we_spi);
       we_mask = 4'b0000;
     end
   endtask
@@ -61,7 +59,6 @@ module cpu_address_decoder_tb;
     expect_read(32'h2000_0000, 32'h1111_1111, "DMEM");
     expect_read(32'h4000_0000, 32'h2222_2222, "GPIO");
     expect_read(32'h5000_0000, 32'h3333_3333, "UART");
-    expect_read(32'h6000_0000, 32'h4444_4444, "I2C");
     expect_read(32'h7000_0000, 32'h5555_5555, "SPI");
 
     // Only addr[31:28] selects, so the offset within a region is irrelevant here.
@@ -70,19 +67,19 @@ module cpu_address_decoder_tb;
     // Unmapped regions read as zero rather than floating.
     expect_read(32'h1000_0000, 32'd0, "unmapped 0x1");
     expect_read(32'h3000_0000, 32'd0, "unmapped 0x3");
+    expect_read(32'h6000_0000, 32'd0, "unmapped 0x6");
     expect_read(32'h8000_0000, 32'd0, "unmapped 0x8");
     expect_read(32'hF000_0000, 32'd0, "unmapped 0xF");
 
     // RAM takes the full byte mask; peripherals take a single enable.
-    expect_write(32'h2000_0000, 4'b1111, 1'b0, 1'b0, 1'b0, 1'b0, "store to DMEM");
-    expect_write(32'h4000_0000, 4'b0000, 1'b1, 1'b0, 1'b0, 1'b0, "store to GPIO");
-    expect_write(32'h5000_0000, 4'b0000, 1'b0, 1'b1, 1'b0, 1'b0, "store to UART");
-    expect_write(32'h6000_0000, 4'b0000, 1'b0, 1'b0, 1'b1, 1'b0, "store to I2C");
-    expect_write(32'h7000_0000, 4'b0000, 1'b0, 1'b0, 1'b0, 1'b1, "store to SPI");
+    expect_write(32'h2000_0000, 4'b1111, 1'b0, 1'b0, 1'b0, "store to DMEM");
+    expect_write(32'h4000_0000, 4'b0000, 1'b1, 1'b0, 1'b0, "store to GPIO");
+    expect_write(32'h5000_0000, 4'b0000, 1'b0, 1'b1, 1'b0, "store to UART");
+    expect_write(32'h7000_0000, 4'b0000, 1'b0, 1'b0, 1'b1, "store to SPI");
 
     // The ROM window is read only: a store there must reach nothing at all.
-    expect_write(32'h0000_0000, 4'b0000, 1'b0, 1'b0, 1'b0, 1'b0, "store into ROM");
-    expect_write(32'h3000_0000, 4'b0000, 1'b0, 1'b0, 1'b0, 1'b0, "store to unmapped 0x3");
+    expect_write(32'h0000_0000, 4'b0000, 1'b0, 1'b0, 1'b0, "store into ROM");
+    expect_write(32'h3000_0000, 4'b0000, 1'b0, 1'b0, 1'b0, "store to unmapped 0x3");
 
     // The byte mask passes through to RAM unchanged, so SB and SH still work.
     addr = 32'h2000_0001;

@@ -598,7 +598,8 @@ source/   CPU RTL, peripherals and common modules. CPU files use the core_,
           pipe_, mem_ and cpu_ prefixes by responsibility.
 libs/     Reusable I2C, UART and SPI RTL, each stored with its unit testbench.
 constr/   Pin (.cst) and timing (.sdc) constraints
-sim/      CPU integration and non-library self-checking testbenches
+sim/      Self-checking testbenches for source/, one sim/ directory per
+          source/ directory. Library tests live beside their RTL in libs/
 sw/       C firmware: main.c, startup.s, linker.ld, firmware.hex
 tools/    Scripts for firmware, bitstream, programming and tests
 docs/     Design report, register map, bring-up notes, verification results

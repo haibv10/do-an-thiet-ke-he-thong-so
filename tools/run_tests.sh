@@ -22,27 +22,27 @@ run_test() {
   vvp "$test_build_dir/$top.vvp"
 }
 
-# --- CPU core ---
-run_test core_alu_tb       source/cpu/core_alu.v       sim/core/core_alu_tb.sv
-run_test core_control_tb   source/cpu/core_control.v   sim/core/core_control_tb.sv
-run_test core_immediate_tb source/cpu/core_immediate.v sim/core/core_immediate_tb.sv
-run_test core_regfile_tb   source/cpu/core_regfile.v   sim/core/core_regfile_tb.sv
-run_test core_pc_tb        source/cpu/core_pc.v        sim/core/core_pc_tb.sv
+# --- CPU core and datapath ---
+run_test core_alu_tb       source/cpu/core_alu.v       sim/cpu/core_alu_tb.sv
+run_test core_control_tb   source/cpu/core_control.v   sim/cpu/core_control_tb.sv
+run_test core_immediate_tb source/cpu/core_immediate.v sim/cpu/core_immediate_tb.sv
+run_test core_regfile_tb   source/cpu/core_regfile.v   sim/cpu/core_regfile_tb.sv
+run_test core_pc_tb        source/cpu/core_pc.v        sim/cpu/core_pc_tb.sv
 
-# --- Common and pipeline ---
+# --- Common infrastructure and pipeline ---
 run_test reset_sync_tb source/common/reset_sync.v sim/common/reset_sync_tb.sv
 run_test clock_enable_tb source/common/clock_enable.v sim/common/clock_enable_tb.sv
-run_test pipe_forwarding_tb source/cpu/pipe_forwarding.v sim/core/pipe_forwarding_tb.sv
-run_test pipe_hazard_tb source/cpu/pipe_hazard.v sim/core/pipe_hazard_tb.sv
-run_test pipe_if_id_tb source/cpu/pipe_if_id.v sim/core/pipe_if_id_tb.sv
-run_test pipe_id_ex_tb source/cpu/pipe_id_ex.v sim/core/pipe_id_ex_tb.sv
-run_test pipe_ex_mem_tb source/cpu/pipe_ex_mem.v sim/core/pipe_ex_mem_tb.sv
-run_test pipe_mem_wb_tb source/cpu/pipe_mem_wb.v sim/core/pipe_mem_wb_tb.sv
+run_test pipe_forwarding_tb source/cpu/pipe_forwarding.v sim/cpu/pipe_forwarding_tb.sv
+run_test pipe_hazard_tb source/cpu/pipe_hazard.v sim/cpu/pipe_hazard_tb.sv
+run_test pipe_if_id_tb source/cpu/pipe_if_id.v sim/cpu/pipe_if_id_tb.sv
+run_test pipe_id_ex_tb source/cpu/pipe_id_ex.v sim/cpu/pipe_id_ex_tb.sv
+run_test pipe_ex_mem_tb source/cpu/pipe_ex_mem.v sim/cpu/pipe_ex_mem_tb.sv
+run_test pipe_mem_wb_tb source/cpu/pipe_mem_wb.v sim/cpu/pipe_mem_wb_tb.sv
 
-# --- Memory, bus, and peripherals ---
+# --- Memory, bus and peripherals ---
 run_test cpu_address_decoder_tb source/cpu/cpu_address_decoder.v sim/cpu/cpu_address_decoder_tb.sv
-run_test mem_data_ram_tb source/cpu/mem_data_ram.v sim/memory/mem_data_ram_tb.sv
-run_test mem_instruction_rom_tb source/cpu/mem_instruction_rom.v sim/memory/mem_instruction_rom_tb.sv
+run_test mem_data_ram_tb source/cpu/mem_data_ram.v sim/cpu/mem_data_ram_tb.sv
+run_test mem_instruction_rom_tb source/cpu/mem_instruction_rom.v sim/cpu/mem_instruction_rom_tb.sv
 run_test gpio_mmio_tb source/peripheral/gpio_mmio.v sim/peripheral/gpio_mmio_tb.sv
 run_test uart_tx_tb libs/uart/uart_tx.v libs/uart/uart_tx_tb.sv
 run_test uart_rx_tb libs/uart/uart_rx.v libs/uart/uart_rx_tb.sv

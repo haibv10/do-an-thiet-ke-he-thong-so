@@ -241,7 +241,7 @@ FT2232 JTAG channel, are collected in [docs/bringup.md](docs/bringup.md).
 | `libs/` | Reusable protocol blocks. Each library keeps its RTL and unit testbench together |
 | `constr/` | Pin (`.cst`) and timing (`.sdc`) constraints |
 | `sw/` | C firmware, startup code, linker script and the built `firmware.hex` |
-| `sim/` | CPU integration and non-library testbenches; `sim/support/` holds helpers and fixtures |
+| `sim/` | Testbenches for `source/`, one `sim/` directory per `source/` directory; `sim/support/` holds shared fixtures |
 | `tools/` | Scripts for firmware, bitstream, programming and tests |
 | `docs/` | Design report, register map, bring-up notes, verification results |
 | `rules/` | Coding style, commit and branching conventions |

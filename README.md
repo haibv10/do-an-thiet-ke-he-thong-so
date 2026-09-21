@@ -259,7 +259,7 @@ testbenches. It is verification only and is never synthesized.
 | Simulation | 33 / 33 testbenches pass on Icarus Verilog 12.0 |
 | Timing | Fmax 27.678 MHz against a 27 MHz constraint, 0 setup and 0 hold violations. The critical path is the ROM data window through the load formatter, and it moves with the firmware image |
 | Resources | Logic 3256 / 8640 (38%), registers 1598 / 6693 (24%), BSRAM 6 / 26 (24%) |
-| Hardware | Banner reads `BOOT 5A5A5A5A 00000000`, the ST7735 shows red, green and blue bars and then the date and time from the DS3231. The RX FIFO board protocol passed its 16-byte, overrun and W1C cases when it was run; that firmware has since been retired to make ROM room and the result is kept in the fix log |
+| Hardware | Banner reads `BOOT 5A5A5A5A 00000000`, the ST7735 shows red, green and blue bars and then the date and time from the DS3231, whose oscillator stop flag reads clear and whose time survives reprogramming. The 4392-byte image runs from beyond the old 4 KB ROM boundary. The RX FIFO board protocol passed its 16-byte, overrun and W1C cases when it was run; that firmware has since been retired to make ROM room and the result is kept in the fix log |
 
 Measurements and the logs behind them are in
 [docs/verification/rv32i_pipeline.md](docs/verification/rv32i_pipeline.md).

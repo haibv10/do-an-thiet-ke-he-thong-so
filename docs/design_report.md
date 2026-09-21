@@ -399,10 +399,10 @@ calls `main`. Every address it forms uses AUIPC.
                           IMEM  ◄──$readmemh at elaboration──  firmware.hex
 ```
 
-The demo program exercises all three MMIO blocks:
+The demo program exercises every MMIO block:
 
 ```c
-/* sw/main.c - boot banner, ST7735 bring-up, liveness loop */
+/* sw/main.c - boot banner, ST7735 bring-up, clock loop */
 uart_puts("BOOT ");
 uart_hex32(data_marker);            /* .data  -> 5A5A5A5A */
 uart_putc(' ');
@@ -415,10 +415,13 @@ tft_colour_bars();                  /* three CASET/RASET/RAMWR windows */
 uart_puts("TFT BARS\r\n");
 
 while (1) {
-  uart_puts("ALIVE\r\n");           /* digits come from a .rodata table */
-  led = led ^ 1u;
-  LED_REG = led;
-  delay_cycles(27000000);
+  ds3231_read(0x00, time, 7);       /* pointer write, repeated START, 7 reads */
+  if (time[0] != last_second) {     /* the seconds byte, not a timer */
+    last_second = time[0];
+    ds3231_print(time);             /* digits come from a .rodata table */
+    tft_show_time(time);            /* glyphs from an 8x8 font in .rodata */
+  }
+  delay_loop(DELAY_MS(50));
 }
 ```
 

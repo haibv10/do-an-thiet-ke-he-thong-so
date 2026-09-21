@@ -47,6 +47,8 @@ into the bitstream as ROM contents.
   for register reads
 - **SPI** — write-only mode 0 master for an ST7735 128x160 TFT, with chip select,
   data/command and panel reset held in software
+- **Firmware** — reads the DS3231 over I2C and draws the date and time on the
+  panel from an 8x8 ASCII font in ROM
 - **Headless toolflow** — simulation, synthesis, place and route and programming
   all run from the command line
 
@@ -257,7 +259,7 @@ testbenches. It is verification only and is never synthesized.
 | Simulation | 33 / 33 testbenches pass on Icarus Verilog 12.0 |
 | Timing | Fmax 27.678 MHz against a 27 MHz constraint, 0 setup and 0 hold violations. The critical path is the ROM data window through the load formatter, and it moves with the firmware image |
 | Resources | Logic 3256 / 8640 (38%), registers 1598 / 6693 (24%), BSRAM 6 / 26 (24%) |
-| Hardware | Banner reads `BOOT 5A5A5A5A 00000000`, the ST7735 shows red, green and blue bars in that order, and a DS3231 answers with its timekeeping registers and advancing seconds; RX FIFO board protocol passes 16-byte, overrun and W1C cases |
+| Hardware | Banner reads `BOOT 5A5A5A5A 00000000`, the ST7735 shows red, green and blue bars and then the date and time from the DS3231. The RX FIFO board protocol passed its 16-byte, overrun and W1C cases when it was run; that firmware has since been retired to make ROM room and the result is kept in the fix log |
 
 Measurements and the logs behind them are in
 [docs/verification/rv32i_pipeline.md](docs/verification/rv32i_pipeline.md).

@@ -10,6 +10,7 @@ bits act as a register offset.
 | `0x2` | `0x20000000` | Data memory, 4 KB | `mem_data_ram.v` |
 | `0x4` | `0x40000000` | GPIO | `gpio_mmio.v` |
 | `0x5` | `0x50000000` | UART | `uart_mmio.v` |
+| `0x6` | `0x60000000` | I2C | `i2c_mmio.v` |
 | `0x7` | `0x70000000` | SPI/TFT | `spi_mmio.v` |
 
 Region `0x0` answers loads through a second read port on `mem_instruction_rom.v`. It has no
@@ -63,6 +64,58 @@ A write while `tx_busy` is 1 is dropped silently — there is no error flag.
 The RX FIFO holds 16 bytes. When full, a new byte is dropped without changing
 the queued order and sets `rx_overrun`. Reading `0x08` while empty returns zero
 and does not change the FIFO.
+
+---
+
+## I2C — `0x60000000`
+
+The frame FSM lives in the CPU 27 MHz clock domain and advances on a 1 MHz
+tick produced by `clock_enable`. Each state is held for ten ticks, so SCL runs
+at 50 kHz.
+
+One store launches one frame: eight data bits in either direction, plus one
+acknowledge bit. A transaction is therefore a sequence of stores, and the
+framing stays in software because which register pointer to set, how many
+bytes follow and where a read turns around are properties of the slave rather
+than of the bus.
+
+Decoded on `a[7:0]`.
+
+| Offset | Access | Bits | Function |
+|---|---|---|---|
+| `0x00` | Write | `[7:0]` | Byte to send; ignored on a read frame |
+| `0x00` | Write | `[8]` | Emit a START before the frame. On a chained frame this is the repeated START |
+| `0x00` | Write | `[9]` | Emit a STOP after the frame |
+| `0x00` | Write | `[10]` | Direction: `0` writes, `1` reads |
+| `0x00` | Write | `[11]` | Read frames only: `1` refuses the byte, `0` acknowledges it |
+| `0x04` | Read | `[0]` | `busy` — a frame is in flight |
+| `0x04` | Read | `[1]` | `ack` — the slave acknowledged the last write frame |
+| `0x08` | Read | `[7:0]` | Byte received by the last read frame |
+
+A store to `0x00` while `busy` is 1 is dropped silently. Both `ack` and the
+data register hold until the next frame disturbs them, so they are read after
+`busy` falls.
+
+A frame that leaves `[9]` clear does not release the bus, which is what lets
+the next frame chain onto it. Setting `[8]` on a chained frame emits a
+repeated START, the only way to turn the bus around inside one transaction.
+
+Reading seven registers from a slave at `0x68` looks like this:
+
+```c
+i2c_frame(I2C_START | 0xd0);   /* address, write */
+i2c_frame(0x00);               /* register pointer */
+i2c_frame(I2C_START | 0xd1);   /* repeated START, address, read */
+for (i = 0; i < 6; i++) {
+  i2c_frame(I2C_READ);         /* acknowledge, so the slave sends more */
+  buffer[i] = I2C_DATA_REG;
+}
+i2c_frame(I2C_READ | I2C_NACK | I2C_STOP);
+buffer[6] = I2C_DATA_REG;
+```
+
+The refusal on the last byte is not optional. A slave goes on transmitting
+until it is refused, so a read that acknowledges every byte never ends.
 
 ---
 
@@ -123,7 +176,7 @@ firmware cannot poll the ST7735 for readiness and must rely on the delays the
 datasheet specifies.
 
 **Peripheral registers alias.** Each peripheral decodes only its low address
-bits — `a[7:0]` for GPIO, UART and SPI — so `0x40000100` hits the
+bits — `a[7:0]` for GPIO, UART, I2C and SPI — so `0x40000100` hits the
 same LED register as `0x40000000`. Address the documented offsets only.
 
 Defects that have been fixed, including the three that used to make `.rodata`,

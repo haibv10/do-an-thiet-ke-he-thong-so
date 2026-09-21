@@ -15,6 +15,8 @@ module cpu_spi_tb;
   wire spi_cs_n_out;
   wire spi_dc_out;
   wire spi_rst_n_out;
+  tri1 i2c_sda;
+  tri1 i2c_scl;
 
   integer index;
   integer bit_count = 0;
@@ -28,6 +30,7 @@ module cpu_spi_tb;
   cpu_top dut (
     .clk(clk), .rst_n(rst_n), .led_out(led_out),
     .uart_rx_in(1'b1), .uart_tx_out(uart_tx_out),
+    .i2c_sda(i2c_sda), .i2c_scl(i2c_scl),
     .spi_sck_out(spi_sck_out), .spi_mosi_out(spi_mosi_out),
     .spi_cs_n_out(spi_cs_n_out), .spi_dc_out(spi_dc_out),
     .spi_rst_n_out(spi_rst_n_out)

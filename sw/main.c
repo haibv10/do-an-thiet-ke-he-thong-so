@@ -1,5 +1,6 @@
 #define GPIO_BASE     0x40000000
 #define UART_BASE     0x50000000
+#define I2C_BASE      0x60000000
 #define SPI_BASE      0x70000000
 
 #define LED_REG       (*((volatile unsigned int *) GPIO_BASE))
@@ -7,6 +8,9 @@
 #define UART_STAT_REG (*((volatile unsigned int *) (UART_BASE + 4)))
 #define UART_RX_REG   (*((volatile unsigned int *) (UART_BASE + 8)))
 #define UART_CTRL_REG (*((volatile unsigned int *) (UART_BASE + 12)))
+#define I2C_FRAME_REG (*((volatile unsigned int *) I2C_BASE))
+#define I2C_STAT_REG  (*((volatile unsigned int *) (I2C_BASE + 4)))
+#define I2C_DATA_REG  (*((volatile unsigned int *) (I2C_BASE + 8)))
 #define SPI_DATA_REG  (*((volatile unsigned int *) SPI_BASE))
 #define SPI_STAT_REG  (*((volatile unsigned int *) (SPI_BASE + 4)))
 #define SPI_CTRL_REG  (*((volatile unsigned int *) (SPI_BASE + 8)))
@@ -16,6 +20,20 @@
 #define UART_RX_OVERRUN 0x04
 #define UART_RX_LEVEL_MASK 0xf8
 #define UART_CTRL_CLEAR_OVERRUN 0x01
+#define I2C_BUSY      0x01
+#define I2C_ACK       0x02
+#define I2C_START     0x100
+#define I2C_STOP      0x200
+#define I2C_READ      0x400
+#define I2C_NACK      0x800
+
+// Fixed by the part: there are no address straps to scan.
+#define DS3231_WRITE  0xd0
+#define DS3231_READ   0xd1
+#define DS3231_TIME_BYTES 7
+#define DS3231_STATUS 0x0f
+#define DS3231_OSF    0x80
+
 #define SPI_BUSY      0x01
 #define SPI_CS_N      0x01
 #define SPI_DC        0x02
@@ -41,15 +59,24 @@
 // Lives in .rodata, so reading it exercises the ROM window at region 0x0.
 static const char hex_digits[] = "0123456789ABCDEF";
 
+// The compiler knows when it ran, and that is the only time source this board
+// has apart from the part being set. Both live in .rodata.
+static const char build_date[] = __DATE__;   // "Sep 21 2026", day space-padded
+static const char build_time[] = __TIME__;   // "14:46:03"
+static const char month_names[] = "JanFebMarAprMayJunJulAugSepOctNovDec";
+
 // Both markers have external linkage so the compiler must emit the objects and
 // load them back, instead of folding the initialiser into an immediate.
 unsigned int data_marker = 0x5a5a5a5a;  // .data, copied out of ROM by startup.s
 unsigned int bss_marker;                // .bss, cleared by startup.s
 
-static void delay_cycles(unsigned int cycles) {
+// The counter is volatile so the loop survives optimisation, which also fixes
+// its cost at nine clocks an iteration. Callers pass DELAY_MS rather than a
+// raw count.
+static void delay_loop(unsigned int iterations) {
   volatile unsigned int index;
 
-  for (index = 0; index < cycles; index++) {
+  for (index = 0; index < iterations; index++) {
   }
 }
 
@@ -148,10 +175,10 @@ static void uart_fifo_test(void) {
   uart_puts(case16_passed && case17_passed ? "RXFIFO PASS\r\n" : "RXFIFO FAIL\r\n");
 }
 
-// delay_cycles counts loop iterations, and the loop body is several
-// instructions, so the real delay is a few times longer than the argument
-// suggests. Every ST7735 delay below is a minimum, so erring long is safe.
-#define TFT_MS(ms) ((ms) * 27000U)
+// delay_cycles counts loop iterations, not clocks. One volatile iteration
+// measures nine clocks on the board, taken from the nine seconds between
+// consecutive RTC lines when the loop argument was 27000000.
+#define DELAY_MS(ms) ((ms) * 3000U)
 
 static void spi_wait_idle(void) {
   while (SPI_STAT_REG & SPI_BUSY) {
@@ -188,19 +215,19 @@ static void tft_deselect(void) {
 // owns the release timing rather than racing the configuration load.
 static void tft_reset(void) {
   tft_control(SPI_CS_N);               // rst_n = 0, panel in reset
-  delay_cycles(TFT_MS(10));
+  delay_loop(DELAY_MS(10));
   tft_control(SPI_CS_N | SPI_RST_N);   // release
-  delay_cycles(TFT_MS(120));
+  delay_loop(DELAY_MS(120));
 }
 
 static void tft_init(void) {
   tft_reset();
 
   tft_command(0x01);                   // SWRESET
-  delay_cycles(TFT_MS(120));
+  delay_loop(DELAY_MS(120));
 
   tft_command(0x11);                   // SLPOUT
-  delay_cycles(TFT_MS(120));           // datasheet 10.1.11 requires 120 ms
+  delay_loop(DELAY_MS(120));           // datasheet 10.1.11 requires 120 ms
 
   tft_command(0x3a);                   // COLMOD
   tft_data(0x55);                      // 16-bit/pixel; 10.1.29 note 2 mandates 55h for writes
@@ -211,7 +238,7 @@ static void tft_init(void) {
   tft_command(0x20);                   // INVOFF
   tft_command(0x13);                   // NORON
   tft_command(0x29);                   // DISPON
-  delay_cycles(TFT_MS(120));
+  delay_loop(DELAY_MS(120));
 
   tft_deselect();
 }
@@ -272,6 +299,196 @@ static void tft_colour_bars(void) {
   tft_fill_rect(2 * third, 0, TFT_WIDTH - 1, TFT_HEIGHT - 1, TFT_BLUE);
 }
 
+static void i2c_wait(void) {
+  while (I2C_STAT_REG & I2C_BUSY) {
+  }
+}
+
+// One store carries one frame. The acknowledge belongs to the frame that just
+// finished, so it is only meaningful once busy has fallen again.
+static int i2c_frame(unsigned int value) {
+  i2c_wait();
+  I2C_FRAME_REG = value;
+  i2c_wait();
+  return (I2C_STAT_REG & I2C_ACK) != 0;
+}
+
+// The peripheral has no stop-only operation, so releasing the bus after a
+// refused frame costs one throwaway byte. A slave that did not acknowledge is
+// not listening to it.
+static void i2c_release(void) {
+  i2c_frame(I2C_STOP | 0x00);
+}
+
+static int ds3231_read(unsigned char first, unsigned char *buffer,
+                       unsigned int count) {
+  unsigned int index;
+  unsigned int flags;
+
+  // Setting the pointer is a write; the read that follows turns the bus
+  // around with a repeated START rather than releasing it.
+  if (!i2c_frame(I2C_START | DS3231_WRITE)) {
+    i2c_release();
+    return 0;
+  }
+  if (!i2c_frame(first)) {
+    i2c_release();
+    return 0;
+  }
+  if (!i2c_frame(I2C_START | DS3231_READ)) {
+    i2c_release();
+    return 0;
+  }
+
+  for (index = 0; index < count; index++) {
+    flags = I2C_READ;
+    // A slave transmits until it is refused, so the last byte must be.
+    if (index == count - 1) flags |= I2C_NACK | I2C_STOP;
+    i2c_frame(flags);
+    buffer[index] = (unsigned char) I2C_DATA_REG;
+  }
+
+  return 1;
+}
+
+// Two ASCII digits to one BCD byte. A day below the tenth is space-padded in
+// __DATE__, not zero-padded.
+static unsigned char bcd_from_chars(char high, char low) {
+  unsigned char tens = (high == ' ') ? 0 : (unsigned char) (high - '0');
+
+  return (unsigned char) ((tens << 4) | (unsigned char) (low - '0'));
+}
+
+// Division and modulo would pull in a libcall the core cannot satisfy, so the
+// only two-digit case is spelled out instead.
+static unsigned char build_month(void) {
+  unsigned int index;
+  unsigned int month;
+
+  for (index = 0; index < 12; index++) {
+    if (month_names[index * 3] == build_date[0] &&
+        month_names[index * 3 + 1] == build_date[1] &&
+        month_names[index * 3 + 2] == build_date[2]) {
+      month = index + 1;
+      if (month >= 10) return (unsigned char) (0x10 | (month - 10));
+      return (unsigned char) month;
+    }
+  }
+
+  return 0x01;
+}
+
+static int ds3231_write(unsigned char first, const unsigned char *buffer,
+                        unsigned int count) {
+  unsigned int index;
+  unsigned int flags;
+
+  if (!i2c_frame(I2C_START | DS3231_WRITE)) {
+    i2c_release();
+    return 0;
+  }
+  if (!i2c_frame(first)) {
+    i2c_release();
+    return 0;
+  }
+
+  for (index = 0; index < count; index++) {
+    flags = buffer[index];
+    if (index == count - 1) flags |= I2C_STOP;
+    if (!i2c_frame(flags)) {
+      i2c_release();
+      return 0;
+    }
+  }
+
+  return 1;
+}
+
+// Sticky from the first time the part is powered, and cleared only by writing
+// zero over it. Set means the oscillator stopped at some point, so whatever
+// the timekeeping registers hold has not been counting since it was last set.
+static void ds3231_report_osf(void) {
+  unsigned char status;
+
+  if (!ds3231_read(DS3231_STATUS, &status, 1)) {
+    uart_puts("RTC NACK\r\n");
+    return;
+  }
+
+  uart_puts((status & DS3231_OSF) ? "RTC OSF SET\r\n" : "RTC OSF CLEAR\r\n");
+}
+
+// Writing the time is what makes the oscillator stop flag safe to clear: the
+// flag says the registers have not been counting, and only a known value in
+// them makes that untrue again.
+static void ds3231_set_build_time(void) {
+  unsigned char time[DS3231_TIME_BYTES];
+  unsigned char status;
+
+  time[0] = bcd_from_chars(build_time[6], build_time[7]);
+  time[1] = bcd_from_chars(build_time[3], build_time[4]);
+  time[2] = bcd_from_chars(build_time[0], build_time[1]);  // 24 hour: bit 6 clear
+  time[3] = 0x01;                                          // day of week is not derived
+  time[4] = bcd_from_chars(build_date[4], build_date[5]);
+  time[5] = build_month();
+  time[6] = bcd_from_chars(build_date[9], build_date[10]);
+
+  if (!ds3231_write(0x00, time, DS3231_TIME_BYTES)) {
+    uart_puts("RTC SET FAIL\r\n");
+    return;
+  }
+
+  // Read back rather than write a whole byte: bit 3 enables the 32 kHz output
+  // and the alarm flags live here too.
+  if (!ds3231_read(DS3231_STATUS, &status, 1)) {
+    uart_puts("RTC SET FAIL\r\n");
+    return;
+  }
+  status &= (unsigned char) ~DS3231_OSF;
+  if (!ds3231_write(DS3231_STATUS, &status, 1)) {
+    uart_puts("RTC SET FAIL\r\n");
+    return;
+  }
+
+  uart_puts("RTC SET ");
+  uart_puts(build_date);
+  uart_putc(' ');
+  uart_puts(build_time);
+  uart_puts("\r\n");
+}
+
+// The registers hold BCD, so printing a byte as two hex digits already reads
+// as the decimal value and needs no conversion.
+static void uart_bcd(unsigned char value) {
+  uart_putc(hex_digits[(value >> 4) & 0x0f]);
+  uart_putc(hex_digits[value & 0x0f]);
+}
+
+// Reading from register 0 snapshots the time into a second bank inside the
+// part, so the seven bytes cannot straddle a tick.
+static void ds3231_report(void) {
+  unsigned char time[DS3231_TIME_BYTES];
+
+  if (!ds3231_read(0x00, time, DS3231_TIME_BYTES)) {
+    uart_puts("RTC NACK\r\n");
+    return;
+  }
+
+  uart_puts("RTC 20");
+  uart_bcd(time[6]);                 // year
+  uart_putc('-');
+  uart_bcd(time[5] & 0x1f);          // month, without the century bit
+  uart_putc('-');
+  uart_bcd(time[4] & 0x3f);          // date
+  uart_putc(' ');
+  uart_bcd(time[2] & 0x3f);          // hours, 24 hour mode
+  uart_putc(':');
+  uart_bcd(time[1] & 0x7f);          // minutes
+  uart_putc(':');
+  uart_bcd(time[0] & 0x7f);          // seconds
+  uart_puts("\r\n");
+}
+
 int main(void) {
   unsigned int led = 0;
 
@@ -290,16 +507,21 @@ int main(void) {
   tft_colour_bars();
   uart_puts("TFT BARS\r\n");
 
+  ds3231_report_osf();
+
   while (1) {
     if (UART_STAT_REG & UART_RX_VALID) {
-      if ((unsigned char) UART_RX_REG == 'T') uart_fifo_test();
+      unsigned char command = (unsigned char) UART_RX_REG;
+
+      if (command == 'T') uart_fifo_test();
+      if (command == 'S') ds3231_set_build_time();
     }
 
-    // A periodic line separates a CPU that hung from a capture that never
-    // reached the terminal. The LED is the same evidence without a terminal.
-    uart_puts("ALIVE\r\n");
+    // The line is also the liveness signal: a CPU that hung prints nothing,
+    // and the LED says the same without a terminal.
+    ds3231_report();
     led = led ^ 1u;
     LED_REG = led;
-    delay_cycles(27000000);
+    delay_loop(DELAY_MS(1000));
   }
 }

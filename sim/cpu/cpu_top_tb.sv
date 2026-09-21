@@ -8,6 +8,8 @@ module cpu_top_tb;
   logic uart_rx_in = 1'b1;
   logic led_out;
   logic uart_tx_out;
+  tri1 i2c_sda;
+  tri1 i2c_scl;
   logic [7:0] uart_data;
   logic [7:0] uart_echo_data;
   integer index;
@@ -20,7 +22,9 @@ module cpu_top_tb;
     .rst_n(rst_n),
     .led_out(led_out),
     .uart_rx_in(uart_rx_in),
-    .uart_tx_out(uart_tx_out)
+    .uart_tx_out(uart_tx_out),
+    .i2c_sda(i2c_sda),
+    .i2c_scl(i2c_scl)
   );
 
   always @(posedge clk) begin

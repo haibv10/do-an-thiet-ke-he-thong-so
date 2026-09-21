@@ -74,9 +74,10 @@ The I2C pins sit in bank 2, which runs at 3.3 V (`LVCMOS33`). A slave may need
 its own 5 V supply, but SDA and SCL **must not** be pulled up to 5 V —
 level-shift them or use 3.3 V pull-ups.
 
-No I2C device is wired at present. The HD44780 panel has been removed and the
-DS3231 that replaces it is a 3.3 V part, so the same rule holds when it is
-fitted: pull SDA and SCL to 3.3 V, never to 5 V.
+The DS3231 that replaces the HD44780 panel sits on pins 31 and 32 with 3.3 V
+pull-ups. Most breakout boards for it already carry pull-ups and a backup cell;
+check the board before adding your own, since two sets in parallel pull the bus
+harder than the master can fight.
 
 An earlier capture reported `0x21` and was written up as the real address. It
 was not: the reading itself was corrupted by the register file defect recorded

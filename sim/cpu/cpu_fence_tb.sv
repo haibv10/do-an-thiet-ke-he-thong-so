@@ -8,6 +8,8 @@ module cpu_fence_tb;
   logic rst_n = 1'b0;
   wire led_out;
   wire uart_tx_out;
+  tri1 i2c_sda;
+  tri1 i2c_scl;
   integer index;
   integer fence_count = 0;
 
@@ -15,7 +17,8 @@ module cpu_fence_tb;
 
   cpu_top dut (
     .clk(clk), .rst_n(rst_n), .led_out(led_out),
-    .uart_rx_in(1'b1), .uart_tx_out(uart_tx_out)
+    .uart_rx_in(1'b1), .uart_tx_out(uart_tx_out),
+    .i2c_sda(i2c_sda), .i2c_scl(i2c_scl)
   );
 
   always @(posedge clk)

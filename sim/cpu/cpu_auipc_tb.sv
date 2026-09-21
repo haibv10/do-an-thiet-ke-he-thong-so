@@ -18,7 +18,8 @@ module cpu_auipc_tb;
 
   cpu_top dut (
     .clk(clk), .rst_n(rst_n), .led_out(led_out),
-    .uart_rx_in(1'b1), .uart_tx_out(uart_tx_out)
+    .uart_rx_in(1'b1), .uart_tx_out(uart_tx_out),
+    .i2c_sda(i2c_sda), .i2c_scl(i2c_scl)
   );
 
   function automatic logic [31:0] encode_i(

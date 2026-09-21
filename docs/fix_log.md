@@ -135,6 +135,19 @@ the nine clocks that figure rests on. Firmware is 4392 bytes, genuinely past
 4 KB, so the shipped image is what exercises the new depth: pROM 8, BSRAM
 12/26, Fmax 31.317 MHz, no violated endpoints, in
 `logs/13-rom-8k/03-o1-clock-build.log`.
+
+**Hardware.** The 4392 byte image boots and runs, which is the proof the probe
+could only stand in for: code above `0x1000` lives in the half of the ROM that
+did not exist before, and a board that reaches its main loop has fetched from
+it. Raw log: `logs/13-rom-8k/06-board.log`.
+
+```text
+BOOT 5A5A5A5A 00000000
+TFT INIT
+TFT BARS
+RTC OSF CLEAR
+RTC 2026-09-21 15:40:12
+```
 ## 2026-09-21 panel clock
 
 ### 32. The panel said nothing after bring-up
@@ -263,9 +276,13 @@ RTC 2026-09-21 14:47:18
 RTC 2026-09-21 14:47:19
 ```
 
-Firmware grows to 3404 bytes of the 4 KB ROM. The stop flag reading after a
-reset is not yet captured, so clearing it is inferred from the write path
-rather than observed.
+Firmware grows to 3404 bytes of the 4 KB ROM.
+
+Clearing the flag was recorded here as inferred from the write path rather
+than observed. It has since been observed: a reset in
+`logs/13-rom-8k/06-board.log` reports `RTC OSF CLEAR`, and the clock reads the
+real date rather than the power-on default, so the write reached the part and
+survived a power cycle of the FPGA.
 
 ---
 

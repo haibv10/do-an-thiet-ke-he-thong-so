@@ -9,6 +9,8 @@ Entries are newest first.
 
 ## Contents
 
+- [2026-09-21 panel clock](#2026-09-21-panel-clock)
+  - [32. The panel said nothing after bring-up](#32-the-panel-said-nothing-after-bring-up)
 - [2026-09-21 DS3231](#2026-09-21-ds3231)
   - [30. Every delay was nine times its intended length](#30-every-delay-was-nine-times-its-intended-length)
   - [31. The clock could be read but never set](#31-the-clock-could-be-read-but-never-set)
@@ -54,6 +56,62 @@ Entries are newest first.
   - [8. The ROM image left words undefined past the end of the firmware](#8-the-rom-image-left-words-undefined-past-the-end-of-the-firmware)
   - [9. Documentation described the I2C defect incorrectly](#9-documentation-described-the-i2c-defect-incorrectly)
   - [10. The PCF8574 address was recorded as `0x21`](#10-the-pcf8574-address-was-recorded-as-0x21)
+
+---
+
+## 2026-09-21 panel clock
+
+### 32. The panel said nothing after bring-up
+
+**Scope.** The ST7735 had been showing the same three colour bars since it
+came up. They proved the link and then carried no information.
+
+**Changes.** Add an 8x8 ASCII font for 32 through 126, taken from the console
+font at `/usr/share/consolefonts/Uni2-VGA8.psf.gz`, whose first 128 entries
+follow ASCII. A glyph is drawn into its own address window, so a redraw touches
+64 pixels rather than a line, and both colours are written so a character
+replaces the one under it without a clear.
+
+Redraw when the seconds byte changes rather than on a timer. The loop polls
+the part every 50 ms and compares; a timer cannot keep step, because the loop
+spends time reading I2C and printing after the delay expires.
+
+Three consequences had to be paid for. The font and the drawing code
+overflowed the 4 KB ROM by 296 bytes, so the UART RX FIFO board test was
+retired, freeing 728 bytes; it is the board half of a protocol that has
+already run, `cpu_uart_fifo_tb` keeps the behaviour under test, and the result
+stays in entry 18. That was still short, so the build moved from `-O1` to
+`-Os`, which fits in 3844 bytes with 252 spare.
+
+Moving to `-Os` invalidated the delay calibration recorded in entry 30. One
+iteration of `delay_loop` costs its instructions plus two cycles for each taken
+branch and one for each load-use stall: twelve for the six-instruction loop
+`-Os` emits, nine for the five-instruction loop `-O1` emitted. Nine is what the
+board measured, so the model is calibrated rather than assumed, and `DELAY_MS`
+moves from 3000 to 2250 iterations a millisecond.
+
+**Verification.** The suite passes 33/33 and the build has no violated
+endpoints. On the board the panel shows the date and time, and a capture of
+373 consecutive readings over five minutes contains no repeated and no skipped
+second:
+
+```text
+RTC lines: 373
+first: RTC 2026-09-21 15:07:54   last: RTC 2026-09-21 15:13:07
+repeated seconds: 0
+gaps other than 1 s: 1
+    RTC 2026-09-21 15:08:03 -> RTC 2026-09-21 15:07:05 delta -58
+```
+
+The single exception is the `S` command setting the clock back to the build
+timestamp. The earlier capture, before the redraw was tied to the seconds
+byte, skipped one: `00:14:52` followed by `00:14:54`. Raw log:
+`logs/11-i2c-master/13-board.log`.
+
+**Known consequence.** Embedding `__DATE__` and `__TIME__` makes the image
+different on every build, so `sw/firmware.hex` never reproduces and always
+shows as modified after a build. The difference is confined to the timestamp
+string and the immediates that load it.
 
 ---
 

@@ -31,6 +31,8 @@
 #define DS3231_WRITE  0xd0
 #define DS3231_READ   0xd1
 #define DS3231_TIME_BYTES 7
+#define DS3231_STATUS 0x0f
+#define DS3231_OSF    0x80
 
 #define SPI_BUSY      0x01
 #define SPI_CS_N      0x01
@@ -62,10 +64,13 @@ static const char hex_digits[] = "0123456789ABCDEF";
 unsigned int data_marker = 0x5a5a5a5a;  // .data, copied out of ROM by startup.s
 unsigned int bss_marker;                // .bss, cleared by startup.s
 
-static void delay_cycles(unsigned int cycles) {
+// The counter is volatile so the loop survives optimisation, which also fixes
+// its cost at nine clocks an iteration. Callers pass DELAY_MS rather than a
+// raw count.
+static void delay_loop(unsigned int iterations) {
   volatile unsigned int index;
 
-  for (index = 0; index < cycles; index++) {
+  for (index = 0; index < iterations; index++) {
   }
 }
 
@@ -164,10 +169,10 @@ static void uart_fifo_test(void) {
   uart_puts(case16_passed && case17_passed ? "RXFIFO PASS\r\n" : "RXFIFO FAIL\r\n");
 }
 
-// delay_cycles counts loop iterations, and the loop body is several
-// instructions, so the real delay is a few times longer than the argument
-// suggests. Every ST7735 delay below is a minimum, so erring long is safe.
-#define TFT_MS(ms) ((ms) * 27000U)
+// delay_cycles counts loop iterations, not clocks. One volatile iteration
+// measures nine clocks on the board, taken from the nine seconds between
+// consecutive RTC lines when the loop argument was 27000000.
+#define DELAY_MS(ms) ((ms) * 3000U)
 
 static void spi_wait_idle(void) {
   while (SPI_STAT_REG & SPI_BUSY) {
@@ -204,19 +209,19 @@ static void tft_deselect(void) {
 // owns the release timing rather than racing the configuration load.
 static void tft_reset(void) {
   tft_control(SPI_CS_N);               // rst_n = 0, panel in reset
-  delay_cycles(TFT_MS(10));
+  delay_loop(DELAY_MS(10));
   tft_control(SPI_CS_N | SPI_RST_N);   // release
-  delay_cycles(TFT_MS(120));
+  delay_loop(DELAY_MS(120));
 }
 
 static void tft_init(void) {
   tft_reset();
 
   tft_command(0x01);                   // SWRESET
-  delay_cycles(TFT_MS(120));
+  delay_loop(DELAY_MS(120));
 
   tft_command(0x11);                   // SLPOUT
-  delay_cycles(TFT_MS(120));           // datasheet 10.1.11 requires 120 ms
+  delay_loop(DELAY_MS(120));           // datasheet 10.1.11 requires 120 ms
 
   tft_command(0x3a);                   // COLMOD
   tft_data(0x55);                      // 16-bit/pixel; 10.1.29 note 2 mandates 55h for writes
@@ -227,7 +232,7 @@ static void tft_init(void) {
   tft_command(0x20);                   // INVOFF
   tft_command(0x13);                   // NORON
   tft_command(0x29);                   // DISPON
-  delay_cycles(TFT_MS(120));
+  delay_loop(DELAY_MS(120));
 
   tft_deselect();
 }
@@ -340,6 +345,20 @@ static int ds3231_read(unsigned char first, unsigned char *buffer,
   return 1;
 }
 
+// Sticky from the first time the part is powered, and cleared only by writing
+// zero over it. Set means the oscillator stopped at some point, so whatever
+// the timekeeping registers hold has not been counting since it was last set.
+static void ds3231_report_osf(void) {
+  unsigned char status;
+
+  if (!ds3231_read(DS3231_STATUS, &status, 1)) {
+    uart_puts("RTC NACK\r\n");
+    return;
+  }
+
+  uart_puts((status & DS3231_OSF) ? "RTC OSF SET\r\n" : "RTC OSF CLEAR\r\n");
+}
+
 // The registers hold BCD, so printing a byte as two hex digits already reads
 // as the decimal value and needs no conversion.
 static void uart_bcd(unsigned char value) {
@@ -390,6 +409,8 @@ int main(void) {
   tft_colour_bars();
   uart_puts("TFT BARS\r\n");
 
+  ds3231_report_osf();
+
   while (1) {
     if (UART_STAT_REG & UART_RX_VALID) {
       if ((unsigned char) UART_RX_REG == 'T') uart_fifo_test();
@@ -400,6 +421,6 @@ int main(void) {
     ds3231_report();
     led = led ^ 1u;
     LED_REG = led;
-    delay_cycles(27000000);
+    delay_loop(DELAY_MS(1000));
   }
 }

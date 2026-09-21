@@ -9,6 +9,8 @@ Entries are newest first.
 
 ## Contents
 
+- [2026-09-21 branch prefixes](#2026-09-21-branch-prefixes)
+  - [35. The branch model and the CI triggers disagreed](#35-the-branch-model-and-the-ci-triggers-disagreed)
 - [2026-09-21 panel orientation](#2026-09-21-panel-orientation)
   - [34. The panel was upside down](#34-the-panel-was-upside-down)
 - [2026-09-21 ROM depth](#2026-09-21-rom-depth)
@@ -60,6 +62,36 @@ Entries are newest first.
   - [8. The ROM image left words undefined past the end of the firmware](#8-the-rom-image-left-words-undefined-past-the-end-of-the-firmware)
   - [9. Documentation described the I2C defect incorrectly](#9-documentation-described-the-i2c-defect-incorrectly)
   - [10. The PCF8574 address was recorded as `0x21`](#10-the-pcf8574-address-was-recorded-as-0x21)
+
+---
+
+## 2026-09-21 branch prefixes
+
+### 35. The branch model and the CI triggers disagreed
+
+**Defect.** `rules/git_flow.md` listed `feat/*`, `release/*`, `fix/*` and
+`hotfix/*`. The CI push trigger listed `feat/**`, `fix/**`, `chore/**` and
+`release/**`. Neither list is a subset of the other, so two prefixes behaved
+unlike the rest:
+
+`hotfix/*` is in the branch model and not in the trigger, so the branch type
+meant for an urgent production fix was the one type that ran no checks on
+push. `chore/*` is in the trigger and not in the model, so it ran checks while
+being undocumented.
+
+There was also no prefix for a documentation change. A pull request touching
+only documents had to borrow `fix/*`, which is what happened to the record of
+the board results.
+
+**Fix.** Add `docs/*` and `chore/*` to the branch model, and `docs/**` and
+`hotfix/**` to the CI push trigger, so the two lists now describe the same set.
+Add a rule that a branch touching anything besides documentation is not a
+`docs/*` branch, which is why this change is `chore/*`: it edits the workflow.
+
+**Verification.** The workflow parses and its push list is `main, develop,
+feat/**, fix/**, docs/**, chore/**, release/**, hotfix/**`, which matches the
+table entry for entry. Documentation and CI configuration only; the suite is
+unaffected and passes 33/33.
 
 ---
 

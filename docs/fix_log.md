@@ -9,6 +9,8 @@ Entries are newest first.
 
 ## Contents
 
+- [2026-09-21 panel orientation](#2026-09-21-panel-orientation)
+  - [34. The panel was upside down](#34-the-panel-was-upside-down)
 - [2026-09-21 ROM depth](#2026-09-21-rom-depth)
   - [33. Firmware had outgrown the 4 KB instruction ROM](#33-firmware-had-outgrown-the-4-kb-instruction-rom)
 - [2026-09-21 panel clock](#2026-09-21-panel-clock)
@@ -58,6 +60,30 @@ Entries are newest first.
   - [8. The ROM image left words undefined past the end of the firmware](#8-the-rom-image-left-words-undefined-past-the-end-of-the-firmware)
   - [9. Documentation described the I2C defect incorrectly](#9-documentation-described-the-i2c-defect-incorrectly)
   - [10. The PCF8574 address was recorded as `0x21`](#10-the-pcf8574-address-was-recorded-as-0x21)
+
+---
+
+## 2026-09-21 panel orientation
+
+### 34. The panel was upside down
+
+**Defect.** `MADCTL` was set to `0xc8`, which mirrors both the row and the
+column order. Nothing caught it earlier: the first frame was three vertical
+colour bars, and red, green and blue read the same way up as they do upside
+down. Only text showed it.
+
+**Fix.** Clear D7 MY and D6 MX, leaving `0x08`. Clearing both together turns
+the image through 180 degrees rather than mirroring it about one axis, so the
+glyphs stay readable instead of coming out reversed. D3 stays set: the bars
+come out red, green and blue in that order, and that bit is what decides it.
+
+The panel is still 128 by 160, so every drawing coordinate is unchanged. This
+is one byte. Landscape would not be: it needs D5 MV as well, which makes the
+panel 160 by 128 and moves the layout with it.
+
+**Verification.** The suite passes 33/33 and the build is unaffected, since
+the constant is firmware. Confirmed by eye on the board, which is the only
+place an orientation can be confirmed.
 
 ---
 

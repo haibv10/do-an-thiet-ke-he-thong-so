@@ -26,6 +26,8 @@
     <File path="source/peripheral/uart_mmio.v" type="file.verilog" enable="1"/>
     <File path="libs/uart/uart_rx.v" type="file.verilog" enable="1"/>
     <File path="libs/uart/uart_tx.v" type="file.verilog" enable="1"/>
+    <File path="source/peripheral/i2c_mmio.v" type="file.verilog" enable="1"/>
+    <File path="libs/i2c/i2c_master.v" type="file.verilog" enable="1"/>
     <File path="source/peripheral/spi_mmio.v" type="file.verilog" enable="1"/>
     <File path="libs/spi/spi_master.v" type="file.verilog" enable="1"/>
     <File path="constr/fpga_project.cst" type="file.cst" enable="1"/>

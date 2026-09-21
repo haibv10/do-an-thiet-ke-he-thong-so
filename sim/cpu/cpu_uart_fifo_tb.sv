@@ -8,6 +8,8 @@ module cpu_uart_fifo_tb;
   logic uart_rx_in = 1'b1;
   wire led_out;
   wire uart_tx_out;
+  tri1 i2c_sda;
+  tri1 i2c_scl;
   integer word_index;
 
   always #5 clk = ~clk;

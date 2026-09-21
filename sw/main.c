@@ -1,23 +1,38 @@
 #define GPIO_BASE     0x40000000
 #define UART_BASE     0x50000000
-#define I2C_BASE      0x60000000
+#define SPI_BASE      0x70000000
 
 #define LED_REG       (*((volatile unsigned int *) GPIO_BASE))
 #define UART_TX_REG   (*((volatile unsigned int *) UART_BASE))
 #define UART_STAT_REG (*((volatile unsigned int *) (UART_BASE + 4)))
 #define UART_RX_REG   (*((volatile unsigned int *) (UART_BASE + 8)))
 #define UART_CTRL_REG (*((volatile unsigned int *) (UART_BASE + 12)))
-#define LCD_WRITE_REG (*((volatile unsigned int *) I2C_BASE))
-#define LCD_STAT_REG  (*((volatile unsigned int *) (I2C_BASE + 4)))
-#define LCD_ADDR_REG  (*((volatile unsigned int *) (I2C_BASE + 8)))
+#define SPI_DATA_REG  (*((volatile unsigned int *) SPI_BASE))
+#define SPI_STAT_REG  (*((volatile unsigned int *) (SPI_BASE + 4)))
+#define SPI_CTRL_REG  (*((volatile unsigned int *) (SPI_BASE + 8)))
 
 #define UART_TX_BUSY  0x01
 #define UART_RX_VALID 0x02
 #define UART_RX_OVERRUN 0x04
 #define UART_RX_LEVEL_MASK 0xf8
 #define UART_CTRL_CLEAR_OVERRUN 0x01
-#define LCD_BUSY      0x01
-#define LCD_ACK       0x02
+#define SPI_BUSY      0x01
+#define SPI_CS_N      0x01
+#define SPI_DC        0x02
+#define SPI_RST_N     0x04
+
+#define TFT_WIDTH     128
+#define TFT_HEIGHT    160
+
+// D7 MY and D6 MX set the scan direction, D3 selects BGR over RGB subpixel
+// order. Panels sold on identical breakouts differ in subpixel order, so if
+// the first colour bar comes up blue instead of red, clear D3 to make this
+// 0xc0. Nothing else in the driver changes.
+#define TFT_MADCTL    0xc8
+
+#define TFT_RED       0xf800
+#define TFT_GREEN     0x07e0
+#define TFT_BLUE      0x001f
 
 #ifndef UART_FIFO_TEST_TIMEOUT
 #define UART_FIFO_TEST_TIMEOUT 270000U
@@ -133,59 +148,132 @@ static void uart_fifo_test(void) {
   uart_puts(case16_passed && case17_passed ? "RXFIFO PASS\r\n" : "RXFIFO FAIL\r\n");
 }
 
-static void lcd_wait_ready(void) {
-  while (LCD_STAT_REG & LCD_BUSY) {
+// delay_cycles counts loop iterations, and the loop body is several
+// instructions, so the real delay is a few times longer than the argument
+// suggests. Every ST7735 delay below is a minimum, so erring long is safe.
+#define TFT_MS(ms) ((ms) * 27000U)
+
+static void spi_wait_idle(void) {
+  while (SPI_STAT_REG & SPI_BUSY) {
   }
 }
 
-static void lcd_command(unsigned char value) {
-  lcd_wait_ready();
-  LCD_WRITE_REG = value;
+static void spi_write(unsigned char value) {
+  spi_wait_idle();
+  SPI_DATA_REG = value;
 }
 
-static void lcd_data(unsigned char value) {
-  lcd_wait_ready();
-  LCD_WRITE_REG = 0x100 | value;
+// The control register moves cs_n and dc, so it must not change while a byte
+// is still being shifted.
+static void tft_control(unsigned int bits) {
+  spi_wait_idle();
+  SPI_CTRL_REG = bits;
 }
 
-static void lcd_puts(const char *text) {
-  while (*text != '\0') {
-    lcd_data((unsigned char) *text);
-    text++;
+static void tft_command(unsigned char value) {
+  tft_control(SPI_RST_N);              // cs_n = 0, dc = 0
+  spi_write(value);
+}
+
+static void tft_data(unsigned char value) {
+  tft_control(SPI_RST_N | SPI_DC);     // cs_n = 0, dc = 1
+  spi_write(value);
+}
+
+static void tft_deselect(void) {
+  tft_control(SPI_RST_N | SPI_CS_N);
+}
+
+// The panel comes out of reset held low by the SPI peripheral, so firmware
+// owns the release timing rather than racing the configuration load.
+static void tft_reset(void) {
+  tft_control(SPI_CS_N);               // rst_n = 0, panel in reset
+  delay_cycles(TFT_MS(10));
+  tft_control(SPI_CS_N | SPI_RST_N);   // release
+  delay_cycles(TFT_MS(120));
+}
+
+static void tft_init(void) {
+  tft_reset();
+
+  tft_command(0x01);                   // SWRESET
+  delay_cycles(TFT_MS(120));
+
+  tft_command(0x11);                   // SLPOUT
+  delay_cycles(TFT_MS(120));           // datasheet 10.1.11 requires 120 ms
+
+  tft_command(0x3a);                   // COLMOD
+  tft_data(0x55);                      // 16-bit/pixel; 10.1.29 note 2 mandates 55h for writes
+
+  tft_command(0x36);                   // MADCTL
+  tft_data(TFT_MADCTL);
+
+  tft_command(0x20);                   // INVOFF
+  tft_command(0x13);                   // NORON
+  tft_command(0x29);                   // DISPON
+  delay_cycles(TFT_MS(120));
+
+  tft_deselect();
+}
+
+// CASET and RASET take a 16-bit start and end, and the window is inclusive at
+// both ends. RAMWR leaves the panel expecting pixel data.
+static void tft_set_window(unsigned char x0, unsigned char y0,
+                           unsigned char x1, unsigned char y1) {
+  tft_command(0x2a);                   // CASET
+  tft_data(0x00);
+  tft_data(x0);
+  tft_data(0x00);
+  tft_data(x1);
+
+  tft_command(0x2b);                   // RASET
+  tft_data(0x00);
+  tft_data(y0);
+  tft_data(0x00);
+  tft_data(y1);
+
+  tft_command(0x2c);                   // RAMWR
+}
+
+static void tft_fill_rect(unsigned char x0, unsigned char y0,
+                          unsigned char x1, unsigned char y1,
+                          unsigned short colour) {
+  unsigned int columns = (unsigned int) (x1 - x0) + 1;
+  unsigned int rows = (unsigned int) (y1 - y0) + 1;
+  unsigned int row;
+  unsigned int column;
+
+  tft_set_window(x0, y0, x1, y1);
+
+  // dc is raised once and left there: the whole burst is pixel data, and
+  // moving it per byte would cost a register write per byte for nothing.
+  tft_control(SPI_RST_N | SPI_DC);
+
+  // Nested rather than one counter of columns * rows: the core is RV32I with
+  // no multiply instruction, and -nostdlib leaves no __mulsi3 to call.
+  for (row = 0; row < rows; row++) {
+    for (column = 0; column < columns; column++) {
+      spi_write((unsigned char) (colour >> 8));
+      spi_write((unsigned char) colour);
+    }
   }
+
+  tft_deselect();
 }
 
-static void lcd_init(void) {
-  delay_cycles(1080000);
-  lcd_command(0x02); // return home, 4-bit interface
-  lcd_command(0x28); // 4-bit bus, two display lines, 5x8 font
-  lcd_command(0x0C); // display on, cursor off, blink off
-  lcd_command(0x06); // entry mode: increment, no shift
-  lcd_command(0x01); // clear display
-}
+// Three vertical bars, not text. A bar shows byte order, MADCTL scan direction
+// and column addressing at once: a swapped subpixel order comes back as the
+// wrong colour, and a wrong scan direction as bars running the wrong way.
+static void tft_colour_bars(void) {
+  unsigned char third = TFT_WIDTH / 3;
 
-static int lcd_probe(unsigned char address) {
-  LCD_ADDR_REG = address;
-  lcd_command(0x00);
-  lcd_wait_ready();
-  return (LCD_STAT_REG & LCD_ACK) != 0;
-}
-
-static int lcd_find_address(void) {
-  unsigned char address;
-
-  // PCF8574 answers in 0x20-0x27, PCF8574A in 0x38-0x3f.
-  for (address = 0x20; address <= 0x27; address++) {
-    if (lcd_probe(address)) return address;
-  }
-  for (address = 0x38; address <= 0x3f; address++) {
-    if (lcd_probe(address)) return address;
-  }
-  return -1;
+  tft_fill_rect(0, 0, third - 1, TFT_HEIGHT - 1, TFT_RED);
+  tft_fill_rect(third, 0, (unsigned char) (2 * third - 1), TFT_HEIGHT - 1, TFT_GREEN);
+  tft_fill_rect(2 * third, 0, TFT_WIDTH - 1, TFT_HEIGHT - 1, TFT_BLUE);
 }
 
 int main(void) {
-  int lcd_address;
+  unsigned int led = 0;
 
   LED_REG = 0;
 
@@ -197,27 +285,21 @@ int main(void) {
   uart_hex32(bss_marker);
   uart_puts("\r\n");
 
-  lcd_address = -1;
-  delay_cycles(1080000);
-  lcd_address = lcd_find_address();
-  if (lcd_address >= 0) {
-    lcd_init();
-    lcd_command(0x80); // move the cursor to the start of line 1
-    lcd_puts("HELLO FPGA");
-  }
+  uart_puts("TFT INIT\r\n");
+  tft_init();
+  tft_colour_bars();
+  uart_puts("TFT BARS\r\n");
 
   while (1) {
     if (UART_STAT_REG & UART_RX_VALID) {
       if ((unsigned char) UART_RX_REG == 'T') uart_fifo_test();
     }
 
-    uart_puts("I2C ");
-    if (lcd_address >= 0) {
-      uart_hex8((unsigned char) lcd_address);
-    } else {
-      uart_puts("NACK");
-    }
-    uart_puts("\r\n");
+    // A periodic line separates a CPU that hung from a capture that never
+    // reached the terminal. The LED is the same evidence without a terminal.
+    uart_puts("ALIVE\r\n");
+    led = led ^ 1u;
+    LED_REG = led;
     delay_cycles(27000000);
   }
 }

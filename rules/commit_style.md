@@ -1,79 +1,141 @@
 # Commit Style Guide
 
-Use [Conventional Commits 1.0.0](https://www.conventionalcommits.org/) with a concise subject and a
-technical body. The commit body is required for every commit so that the design context remains available
-to contributors and AI-assisted tools.
+This repository writes commit messages the way the Linux kernel does: a short
+subsystem-prefixed subject, a blank line, then prose that explains the problem
+before it explains the change.
+
+A commit message is read by someone who has the diff in front of them. The diff
+already says what changed. The message has to say what was wrong, or what was
+missing, and what the change means for the hardware, the firmware or anyone
+reading the tree later.
 
 ## Format
 
 ```text
-<type>(<scope>): <short description>
+<subsystem>: <summary in the imperative, no trailing period>
 
-Context:
-<hardware or architectural context>
+Body paragraphs wrapped at 72 columns, in the imperative mood, describing
+the problem first and the change second.
 
-Changes:
-<modules, interfaces, FSM behavior, or documentation changed>
-
-Verification:
-<simulation, synthesis, hardware test, or explicitly not run>
+An optional tag block at the end.
 ```
 
-Use only the sections that are relevant, but always include enough detail to explain the change independently
-of the conversation. Do not include user requests, chat history, or vague statements such as “update code”.
+## Subject
 
-## Types and Scopes
+Prefix with the subsystem the change belongs to, lowercase, followed by a colon
+and a space. The subsystems in this tree are:
 
-| Type | Use |
-|------|-----|
-| `feat` | Add hardware or software behavior. |
-| `fix` | Correct functional, timing, reset, or interface behavior. |
-| `refactor` | Restructure code without changing intended behavior. |
-| `test` | Add or update simulation and verification. |
-| `docs` | Change README, diagrams, or technical documentation. |
-| `chore` | Change repository setup, ignore rules, or tooling. |
-| `build` | Change FPGA project or synthesis configuration. |
+```text
+cpu       pipeline, ALU, control, register file, address decoder
+memory    instruction ROM and data RAM
+uart      UART RTL and its MMIO peripheral
+i2c       I2C RTL and its MMIO peripheral
+spi       SPI RTL and its MMIO peripheral
+tft       ST7735 panel behaviour
+lcd       HD44780 panel behaviour
+gpio      LED and other pin-level peripherals
+sw        C firmware, startup code, linker script
+sim       testbenches with no RTL change
+build     synthesis flow, project files, tool scripts
+docs      documentation and diagrams
+rules     these guides
+```
 
-Use a lowercase `snake_case` scope naming the affected subsystem, for example `cpu`, `i2c`, `lcd`, `uart`,
-`gpio`, `memory`, or `verification`.
+A change that spans two of them belongs in two commits. Where one subsystem
+contains an obvious sub-part, nest it: `spi: st7735: ...`.
 
-## Subject Rules
+Write the summary as a command, not a report. `add mode 0 master`, not `added`
+or `this adds`. Keep the whole subject line under 72 characters. No trailing
+period.
 
-- Use lowercase imperative English and no trailing period.
-- Keep the subject specific and under 72 characters where practical.
-- Keep unrelated RTL, documentation, and generated files in separate commits.
+## Body
 
-## Technical Body Rules
+The body is required. Write it as paragraphs, not as a form to fill in. Do not
+use `Context:`, `Changes:` or `Verification:` headers, and do not reduce the
+message to a bullet list of file names, which repeats the diff.
 
-For RTL changes, record the affected module and relevant clock/reset contract. For FSM changes, describe
-states, transitions, timing, ACK/error handling, or externally visible behavior. For SoC changes, record
-MMIO addresses/registers and bus assumptions. For hardware changes, state the FPGA or peripheral constraint.
-Always state verification performed and distinguish “not run” from a passing result.
+Open with the problem. What was broken, missing, or about to become wrong. If
+the change is a cleanup with no defect behind it, say what made the old shape
+inadequate.
+
+Then state the change in the imperative, as an instruction to the codebase:
+"Add a mode 0 shift engine", "Remove the LCD helpers", "Constrain the five pins
+to bank 2".
+
+Explain any decision a reader would otherwise question, including the ones that
+look arbitrary. A magic constant, a pin choice, a state that exists only to
+hold a signal stable for one more cycle: if it took thought, record the thought.
+
+Close with what was verified, in prose. Name the testbenches or the board
+observation, and say plainly when something was not run. "Not simulated" is
+useful; silence is not.
+
+### What an RTL body has to contain
+
+Record the module and its clock and reset contract. For an FSM, name the states
+and what makes them advance, and say what is externally visible. For a bus or
+SoC change, record the MMIO address and register layout, and any assumption
+about how software has to use it. For a pin or board change, state the FPGA
+constraint and why that pin and not another.
+
+## Tags
+
+An optional block at the end, one tag per line, no blank lines inside it.
+
+```text
+Fixes: 3910e8d8a237 ("build: add the spi sources to the gowin file list")
+Reported-by: Name <email>
+Tested-by: Name <email>
+Link: https://example.invalid/thread
+Signed-off-by: Name <email>
+```
+
+Use `Fixes:` when the commit corrects a defect introduced by an earlier commit
+in this repository, with the abbreviated hash and the original subject in
+parentheses. `git commit -s` appends `Signed-off-by:` for you.
+
+Never add a tag crediting a tool for authorship.
 
 ## Examples
 
 ```text
-feat(i2c): import lcd write controller
+spi: add mode 0 write-only master with mmio wrapper
 
-Context:
-The LCD demo uses a PCF8574 adapter over a 1 MHz I2C control clock.
+The ST7735 breakout on this board brings only SDA out to its header, so
+the link to the panel can never be anything but write-only.  Giving the
+master a miso port and a receive register would leave logic with nothing
+driving it.
 
-Changes:
-Add the existing I2C frame, LCD nibble, and clock-divider modules without changing their RTL behavior.
+Add a mode 0, MSB first, 8 bit shift engine with no receive path.
+CLK_DIV sets the sck half period in clk cycles and defaults to 2, which
+gives 6.75 MHz out of the 27 MHz domain, inside the ST7735 write cycle
+limit with margin for jumper wiring.
 
-Verification:
-Not run; no simulator is configured in the repository.
+Keep busy set for one further half period after the last bit.  Software
+moves cs_n and dc as soon as busy clears, and without that trailing
+state either line could change while sck was still high.
+
+Both new testbenches pass under Icarus Verilog.
 ```
 
 ```text
-fix(gpio): correct active-low LED handling
+build: add the spi sources to the gowin file list
 
-Context:
-The board LED is active-low while software writes the logical LED state.
+tools/run_tests.sh collects CPU sources with a glob, but
+tools/build_gowin.tcl names every file by hand.  A module added to the
+tree therefore passes every testbench while never reaching synthesis,
+and the only symptom is the top module quietly becoming a black box.
 
-Changes:
-Preserve the software-visible register format while matching the board output polarity.
+Nothing in the test suite can catch this, because the suite never reads
+the synthesis file list.  Add both SPI sources to build_gowin.tcl, and
+to fpga_project.gprj so the IDE flow matches the headless one.
 
-Verification:
-Simulation passed for reset, LED set and LED clear states.
+The build now runs through to bitstream generation at Fmax 30.880 MHz
+against the 27 MHz constraint with no violated endpoints.
 ```
+
+## Do not
+
+Do not paste conversation, requests or questions into a message. Do not write
+`update code`, `fix bug` or `improve`. Do not describe the change as work that
+happened to you; describe it as an instruction to the tree.

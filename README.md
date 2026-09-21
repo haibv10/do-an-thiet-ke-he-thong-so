@@ -7,7 +7,7 @@
 
 The core is a five-stage RV32I pipeline with full forwarding, load-use
 interlocking and branch flushing. Around it sit on-chip instruction and data
-memory plus three peripherals — GPIO, UART and I2C — all reachable through a
+memory plus four peripherals — GPIO, UART, I2C and SPI — all reachable through a
 single memory-mapped bus. The CPU has no special instructions for hardware: an
 address decoder turns ordinary `lw` and `sw` into peripheral access.
 
@@ -40,10 +40,13 @@ into the bitstream as ROM contents.
   file bypass, one-cycle load-use stall, two-cycle branch flush
 - **Sub-word memory access** — `LB`, `LBU`, `LH`, `LHU`, `LW`, `SB`, `SH`, `SW`
   through a byte-alignment stage
-- **Memory-mapped I/O** — one address decoder, five regions, no peripheral-specific
+- **Memory-mapped I/O** — one address decoder, six regions, no peripheral-specific
   CPU instructions
 - **UART** — 115200 8N1, memory-mapped transmit and 16-byte receive FIFO
-- **I2C** — bit-banged master driving a 20x4 HD44780 LCD over a PCF8574 backpack
+- **I2C** — bit-banged master, hardware in place but no longer driven by the
+  shipped firmware
+- **SPI** — write-only mode 0 master for an ST7735 128x160 TFT, with chip select,
+  data/command and panel reset held in software
 - **Headless toolflow** — simulation, synthesis, place and route and programming
   all run from the command line
 
@@ -91,6 +94,7 @@ firmware use string literals and initialised globals.
 | `0x4` | `0x40000000` | GPIO | LED output |
 | `0x5` | `0x50000000` | UART | 115200 8N1, TX and RX |
 | `0x6` | `0x60000000` | I2C | 20x4 LCD through a PCF8574 |
+| `0x7` | `0x70000000` | SPI | ST7735 128x160 TFT, write only |
 
 Per-register details are in [docs/hardware/register_map.md](docs/hardware/register_map.md).
 
@@ -124,7 +128,7 @@ export GOWIN_ROOT=/home/haihbv/tools/Gowin_V1.9.12.03
 bash tools/run_tests.sh
 ```
 
-Runs 31 self-checking testbenches, ending with `firmware_boot_tb`, which boots
+Runs 34 self-checking testbenches, ending with `firmware_boot_tb`, which boots
 the real `sw/firmware.hex` image on the full SoC and decodes its UART output.
 Each prints `<name>: PASS`; the script stops at the first failure.
 
@@ -180,14 +184,19 @@ picocom -b 115200 --flow n /dev/serial/by-id/<external-usb-uart>
 Press the **S2** reset button on the board to catch the `BOOT` line. Exit with
 `Ctrl-A` then `Ctrl-X`.
 
-The shipped firmware prints a banner, scans `0x20-0x27` and `0x38-0x3f` for a
-PCF8574, reports the address it finds and writes `HELLO FPGA` to the LCD:
+The shipped firmware prints a banner, brings the ST7735 up and draws three
+colour bars, then repeats a liveness line once a second:
 
 ```text
 BOOT 5A5A5A5A 00000000
-I2C 27
-I2C 27
+TFT INIT
+TFT BARS
+ALIVE
+ALIVE
 ```
+
+`TFT BARS` without anything on the panel narrows the fault to the backlight or
+the wiring rather than the init sequence.
 
 The two words in the banner are a startup self-check: `5A5A5A5A` is a `.data`
 global, so it only reads back correctly if `startup.s` copied `.data` out of
@@ -205,9 +214,21 @@ ROM, and `00000000` is a `.bss` global, so it only reads back as zero if
 | 33 | `uart_rx_in` | TXD on the external USB-UART module |
 | 31 | `i2c_sda` | SDA on the PCF8574 backpack |
 | 32 | `i2c_scl` | SCL on the PCF8574 backpack |
+| 25 | `spi_sck_out` | SCK on the ST7735 module |
+| 26 | `spi_mosi_out` | SDA on the ST7735 module |
+| 27 | `spi_cs_n_out` | CS on the ST7735 module |
+| 28 | `spi_dc_out` | AO on the ST7735 module |
+| 29 | `spi_rst_n_out` | RESET on the ST7735 module |
 
 Cross UART TX and RX, and share a ground. The I2C bus runs at 3.3 V — do not
 pull SDA or SCL up to 5 V even if the LCD itself is powered from 5 V.
+
+Power the ST7735 module from 3V3, not the 5V pin: bank 2 drives 3.3 V logic.
+Tie its `LED` pin straight to 3V3 — the backlight draws more than the 8 mA the
+IO pins are set to drive. Pins 25 through 30 are the only run of bank 2 header
+pins with no onboard component on them; 36 through 39 sit next to them but
+belong to the TF card slot. Pin 30 is left free for backlight control through a
+transistor.
 
 Board-specific pitfalls, including how to tell the external UART node from the
 FT2232 JTAG channel, are collected in [docs/bringup.md](docs/bringup.md).
@@ -233,10 +254,10 @@ FT2232 JTAG channel, are collected in [docs/bringup.md](docs/bringup.md).
 
 | Layer | Result |
 |---|---|
-| Simulation | 31 / 31 testbenches pass on Icarus Verilog 12.0 |
-| Timing | Fmax 30.210 MHz against a 27 MHz constraint, 0 setup and 0 hold violations |
-| Resources | Logic 3375 / 8640 (40%), registers 1599 / 6693 (24%), BSRAM 6 / 26 (24%) |
-| Hardware | Banner reads `BOOT 5A5A5A5A 00000000`, LCD displays `HELLO FPGA`, UART reports the PCF8574 at `0x27`; RX FIFO board protocol passes 16-byte, overrun and W1C cases |
+| Simulation | 34 / 34 testbenches pass on Icarus Verilog 12.0 |
+| Timing | Fmax 30.880 MHz against a 27 MHz constraint, 0 setup and 0 hold violations |
+| Resources | Logic 3372 / 8640 (40%), registers 1632 / 6693 (25%), BSRAM 6 / 26 (24%) |
+| Hardware | Banner reads `BOOT 5A5A5A5A 00000000`, the ST7735 shows red, green and blue bars in that order; RX FIFO board protocol passes 16-byte, overrun and W1C cases |
 
 Measurements and the logs behind them are in
 [docs/verification/rv32i_pipeline.md](docs/verification/rv32i_pipeline.md).

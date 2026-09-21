@@ -9,6 +9,11 @@ Entries are newest first.
 
 ## Contents
 
+- [2026-09-21 LCD scope removal](#2026-09-21-lcd-scope-removal)
+  - [24. Firmware still drove an LCD that is leaving the design](#24-firmware-still-drove-an-lcd-that-is-leaving-the-design)
+- [2026-09-21 SPI and ST7735](#2026-09-21-spi-and-st7735)
+  - [22. New RTL was left out of synthesis without failing a test](#22-new-rtl-was-left-out-of-synthesis-without-failing-a-test)
+  - [23. The design had no SPI peripheral](#23-the-design-had-no-spi-peripheral)
 - [2026-09-21 GPIO button scope removal](#2026-09-21-gpio-button-scope-removal)
   - [21. GPIO included an unused button input](#21-gpio-included-an-unused-button-input)
 - [2026-09-21 FENCE](#2026-09-21-fence)
@@ -39,6 +44,85 @@ Entries are newest first.
   - [8. The ROM image left words undefined past the end of the firmware](#8-the-rom-image-left-words-undefined-past-the-end-of-the-firmware)
   - [9. Documentation described the I2C defect incorrectly](#9-documentation-described-the-i2c-defect-incorrectly)
   - [10. The PCF8574 address was recorded as `0x21`](#10-the-pcf8574-address-was-recorded-as-0x21)
+
+---
+
+## 2026-09-21 LCD scope removal
+
+### 24. Firmware still drove an LCD that is leaving the design
+
+**Scope.** The 20x4 HD44780 LCD is being retired and a DS3231 will take its
+place on the I2C bus. The shipped firmware no longer talks to it.
+
+**Changes.** Remove `lcd_wait_ready`, `lcd_command`, `lcd_data`, `lcd_puts`,
+`lcd_init`, `lcd_probe`, `lcd_find_address`, the `LCD_*` register defines and
+`I2C_BASE` from `sw/main.c`. The main loop now prints `ALIVE` once a second and
+toggles the LED instead of reporting the PCF8574 address. Firmware drops from
+2412 to 2000 bytes of the 4 KB ROM.
+
+The I2C RTL is untouched: `source/peripheral/pcf8574_lcd_mmio.v`, `libs/i2c/`,
+region `0x6` and the four I2C testbenches all remain. `rules/git_flow.md`
+keeps one subsystem per branch, and the DS3231 needs register reads that the
+present write-only frame engine cannot do, so replacing it is its own branch
+rather than a deletion here.
+
+**Verification.** Simulation passes 34/34. On the board the banner, `TFT INIT`,
+`TFT BARS` and the repeating `ALIVE` line all appear in
+`logs/09-spi-st7735/04-board.log`.
+
+---
+
+## 2026-09-21 SPI and ST7735
+
+### 22. New RTL was left out of synthesis without failing a test
+
+**Defect.** `tools/run_tests.sh` collects CPU sources with a glob, but
+`tools/build_gowin.tcl` names every file explicitly. A new module therefore
+simulates and passes its testbenches while never reaching synthesis, and the
+only symptom is the top module quietly becoming a black box.
+
+**Evidence before.** The first FPGA build after adding the SPI peripheral,
+with all 33 testbenches passing:
+
+```text
+ERROR (EX3937) : Instantiating unknown module 'spi_mmio'(".../source/cpu/cpu_top.v":294)
+Module 'cpu_top' remains a black box due to errors in its contents(".../source/cpu/cpu_top.v":1)
+GowinSynthesis finish
+```
+
+**Fix.** Add `source/peripheral/spi_mmio.v` and `libs/spi/spi_master.v` to
+`tools/build_gowin.tcl`, and to `fpga_project.gprj` so the IDE flow matches.
+
+**Evidence after.** `logs/09-spi-st7735/02-firmware-build.log` completes with
+Fmax 30.880 MHz against the 27 MHz constraint, 0 setup and 0 hold violations,
+and `logs/09-spi-st7735/03-program.log` reaches 100%.
+
+### 23. The design had no SPI peripheral
+
+**Scope.** Add a write-only SPI master at region `0x7` and drive an ST7735
+128x160 TFT from firmware.
+
+**Changes.** New `libs/spi/spi_master.v`, a mode 0 MSB-first shift engine with
+no `miso` port, since the breakout brings only `SDA` to its header. New
+`source/peripheral/spi_mmio.v` holding `cs_n`, `dc` and the panel reset as
+software state, because one ST7735 command and its parameters form a single
+chip select frame with `dc` changing partway through. `cpu_address_decoder`
+gains region `0x7`; `cpu_top` gains five output pins bound to 25 through 29,
+the only run of bank 2 header pins with no onboard component on them.
+
+`sw/main.c` gains an ST7735 driver whose init sequence is limited to commands
+the datasheet specifies: `SWRESET`, `SLPOUT`, `COLMOD` = `0x55` per 10.1.29
+note 2, `MADCTL`, `INVOFF`, `NORON`, `DISPON`. Power control and frame rate
+registers are left at their reset defaults. The fill loop is nested rather
+than `columns * rows` because the core is RV32I with no multiply instruction
+and `-nostdlib` leaves no `__mulsi3`.
+
+**Verification.** Simulation passes 34/34, including `spi_master_tb`,
+`spi_mmio_tb` and `cpu_spi_tb`, which boots a handwritten program and decodes
+the byte stream off the pins with the state of `dc` recorded per byte. On the
+board the panel shows three vertical bars in red, green and blue in that
+order, which confirms RGB565 byte order, the `MADCTL 0xc8` subpixel order and
+`CASET`/`RASET` addressing together.
 
 ---
 
@@ -110,8 +194,8 @@ one stall for its only true load-use dependency.
 
 **Symptom.** The FIFO board protocol printed `RXFIFO CASE16`, `RXFIFO
 CASE17`, then `RXFIFO FAIL` in both
-`logs/23-uart-rx-fifo-board-protocol.log`
-and `logs/27-uart-rx-fifo-board-test-firmware-protocol.log`.
+`logs/03-uart-rx-fifo/11-board-protocol.log`
+and `logs/03-uart-rx-fifo/15-board-test-firmware-protocol.log`.
 The second failure followed a firmware rebuild, so the earlier explanation
 that only a stale firmware image caused the first failure was not supported.
 These captures report only an aggregate result; they do not identify which
@@ -127,14 +211,14 @@ case 16 and case 17 results independently, and drain/clear the FIFO between
 cases. The MMIO test now confirms that writing `0x04` leaves overrun set and
 writing `0x01` clears it.
 
-**Simulation.** `logs/28-uart-rx-fifo-w1c-fix-simulation.log`
+**Simulation.** `logs/03-uart-rx-fifo/16-w1c-fix-simulation.log`
 records 30/30 PASS; the rebuilt firmware image is 1024 ROM words.
 
-**Board verification.** `logs/29-uart-rx-fifo-w1c-fix-build.log`
+**Board verification.** `logs/03-uart-rx-fifo/17-w1c-fix-build.log`
 records P&R, timing analysis and bitstream generation complete.
-`logs/30-uart-rx-fifo-w1c-fix-program.log`
+`logs/03-uart-rx-fifo/18-w1c-fix-program.log`
 records SRAM programming at 100% with `Finished.`. The protocol capture in
-`logs/31-uart-rx-fifo-w1c-fix-protocol.log`
+`logs/03-uart-rx-fifo/19-w1c-fix-protocol.log`
 records `CASE16 PASS`, `CASE17 PASS` and `RXFIFO PASS`.
 
 **Status** — Fixed and board-verified. Case 16 proves ordered receipt of a
@@ -158,19 +242,19 @@ Reading `0x50000008` pops the oldest byte; writing one to `0x5000000c` bit zero
 clears the overrun indication. A full FIFO drops the new byte and preserves the
 queued sequence.
 
-**Verification.** `logs/14-uart-rx-fifo-full-simulation.log`
+**Verification.** `logs/03-uart-rx-fifo/03-full-simulation.log`
 records 30/30 PASS. The UART unit and MMIO tests cover FIFO order, full state,
 drop-on-full, sticky overrun, W1C clear and pop behavior; `cpu_uart_fifo_tb`
 covers two CPU loads popping queued bytes in order.
 
-**Build.** `logs/15-uart-rx-fifo-fpga-build.log`
+**Build.** `logs/03-uart-rx-fifo/04-fpga-build.log`
 records P&R, timing analysis and bitstream generation complete at 30.210 MHz
 against the 27 MHz constraint with 0 setup/hold violations. The FIFO build uses
 3375/8640 logic cells, 1599/6693 registers and 6/26 BSRAM.
 
-**Board boot.** `logs/17-uart-rx-fifo-program-board.log`
+**Board boot.** `logs/03-uart-rx-fifo/05-program-board.log`
 records SRAM programming at 100% with `Finished.`. The reset capture in
-`logs/18-uart-rx-fifo-board-uart.log`
+`logs/03-uart-rx-fifo/06-board-uart.log`
 records `BOOT 5A5A5A5A 00000000` and `I2C 27` from the FIFO bitstream.
 
 **Status** — Superseded by finding 18. The initial board workload exposed the
@@ -199,21 +283,21 @@ grouped by ownership under `sim/`.
 the new paths and module names. README, design report, coding guide and firmware
 image helper now describe the same tree.
 
-**Simulation.** `logs/09-source-layout-refactor.log`
+**Simulation.** `logs/02-source-layout/01-refactor.log`
 records 29/29 PASS. The only warning is the intentional short-image fixture in
 `mem_instruction_rom_tb`; it proves that ROM words beyond the fixture are
 zero-filled.
 
 **Build and programming.** The refactored tree was built and programmed after the
-simulation run. `logs/10-source-layout-fpga-build.log`
+simulation run. `logs/02-source-layout/02-fpga-build.log`
 records P&R, timing analysis and bitstream generation complete with Fmax
 28.912 MHz, 0 setup/hold violations, 3321/8640 logic cells, 1594/6693 registers
-and 6/26 BSRAM. `logs/11-source-layout-program-board.log`
+and 6/26 BSRAM. `logs/02-source-layout/03-program-board.log`
 records SRAM programming at 100% with `Finished.`.
 
 **Status** — Fixed. This is a behavior-preserving refactor. Programming was
 verified, but no new UART/LCD capture was taken after the refactored bitstream
-was loaded; the functional board evidence remains `logs/05-board-uart.log`.
+was loaded; the functional board evidence remains `logs/01-initial-bringup/05-board-uart.log`.
 
 ---
 
@@ -754,7 +838,7 @@ removed from both documents rather than reworded.
 **Severity** — Low in the RTL, high in the documentation. Five documents stated
 the wrong address as measured fact.
 
-**Symptom.** `logs/05-board-uart.log` captured `I2C 21` repeatedly, and that was
+**Symptom.** `logs/01-initial-bringup/05-board-uart.log` captured `I2C 21` repeatedly, and that was
 written up as "`0x21` is the real PCF8574 address on this backpack rather than
 the more common `0x27`". A PCF8574 with A0, A1 and A2 left open answers at
 `0x27`; `0x21` needs A0 strapped, which this backpack does not do.
@@ -814,7 +898,7 @@ firmware_boot_tb: PASS (banner "BOOT 5A5A5A5A 00000000")
 
 Gowin V1.9.12.03 completes the flow for `GW1NR-LV9QN88PC6/I5` with no errors and
 no registers inferred as latches. Full output in
-`logs/02-fpga-build.log`.
+`logs/01-initial-bringup/02-fpga-build.log`.
 
 | Metric | Before this pass | After |
 |---|---|---|
@@ -837,7 +921,7 @@ memory rather than duplicating the 4 KB image, so the cost is one block, not two
 
 Board measurement has been repeated on the bitstream built from this tree.
 Programming reports `User Code is: 0x000003D3` and `Finished.`, and the capture
-in `logs/05-board-uart.log` closes the loop on
+in `logs/01-initial-bringup/05-board-uart.log` closes the loop on
 four of the findings at once:
 
 ```

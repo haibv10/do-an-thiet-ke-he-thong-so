@@ -1,5 +1,6 @@
 module cpu_top #(
-  parameter UART_CLKS_PER_BIT = 234
+  parameter UART_CLKS_PER_BIT = 234,
+  parameter SPI_CLK_DIV = 2
 ) (
   input  wire clk,
   input  wire rst_n,
@@ -7,7 +8,12 @@ module cpu_top #(
   input  wire uart_rx_in,
   output wire uart_tx_out,
   inout wire i2c_sda,
-  inout wire i2c_scl
+  inout wire i2c_scl,
+  output wire spi_sck_out,
+  output wire spi_mosi_out,
+  output wire spi_cs_n_out,
+  output wire spi_dc_out,
+  output wire spi_rst_n_out
 );
 
   // Every sequential block below runs on the synchronised reset, never on the
@@ -209,9 +215,9 @@ module cpu_top #(
   );
 
   // --- MEM: memory, byte alignment and MMIO ---
-  wire we_gpio, we_uart, we_i2c;
+  wire we_gpio, we_uart, we_i2c, we_spi;
   wire [3:0]  we_dmem;
-  wire [31:0] dmem_rd, gpio_rd, uart_rd, i2c_rd, mem_read_data;
+  wire [31:0] dmem_rd, gpio_rd, uart_rd, i2c_rd, spi_rd, mem_read_data;
 
   wire i2c_tick;
 
@@ -244,8 +250,9 @@ module cpu_top #(
   cpu_address_decoder bus_matrix (
     .addr(mem_alu_result), .we_mask(mem_we_mask),
     .we_dmem(we_dmem), .we_gpio(we_gpio), .we_uart(we_uart), .we_i2c(we_i2c),
+    .we_spi(we_spi),
     .rd_rom(rom_rd), .rd_dmem(dmem_rd), .rd_gpio(gpio_rd), .rd_uart(uart_rd),
-    .rd_i2c(i2c_rd), .rd_out(mem_read_data)
+    .rd_i2c(i2c_rd), .rd_spi(spi_rd), .rd_out(mem_read_data)
   );
 
   mem_data_ram ram (
@@ -275,6 +282,15 @@ module cpu_top #(
   pcf8574_lcd_mmio lcd_port (
     .clk(clk), .tick(i2c_tick), .rst_n(rst_n_sync), .we(we_i2c), .a(mem_alu_result),
     .wd(mem_store_data), .rd(i2c_rd), .sda(i2c_sda), .scl(i2c_scl)
+  );
+
+  spi_mmio #(
+    .CLK_DIV(SPI_CLK_DIV)
+  ) display_port (
+    .clk(clk), .rst_n(rst_n_sync), .we(we_spi), .a(mem_alu_result),
+    .wd(mem_store_data), .rd(spi_rd),
+    .spi_sck(spi_sck_out), .spi_mosi(spi_mosi_out), .spi_cs_n(spi_cs_n_out),
+    .spi_dc(spi_dc_out), .spi_rst_n(spi_rst_n_out)
   );
 
   // Loads come back as a full word and are shifted down to the addressed byte.

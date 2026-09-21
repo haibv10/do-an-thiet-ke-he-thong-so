@@ -1,5 +1,6 @@
 #define GPIO_BASE     0x40000000
 #define UART_BASE     0x50000000
+#define I2C_BASE      0x60000000
 #define SPI_BASE      0x70000000
 
 #define LED_REG       (*((volatile unsigned int *) GPIO_BASE))
@@ -7,6 +8,9 @@
 #define UART_STAT_REG (*((volatile unsigned int *) (UART_BASE + 4)))
 #define UART_RX_REG   (*((volatile unsigned int *) (UART_BASE + 8)))
 #define UART_CTRL_REG (*((volatile unsigned int *) (UART_BASE + 12)))
+#define I2C_FRAME_REG (*((volatile unsigned int *) I2C_BASE))
+#define I2C_STAT_REG  (*((volatile unsigned int *) (I2C_BASE + 4)))
+#define I2C_DATA_REG  (*((volatile unsigned int *) (I2C_BASE + 8)))
 #define SPI_DATA_REG  (*((volatile unsigned int *) SPI_BASE))
 #define SPI_STAT_REG  (*((volatile unsigned int *) (SPI_BASE + 4)))
 #define SPI_CTRL_REG  (*((volatile unsigned int *) (SPI_BASE + 8)))
@@ -16,6 +20,18 @@
 #define UART_RX_OVERRUN 0x04
 #define UART_RX_LEVEL_MASK 0xf8
 #define UART_CTRL_CLEAR_OVERRUN 0x01
+#define I2C_BUSY      0x01
+#define I2C_ACK       0x02
+#define I2C_START     0x100
+#define I2C_STOP      0x200
+#define I2C_READ      0x400
+#define I2C_NACK      0x800
+
+// Fixed by the part: there are no address straps to scan.
+#define DS3231_WRITE  0xd0
+#define DS3231_READ   0xd1
+#define DS3231_TIME_BYTES 7
+
 #define SPI_BUSY      0x01
 #define SPI_CS_N      0x01
 #define SPI_DC        0x02
@@ -272,6 +288,90 @@ static void tft_colour_bars(void) {
   tft_fill_rect(2 * third, 0, TFT_WIDTH - 1, TFT_HEIGHT - 1, TFT_BLUE);
 }
 
+static void i2c_wait(void) {
+  while (I2C_STAT_REG & I2C_BUSY) {
+  }
+}
+
+// One store carries one frame. The acknowledge belongs to the frame that just
+// finished, so it is only meaningful once busy has fallen again.
+static int i2c_frame(unsigned int value) {
+  i2c_wait();
+  I2C_FRAME_REG = value;
+  i2c_wait();
+  return (I2C_STAT_REG & I2C_ACK) != 0;
+}
+
+// The peripheral has no stop-only operation, so releasing the bus after a
+// refused frame costs one throwaway byte. A slave that did not acknowledge is
+// not listening to it.
+static void i2c_release(void) {
+  i2c_frame(I2C_STOP | 0x00);
+}
+
+static int ds3231_read(unsigned char first, unsigned char *buffer,
+                       unsigned int count) {
+  unsigned int index;
+  unsigned int flags;
+
+  // Setting the pointer is a write; the read that follows turns the bus
+  // around with a repeated START rather than releasing it.
+  if (!i2c_frame(I2C_START | DS3231_WRITE)) {
+    i2c_release();
+    return 0;
+  }
+  if (!i2c_frame(first)) {
+    i2c_release();
+    return 0;
+  }
+  if (!i2c_frame(I2C_START | DS3231_READ)) {
+    i2c_release();
+    return 0;
+  }
+
+  for (index = 0; index < count; index++) {
+    flags = I2C_READ;
+    // A slave transmits until it is refused, so the last byte must be.
+    if (index == count - 1) flags |= I2C_NACK | I2C_STOP;
+    i2c_frame(flags);
+    buffer[index] = (unsigned char) I2C_DATA_REG;
+  }
+
+  return 1;
+}
+
+// The registers hold BCD, so printing a byte as two hex digits already reads
+// as the decimal value and needs no conversion.
+static void uart_bcd(unsigned char value) {
+  uart_putc(hex_digits[(value >> 4) & 0x0f]);
+  uart_putc(hex_digits[value & 0x0f]);
+}
+
+// Reading from register 0 snapshots the time into a second bank inside the
+// part, so the seven bytes cannot straddle a tick.
+static void ds3231_report(void) {
+  unsigned char time[DS3231_TIME_BYTES];
+
+  if (!ds3231_read(0x00, time, DS3231_TIME_BYTES)) {
+    uart_puts("RTC NACK\r\n");
+    return;
+  }
+
+  uart_puts("RTC 20");
+  uart_bcd(time[6]);                 // year
+  uart_putc('-');
+  uart_bcd(time[5] & 0x1f);          // month, without the century bit
+  uart_putc('-');
+  uart_bcd(time[4] & 0x3f);          // date
+  uart_putc(' ');
+  uart_bcd(time[2] & 0x3f);          // hours, 24 hour mode
+  uart_putc(':');
+  uart_bcd(time[1] & 0x7f);          // minutes
+  uart_putc(':');
+  uart_bcd(time[0] & 0x7f);          // seconds
+  uart_puts("\r\n");
+}
+
 int main(void) {
   unsigned int led = 0;
 
@@ -295,9 +395,9 @@ int main(void) {
       if ((unsigned char) UART_RX_REG == 'T') uart_fifo_test();
     }
 
-    // A periodic line separates a CPU that hung from a capture that never
-    // reached the terminal. The LED is the same evidence without a terminal.
-    uart_puts("ALIVE\r\n");
+    // The line is also the liveness signal: a CPU that hung prints nothing,
+    // and the LED says the same without a terminal.
+    ds3231_report();
     led = led ^ 1u;
     LED_REG = led;
     delay_cycles(27000000);

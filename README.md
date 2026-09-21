@@ -127,7 +127,7 @@ export GOWIN_ROOT=/home/haihbv/tools/Gowin_V1.9.12.03
 bash tools/run_tests.sh
 ```
 
-Runs 32 self-checking testbenches, ending with `firmware_boot_tb`, which boots
+Runs 33 self-checking testbenches, ending with `firmware_boot_tb`, which boots
 the real `sw/firmware.hex` image on the full SoC and decodes its UART output.
 Each prints `<name>: PASS`; the script stops at the first failure.
 
@@ -254,10 +254,10 @@ testbenches. It is verification only and is never synthesized.
 
 | Layer | Result |
 |---|---|
-| Simulation | 32 / 32 testbenches pass on Icarus Verilog 12.0 |
-| Timing | Fmax 31.143 MHz against a 27 MHz constraint, 0 setup and 0 hold violations |
+| Simulation | 33 / 33 testbenches pass on Icarus Verilog 12.0 |
+| Timing | Fmax 27.678 MHz against a 27 MHz constraint, 0 setup and 0 hold violations. The critical path is the ROM data window through the load formatter, and it moves with the firmware image |
 | Resources | Logic 3256 / 8640 (38%), registers 1598 / 6693 (24%), BSRAM 6 / 26 (24%) |
-| Hardware | Banner reads `BOOT 5A5A5A5A 00000000`, the ST7735 shows red, green and blue bars in that order; RX FIFO board protocol passes 16-byte, overrun and W1C cases |
+| Hardware | Banner reads `BOOT 5A5A5A5A 00000000`, the ST7735 shows red, green and blue bars in that order, and a DS3231 answers with its timekeeping registers and advancing seconds; RX FIFO board protocol passes 16-byte, overrun and W1C cases |
 
 Measurements and the logs behind them are in
 [docs/verification/rv32i_pipeline.md](docs/verification/rv32i_pipeline.md).

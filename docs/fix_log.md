@@ -103,11 +103,25 @@ register pointer and auto-increment. It is deliberately not named after a part:
 that shape is common to register-mapped I2C devices, and tying the master's
 own tests to one device would misplace the scope.
 
-**Verification.** The suite passes 32/32. The build reaches Fmax 31.143 MHz
-against the 27 MHz constraint with 0 setup and 0 hold violated endpoints; logic
-rises from 3234 to 3256, registers from 1506 to 1598, and I/O ports from 10 to
-12 as pins 31 and 32 come back. Not yet exercised on hardware: no DS3231 has
-been wired.
+**Verification.** The suite passes 33/33, including `cpu_i2c_tb`, which runs
+the whole read sequence from a program in ROM against the slave model. The
+build reaches 0 setup and 0 hold violated endpoints; logic rises from 3234 to
+3256, registers from 1506 to 1598, and I/O ports from 10 to 12 as pins 31 and
+32 come back.
+
+On the board a DS3231 on pins 31 and 32 answers and the seven timekeeping
+registers come back, with the seconds advancing between reads:
+
+```text
+RTC 2000-01-01 00:08:30
+RTC 2000-01-01 00:08:39
+RTC 2000-01-01 00:08:48
+```
+
+The date is the power-on default of a part whose time has never been set; what
+the capture proves is that the address is acknowledged, the repeated START
+turns the bus around, and the oscillator is running. Raw log:
+`logs/11-i2c-master/04-board.log`.
 
 ---
 

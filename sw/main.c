@@ -41,8 +41,11 @@ int main(void) {
   ui_draw_frame();
 
   while (1) {
-    if (uart_poll(&command) && command == 'W')
-      rtc_time_trusted = ds3231_set_from_uart();
+    if (uart_poll(&command) && command == 'W') {
+      // A rejected command never touched the clock, so it must not make a
+      // time that was already trusted disappear from the panel.
+      if (ds3231_set_from_uart()) rtc_time_trusted = 1;
+    }
 
     if (!ds3231_read_time(time)) {
       uart_puts("RTC NACK\r\n");

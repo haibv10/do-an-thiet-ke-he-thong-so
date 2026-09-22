@@ -11,6 +11,7 @@ Entries are newest first.
 
 - [2026-09-21 DS3231 validation](#2026-09-21-ds3231-validation)
   - [42. A stopped or impossible clock was still displayed as real](#42-a-stopped-or-impossible-clock-was-still-displayed-as-real)
+  - [43. Rejecting a new time hid a time that was already trusted](#43-rejecting-a-new-time-hid-a-time-that-was-already-trusted)
 - [2026-09-21 firmware layout](#2026-09-21-firmware-layout)
   - [40. Moving the ROM image quietly deleted the CPU](#40-moving-the-rom-image-quietly-deleted-the-cpu)
   - [41. The firmware was one file and three kinds of thing](#41-the-firmware-was-one-file-and-three-kinds-of-thing)
@@ -103,6 +104,25 @@ for that host compiler.
 builds at Fmax 31.317 MHz with 0 setup and 0 hold violations, using 3256 logic
 cells, 1598 registers and 12 BSRAM blocks. Hardware validation is not yet run
 for this change.
+
+### 43. Rejecting a new time hid a time that was already trusted
+
+**Defect.** `main()` assigned the return value from `ds3231_set_from_uart()`
+straight into `rtc_time_trusted`. A bad command is rejected before it writes
+the RTC and correctly returns zero, but that zero also revoked trust in the
+previously valid clock. The board capture shows `RTC SET RANGE` immediately
+followed by repeated `RTC INVALID`; reset then shows the original running time,
+proving the DS3231 itself was never changed. Raw log:
+`logs/16-ds3231-validation/04-board.log`.
+
+**Fix.** A successful set is the only command result that changes trust, and it
+changes it to one. Rejected, short or failed commands leave the previous trust
+state intact. A clock that began with OSF set remains untrusted until one valid
+set operation succeeds.
+
+**Verification.** The complete suite passes 34/34. Firmware rebuild succeeds,
+and the bitstream reaches Fmax 31.317 MHz with 0 setup and 0 hold violations.
+Hardware validation is pending.
 
 ---
 

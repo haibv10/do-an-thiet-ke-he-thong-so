@@ -200,6 +200,7 @@ behind the ROM size, the three external interfaces and the module boundaries.
 ```text
 .
 ├── README.md                       # Project setup and operating guide
+├── LICENSE                         # MIT License, copyright haibv10
 ├── PROJECT_DECISIONS.txt           # Short architecture decision notes
 ├── .gitignore                      # Local and generated file exclusions
 ├── fpga_project.gprj               # Gowin IDE project
@@ -277,3 +278,8 @@ The ST7735 interface has no read path. The DS3231 is used in 24-hour mode and
 the firmware represents years from 2000 through 2099. UART has no hardware
 flow control, and its receive FIFO can overflow when software does not consume
 bytes quickly enough.
+
+## License
+
+This project is released under the MIT License. Copyright (c) 2026 haibv10.
+See `LICENSE` for the full terms.

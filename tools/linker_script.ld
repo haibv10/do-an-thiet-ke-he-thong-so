@@ -1,6 +1,6 @@
 /* Memory map seen by the CPU. Region 0x0 is the instruction ROM, which the
  * address decoder also exposes read-only on the data bus, and region 0x2 is
- * the on-chip RAM. See docs/hardware/register_map.md for the peripherals. */
+ * the on-chip RAM. See README.md for the peripheral memory map. */
 MEMORY
 {
     ROM (rx)  : ORIGIN = 0x00000000, LENGTH = 8K

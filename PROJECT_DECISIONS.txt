@@ -1,0 +1,143 @@
+PROJECT DECISIONS
+=================
+
+Five-stage RV32I pipeline
+-------------------------
+The CPU uses IF, ID, EX, MEM and WB stages. Forwarding handles most data
+hazards, one-cycle interlocking handles load-use hazards, and taken control
+flow flushes the younger instructions. This keeps the datapath understandable
+while still demonstrating a real pipelined processor.
+
+Standard instructions for peripheral access
+-------------------------------------------
+GPIO, UART, I2C and SPI are memory mapped. The CPU uses ordinary loads and
+stores instead of custom peripheral instructions, so the core stays reusable
+and firmware can be written in C.
+
+Sparse region decoding
+----------------------
+The address decoder uses addr[31:28]: ROM is 0x0, RAM is 0x2, GPIO is 0x4,
+UART is 0x5, I2C is 0x6 and SPI is 0x7. High-nibble decoding costs less logic
+than full 32-bit address comparisons and leaves room inside each region.
+
+8 KB instruction ROM
+--------------------
+The original 4 KB ROM became too small after the DS3231 driver, ST7735 user
+interface and 8x8 ASCII font were added. The ROM was increased to 8 KB rather
+than deleting useful firmware. The linker region, Verilog array and HEX
+padding must always be changed together.
+
+4 KB data RAM
+-------------
+The firmware keeps only a small stack and a few globals in RAM. Fonts, strings
+and program code stay in ROM, so increasing data RAM would spend block memory
+without solving a measured capacity problem.
+
+Second ROM read port
+--------------------
+Instruction fetch and firmware loads both need ROM access. A second read port
+lets the CPU load strings, font data and the initial values of .data while the
+fetch path continues to read instructions.
+
+Registered ROM reads
+--------------------
+ROM output is registered on the falling clock edge so Gowin infers block RAM
+and the value is stable before the pipeline captures it on the next rising
+edge. Replacing it with an asynchronous array can move the ROM into logic and
+change timing and resource use.
+
+Committed firmware image
+------------------------
+rom/firmware.hex is generated but committed because simulation and synthesis
+both load it during elaboration. A fresh FPGA build therefore has a boot image
+even before the recipient rebuilds the C firmware.
+
+Single clock domain
+-------------------
+All sequential RTL runs from the 27 MHz board clock. Slower protocol timing is
+created with clock-enable pulses rather than new divided clocks, avoiding
+extra clock-domain crossings and generated-clock constraints.
+
+Reset synchronization
+---------------------
+The S2 reset asserts asynchronously so the design can stop immediately, then
+releases synchronously so every register leaves reset on a clock edge.
+
+UART for host control
+---------------------
+UART provides boot evidence, RTC status and the command used to set time. It
+avoids adding buttons or another input peripheral. RX uses a 16-byte FIFO;
+there is no hardware flow control, so software must consume input promptly.
+
+No UART TX FIFO
+---------------
+The transmitter keeps a simple busy handshake and firmware polls before every
+write. A TX FIFO implementation was removed after it failed on the board even
+though simulation passed; the smaller baseline is the board-verified path.
+
+I2C for the DS3231
+------------------
+The DS3231 exposes register data on a two-wire bus. The master supports both
+directions, repeated START and master ACK/NACK so firmware can write the
+register pointer, turn the bus around and read a consistent time snapshot.
+
+SPI for the ST7735
+------------------
+The display consumes many pixel bytes, so SPI is a better fit than I2C. The
+master uses mode 0, sends bytes MSB first and runs at 6.75 MHz. The breakout
+does not expose MISO, so the interface is deliberately write-only.
+
+UART, I2C and SPI have different jobs
+-------------------------------------
+I2C obtains stable time from the RTC, SPI moves display pixels efficiently,
+and UART connects the system to the host. Combining them would couple three
+different timing and framing contracts without saving useful hardware.
+
+Protocol RTL, device firmware
+-----------------------------
+uart_tx/uart_rx, i2c_master and spi_master implement wire timing. MMIO modules
+expose those engines to the CPU. DS3231 register meaning, ST7735 commands and
+screen layout remain in firmware because changing device policy should not
+require resynthesizing protocol RTL.
+
+Software layers
+---------------
+Firmware is split into bus access, device drivers and UI policy. i2c_bus and
+spi_bus know MMIO; ds3231_rtc and st7735_panel know device commands; ui_clock
+knows the screen layout; main only owns boot and the polling loop.
+
+RTC trust and validation
+------------------------
+The panel shows time only when the oscillator-stop flag is clear and every
+field forms a valid 24-hour calendar date. Valid BCD alone is insufficient:
+values such as 69 seconds or 30 February are decimal-looking but invalid.
+
+Full ASCII font in ROM
+----------------------
+One 8x8 font covers printable ASCII and is scaled in software for larger clock
+digits. Keeping one bitmap copy costs less ROM than storing separate small and
+large fonts.
+
+ST7735 pin selection
+--------------------
+Pins 25 through 29 form a free 3.3 V header run. The TF-card signals and the
+onboard RGB LCD connector are left alone, so the TFT does not contend with
+another board device.
+
+Library tests stay with libraries
+---------------------------------
+Reusable UART, I2C and SPI RTL keeps its unit testbench beside it. A library
+copied to another project therefore carries the test that defines its protocol
+contract. SoC integration tests stay under sim/.
+
+Firmware delay loop without LTO
+-------------------------------
+The delay loop is calibrated against the instruction shape produced by -O1.
+Link-time optimization is not enabled because cross-file inlining could change
+that loop and invalidate all firmware timing delays.
+
+Source handover scope
+---------------------
+The release keeps RTL, firmware, constraints, tests, ROM image and build tools.
+Development logs, reports, diagrams, internal rules and CI configuration are
+excluded because they are not required to build, program or operate the board.

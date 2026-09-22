@@ -57,9 +57,9 @@ run_test uart_tx_tb libs/uart/uart_tx.v libs/uart/uart_tx_tb.sv
 run_test uart_rx_tb libs/uart/uart_rx.v libs/uart/uart_rx_tb.sv
 run_test uart_mmio_tb libs/uart/uart_tx.v libs/uart/uart_rx.v source/peripheral/uart_mmio.v sim/peripheral/uart_mmio_tb.sv
 run_test i2c_master_tb source/common/clock_enable.v libs/i2c/i2c_master.v \
-  libs/i2c/i2c_slave_model.sv libs/i2c/i2c_master_tb.sv
+  libs/i2c/i2c_register_slave_model.sv libs/i2c/i2c_master_tb.sv
 run_test i2c_mmio_tb \
-  source/common/clock_enable.v libs/i2c/i2c_master.v libs/i2c/i2c_slave_model.sv \
+  source/common/clock_enable.v libs/i2c/i2c_master.v libs/i2c/i2c_register_slave_model.sv \
   source/peripheral/i2c_mmio.v sim/peripheral/i2c_mmio_tb.sv
 run_test spi_master_tb libs/spi/spi_master.v libs/spi/spi_master_tb.sv
 run_test spi_mmio_tb libs/spi/spi_master.v source/peripheral/spi_mmio.v sim/peripheral/spi_mmio_tb.sv
@@ -71,7 +71,7 @@ run_test cpu_hazard_tb "${cpu_sources[@]}" sim/cpu/cpu_hazard_tb.sv
 run_test cpu_auipc_tb "${cpu_sources[@]}" sim/cpu/cpu_auipc_tb.sv
 run_test cpu_uart_hex_tb "${cpu_sources[@]}" sim/cpu/cpu_uart_hex_tb.sv
 run_test cpu_uart_fifo_tb "${cpu_sources[@]}" sim/cpu/cpu_uart_fifo_tb.sv
-run_test cpu_i2c_tb "${cpu_sources[@]}" libs/i2c/i2c_slave_model.sv sim/cpu/cpu_i2c_tb.sv
+run_test cpu_i2c_tb "${cpu_sources[@]}" libs/i2c/i2c_register_slave_model.sv sim/cpu/cpu_i2c_tb.sv
 run_test cpu_spi_tb "${cpu_sources[@]}" sim/cpu/cpu_spi_tb.sv
 run_test cpu_fence_tb "${cpu_sources[@]}" sim/cpu/cpu_fence_tb.sv
 run_test cpu_firmware_boot_tb "${cpu_sources[@]}" sim/cpu/cpu_firmware_boot_tb.sv

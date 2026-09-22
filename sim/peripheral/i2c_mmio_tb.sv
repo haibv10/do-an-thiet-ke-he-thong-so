@@ -46,7 +46,7 @@ module i2c_mmio_tb;
     .clk, .tick, .rst_n, .we, .a, .wd, .rd, .sda, .scl
   );
 
-  i2c_slave_model #(.ADDRESS(SLAVE_ADDRESS)) slave (.sda, .scl);
+  i2c_register_slave_model #(.ADDRESS(SLAVE_ADDRESS)) slave (.sda, .scl);
 
   task automatic bus_write(input logic [31:0] addr, input logic [31:0] value);
     begin

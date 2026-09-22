@@ -1,304 +1,263 @@
-# RV32I SoC for Tang Nano 9K
+# RV32I FPGA Digital System
 
-[![CI](https://github.com/haibv10/do-an-thiet-ke-he-thong-so/actions/workflows/ci.yml/badge.svg)](https://github.com/haibv10/do-an-thiet-ke-he-thong-so/actions/workflows/ci.yml)
+This project implements a complete digital system on a Tang Nano 9K. At its
+centre is a five-stage RV32I processor written in Verilog. The processor boots
+C firmware from an 8 KB instruction ROM, uses 4 KB of data RAM, reads date and
+time from a DS3231 over I2C, and renders a clock interface on an ST7735
+128x160 TFT over SPI. An external USB-UART provides the boot log and a command
+for setting the RTC from a host computer.
 
-> A 32-bit RISC-V system-on-chip written from scratch in Verilog, running on a
-> Gowin GW1NR-9C FPGA.
+The CPU implements the RV32I integer datapath with IF, ID, EX, MEM and WB
+stages. Forwarding, load-use interlocking and control-flow flushing are handled
+in hardware. GPIO, UART, I2C and SPI are ordinary memory-mapped peripherals, so
+firmware reaches them with normal loads and stores rather than custom CPU
+instructions.
 
-The core is a five-stage RV32I pipeline with full forwarding, load-use
-interlocking and branch flushing. Around it sit on-chip instruction and data
-memory plus four peripherals — GPIO, UART, I2C and SPI — all reachable through a
-single memory-mapped bus. The CPU has no special instructions for hardware: an
-address decoder turns ordinary `lw` and `sw` into peripheral access.
+## Hardware and pinout
 
-Firmware is written in C, compiled with the standard RISC-V toolchain and linked
-into the bitstream as ROM contents.
+The target is a Tang Nano 9K carrying a Gowin GW1NR-LV9QN88PC6/I5 and using
+the onboard 27 MHz oscillator. The external modules must share ground with the
+FPGA. The ST7735 and DS3231 are powered from 3.3 V. SDA and SCL must never be
+pulled up to 5 V, and the TFT backlight pin is tied directly to 3.3 V instead
+of being driven by an FPGA I/O pin.
 
-```c
-/* Blink the LED from software. That is the whole driver. */
-*(volatile unsigned int *)0x40000000 = 1;
+| Tang Nano 9K pin | RTL signal | Connection |
+|---|---|---|
+| 52 | `clk` | Onboard 27 MHz oscillator |
+| 3 | `rst_n` | Onboard S2 reset button |
+| 10 | `led_out` | Onboard active-low LED |
+| 34 | `uart_tx_out` | RXD on the external USB-UART |
+| 33 | `uart_rx_in` | TXD on the external USB-UART |
+| 31 | `i2c_sda` | SDA on the DS3231 |
+| 32 | `i2c_scl` | SCL on the DS3231 |
+| 25 | `spi_sck_out` | SCK on the ST7735 |
+| 26 | `spi_mosi_out` | SDA or MOSI on the ST7735 |
+| 27 | `spi_cs_n_out` | CS on the ST7735 |
+| 28 | `spi_dc_out` | AO or DC on the ST7735 |
+| 29 | `spi_rst_n_out` | RESET on the ST7735 |
+| 3V3 | — | VCC on the DS3231; VCC and LED on the ST7735 |
+| GND | — | DS3231, ST7735 and USB-UART ground |
+
+UART is crossed: FPGA TX connects to adapter RXD, and FPGA RX connects to
+adapter TXD. Pins 25 through 29 are used for the external TFT rather than the
+Tang Nano TF-card signals. The SPI link is write-only because the TFT breakout
+does not expose MISO.
+
+## System architecture
+
+The instruction ROM occupies region `0x0` and also has a second port for
+firmware constants and the load image of `.data`. Data RAM occupies region
+`0x2`. The four peripherals use one region each:
+
+| Base address | Device | Purpose |
+|---|---|---|
+| `0x00000000` | Instruction ROM | Instructions, `.rodata` and `.data` load image |
+| `0x20000000` | Data RAM | Globals, `.bss` and stack |
+| `0x40000000` | GPIO | Onboard LED |
+| `0x50000000` | UART | 115200 8N1 transmit and 16-byte receive FIFO |
+| `0x60000000` | I2C | Bidirectional DS3231 transactions at 50 kHz |
+| `0x70000000` | SPI | Write-only ST7735 transfers at 6.75 MHz |
+
+The I2C master supports repeated START, slave ACK and master ACK/NACK, allowing
+firmware to set a register pointer and turn the bus around for a read. The SPI
+master operates in mode 0 and shifts bytes most-significant bit first. The
+firmware validates the DS3231 oscillator-stop flag, 24-hour mode, BCD fields,
+field ranges and calendar date before presenting the value as a real clock.
+
+## Toolchain
+
+The command-line flow uses Icarus Verilog for RTL simulation, the bare-metal
+RISC-V GCC toolchain for firmware, picocom for the serial console, and Gowin
+EDA V1.9.12.03 for synthesis, place and route, bitstream generation and SRAM
+programming. Install the Ubuntu packages with:
+
+```bash
+sudo apt update
+sudo apt install -y \
+  build-essential \
+  gcc-riscv64-unknown-elf \
+  iverilog \
+  picocom
 ```
 
----
-
-## Contents
-
-- [Features](#features)
-- [Architecture](#architecture)
-- [Memory map](#memory-map)
-- [Getting started](#getting-started)
-- [Hardware setup](#hardware-setup)
-- [Repository layout](#repository-layout)
-- [Verification](#verification)
-- [Known limitations](#known-limitations)
-- [Documentation](#documentation)
-
-## Features
-
-- **RV32I core** — 38 of the 40 base instructions, five-stage pipeline
-- **Hazard handling** — EX/MEM and MEM/WB forwarding, a write-first register
-  file bypass, one-cycle load-use stall, two-cycle branch flush
-- **Sub-word memory access** — `LB`, `LBU`, `LH`, `LHU`, `LW`, `SB`, `SH`, `SW`
-  through a byte-alignment stage
-- **Memory-mapped I/O** — one address decoder, six regions, no peripheral-specific
-  CPU instructions
-- **UART** — 115200 8N1, memory-mapped transmit and 16-byte receive FIFO
-- **I2C** — master in both directions, one frame per store, with repeated START
-  for register reads
-- **SPI** — write-only mode 0 master for an ST7735 128x160 TFT, with chip select,
-  data/command and panel reset held in software
-- **Firmware** — reads the DS3231 over I2C and draws the date and time on the
-  panel from an 8x8 ASCII font in ROM, and refuses to draw registers that do
-  not form a trusted 24-hour calendar time
-- **Headless toolflow** — simulation, synthesis, place and route and programming
-  all run from the command line
-
-## Architecture
+The commands below use Gowin from this installation path:
 
 ```text
-   ┌──────────────┐          ┌────────────────────────────────┐
-   │    IMEM      │  instr   │   RV32I CPU — 5-stage pipeline  │
-   │  ROM 8 KB    │ ───────► │      IF · ID · EX · MEM · WB    │
-   └──────────────┘          └────────────────┬───────────────┘
-                                              │ addr · wdata · we_mask
-                                              ▼
-                              ┌───────────────────────────────┐
-                              │        ADDRESS DECODER        │
-                              │     selects on addr[31:28]    │
-                              └──┬─────┬───────┬───────┬──────┬┘
-                                0x2   0x4     0x5     0x6    0x7
-                                 ▼     ▼       ▼       ▼      ▼
-                            ┌───────┐┌──────┐┌──────┐┌─────┐┌───────┐
-                            │ DMEM  ││ GPIO ││ UART ││ I2C ││  SPI  │
-                            │RAM 4K ││      ││ 8N1  ││50kHz││mode 0 │
-                            └───────┘└──┬───┘└──┬───┘└──┬──┘└───┬───┘
-                                        ▼       ▼       ▼       ▼
-                                      LED    laptop  DS3231  ST7735
+/home/haihbv/tools/Gowin_V1.9.12.03
 ```
 
-Branches resolve in EX, so a taken branch costs two cycles. There is no branch
-predictor; the design trades those cycles for a simpler control path.
-
-The reset input passes through its required clock-domain protection before the
-design uses it. Reset releases in step with the clock rather than whenever the
-contact happens to open.
-
-The ROM has a second read port wired to the same decoder, so loads from region
-`0x0` reach `.rodata` and the load image of `.data`. That is what lets the
-firmware use string literals and initialised globals.
-
-## Memory map
-
-| `addr[31:28]` | Base | Device | Notes |
-|---|---|---|---|
-| `0x0` | `0x00000000` | Instruction memory, 8 KB | Fetch, plus read-only data access for `.rodata` and the `.data` load image |
-| `0x2` | `0x20000000` | Data memory, 4 KB | Globals and stack |
-| `0x4` | `0x40000000` | GPIO | LED output |
-| `0x5` | `0x50000000` | UART | 115200 8N1, TX and RX |
-| `0x6` | `0x60000000` | I2C | 50 kHz master, read and write |
-| `0x7` | `0x70000000` | SPI | ST7735 128x160 TFT, write only |
-
-Per-register details are in [docs/hardware/register_map.md](docs/hardware/register_map.md).
-
-## Getting started
-
-### Prerequisites
-
-| Tool | Used for |
-|---|---|
-| Icarus Verilog ≥ 11 (`iverilog`, `vvp`) | Running the testbenches |
-| — | Also run on every push by [CI](.github/workflows/ci.yml) |
-| `riscv64-unknown-elf-gcc` and binutils | Compiling the firmware |
-| Gowin EDA V1.9.12.03 | Synthesis, place and route, bitstream |
-| `picocom` | Reading UART output from the board |
-
-Every command below is run from the repository root:
+Run every command from the project root:
 
 ```bash
 cd /home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so
 ```
 
-The Gowin flow needs `GOWIN_ROOT` exported first:
+## Test, build and program
 
-```bash
-export GOWIN_ROOT=/home/haihbv/tools/Gowin_V1.9.12.03
-```
-
-### Run the test suite
+Run the complete verification suite first. It contains 33 RTL testbenches and
+one host-side C test for DS3231 calendar validation:
 
 ```bash
 bash tools/run_tests.sh
 ```
 
-Runs 34 self-checking tests, ending with `firmware_boot_tb`, which boots
-the real `rom/firmware.hex` image on the full SoC and decodes its UART output.
-Each prints `<name>: PASS`; the script stops at the first failure.
-
-### Build the firmware
+A successful run prints 34 `PASS` lines. Build the firmware next. This command
+links the C and assembly sources and updates the ROM image committed at
+`rom/firmware.hex`:
 
 ```bash
 bash tools/build_firmware.sh
 ```
 
-Compiles the C and assembly in `sw/` into `rom/firmware.hex`. `mem_instruction_rom.v` reads
-that file with `$readmemh` at elaboration time, so rebuild the firmware before
-building a bitstream whenever the software changes.
-
-### Build the bitstream
+Generate the FPGA bitstream with the Gowin headless flow:
 
 ```bash
-bash tools/build_fpga.sh
+GOWIN_ROOT=/home/haihbv/tools/Gowin_V1.9.12.03 \
+  bash tools/build_fpga.sh
 ```
 
-Runs synthesis, place and route, timing analysis and bitstream generation,
-producing `build/gowin/impl/pnr/fpga_project.fs`. The build passes when the
-output contains `Timing analysis completed` and `Bitstream generation completed`
-with no `ERROR`.
-
-### Program the board
-
-Confirm the JTAG cable sees the device:
+The resulting SRAM image is
+`build/gowin/impl/pnr/fpga_project.fs`. Program it into the board with:
 
 ```bash
-sudo /home/haihbv/tools/Gowin_V1.9.12.03/Programmer/bin/programmer_cli \
-  --scan --cable-index 1 --channel 0
+sudo env GOWIN_ROOT=/home/haihbv/tools/Gowin_V1.9.12.03 \
+  bash tools/program_fpga.sh
 ```
 
-Write the bitstream into SRAM:
+A successful programming operation reaches 100 percent and ends with
+`Finished.`. The FPGA configuration is held in SRAM, so it must be programmed
+again after removing board power.
+
+## Console and RTC setup
+
+Open the external USB-UART at 115200 baud, then press S2 to capture the boot
+from its first line:
 
 ```bash
-sudo env GOWIN_ROOT=/home/haihbv/tools/Gowin_V1.9.12.03 bash tools/program_fpga.sh
+picocom -b 115200 --flow n /dev/ttyUSB0
 ```
 
-Programming succeeds when the output shows `Programming... 100%` and `Finished.`
-SRAM is volatile — the bitstream is lost when the board loses power.
-
-### Watch the UART output
-
-Find the external USB-UART module; do not open either FT2232 interface used by
-the Tang Nano board:
-
-```bash
-ls -l /dev/serial/by-id/
-picocom -b 115200 --flow n /dev/serial/by-id/<external-usb-uart>
-```
-
-Press the **S2** reset button on the board to catch the `BOOT` line. Exit with
-`Ctrl-A` then `Ctrl-X`.
-
-The board has no idea what time it is, so the host tells it. With the terminal
-closed:
-
-```bash
-stty -F /dev/ttyUSB0 115200 raw -echo
-printf 'W%s' "$(date +%y%m%d%H%M%S)" > /dev/ttyUSB0
-```
-
-`W` takes twelve digits, `YYMMDDhhmmss`. The panel shows `NOT SET` until the
-DS3231 reports its oscillator never stopped and its registers form a valid
-24-hour calendar time.
-
-The shipped firmware prints a banner, brings the ST7735 up and draws three
-colour bars, then repeats a liveness line once a second:
+A valid boot produces output similar to:
 
 ```text
 BOOT 5A5A5A5A 00000000
 TFT INIT
 TFT BARS
-ALIVE
-ALIVE
+RTC OSF CLEAR
+RTC 2026-09-22 12:07:23
 ```
 
-`TFT BARS` without anything on the panel narrows the fault to the backlight or
-the wiring rather than the init sequence.
+The two banner words check firmware startup: the first comes from `.data` and
+the second from `.bss`. The TFT displays red, green and blue bars for one
+second before switching to the clock interface. If the RTC oscillator-stop
+flag is set or its registers do not contain a valid calendar value, the panel
+shows `NOT SET` instead of displaying an untrusted reading.
 
-The two words in the banner are a startup self-check: `5A5A5A5A` is a `.data`
-global, so it only reads back correctly if `startup.s` copied `.data` out of
-ROM, and `00000000` is a `.bss` global, so it only reads back as zero if
-`.bss` was cleared.
+To set the clock, exit picocom with `Ctrl-A`, then `Ctrl-X`. Configure the
+serial device and send `WYYMMDDhhmmss`. This example sets
+2026-09-22 12:30:00:
 
-## Hardware setup
+```bash
+stty -F /dev/ttyUSB0 115200 raw -echo
+printf 'W260922123000' > /dev/ttyUSB0
+```
 
-| FPGA pin | Signal | Connects to |
-|---|---|---|
-| 52 | `clk` | 27 MHz onboard oscillator |
-| 3 | `rst_n` | Button S2 |
-| 10 | `led_out` | Onboard LED (active low) |
-| 34 | `uart_tx_out` | RXD on the external USB-UART module |
-| 33 | `uart_rx_in` | TXD on the external USB-UART module |
-| 25 | `spi_sck_out` | SCK on the ST7735 module |
-| 26 | `spi_mosi_out` | SDA on the ST7735 module |
-| 27 | `spi_cs_n_out` | CS on the ST7735 module |
-| 28 | `spi_dc_out` | AO on the ST7735 module |
-| 29 | `spi_rst_n_out` | RESET on the ST7735 module |
-| 31 | `i2c_sda` | SDA on the DS3231 module |
-| 32 | `i2c_scl` | SCL on the DS3231 module |
+The firmware replies with `RTC SET OK`. An impossible date is rejected without
+changing a clock that was already trusted:
 
-Cross UART TX and RX, and share a ground. The I2C pins are in bank 2 and run
-at 3.3 V — do not pull SDA or SCL up to 5 V even if the slave is powered from
-5 V.
+```bash
+printf 'W260231120000' > /dev/ttyUSB0
+```
 
-Power the ST7735 module from 3V3, not the 5V pin: bank 2 drives 3.3 V logic.
-Tie its `LED` pin straight to 3V3 — the backlight draws more than the 8 mA the
-IO pins are set to drive. Pins 25 through 30 are the only run of bank 2 header
-pins with no onboard component on them; 36 through 39 sit next to them but
-belong to the TF card slot. Pin 30 is left free for backlight control through a
-transistor.
+The response is `RTC SET RANGE`, and the existing time continues to run.
 
-Board-specific pitfalls, including how to tell the external UART node from the
-FT2232 JTAG channel, are collected in [docs/bringup.md](docs/bringup.md).
+## Source tree
 
-## Repository layout
+The tree is split by responsibility rather than by tool. `source/` contains
+the SoC RTL, `libs/` contains reusable protocol engines and their unit tests,
+and `sim/` contains integration and peripheral testbenches. Firmware is kept
+under `sw/`; its generated boot image is committed under `rom/` because the
+instruction ROM reads it during elaboration. Build, test and programming logic
+is kept under `tools/`. `PROJECT_DECISIONS.txt` briefly records the reasons
+behind the ROM size, the three external interfaces and the module boundaries.
 
-| Path | Contents |
-|---|---|
-| `source/` | CPU RTL, peripherals and common modules. `source/cpu/cpu_top.v` is the top module |
-| `libs/` | Reusable protocol blocks. Each library keeps its RTL and unit testbench together |
-| `constr/` | Pin (`.cst`) and timing (`.sdc`) constraints |
-| `sw/` | Firmware source only: one module per bus, per device and per screen |
-| `rom/` | `firmware.hex`, the image the ROM loads at elaboration. Generated, but committed because simulation and synthesis both read it |
-| `sim/` | Testbenches for `source/`, one `sim/` directory per `source/` directory; `sim/support/` holds shared fixtures |
-| `tools/` | Scripts for firmware, bitstream, programming and tests |
-| `docs/` | Design report, register map, bring-up notes, verification results |
-| `rules/` | Coding style, commit and branching conventions |
-| `build/` | Generated output, not committed |
+```text
+.
+├── README.md                       # Project setup and operating guide
+├── PROJECT_DECISIONS.txt           # Short architecture decision notes
+├── .gitignore                      # Local and generated file exclusions
+├── fpga_project.gprj               # Gowin IDE project
+│
+├── constr/                         # Tang Nano 9K constraints
+│   ├── fpga_project.cst            # Physical pin assignments
+│   └── fpga_project.sdc            # 27 MHz timing constraint
+│
+├── source/                         # Synthesizable SoC RTL
+│   ├── common/                     # Shared clock and reset blocks
+│   │   ├── clock_enable.v
+│   │   └── reset_sync.v
+│   ├── cpu/                        # RV32I core, pipeline and memories
+│   │   ├── cpu_top.v               # FPGA top module
+│   │   ├── cpu_address_decoder.v   # ROM, RAM and MMIO region decoder
+│   │   ├── core_*.v                # ALU, control, PC and register file
+│   │   ├── pipe_*.v                # Pipeline registers and hazards
+│   │   └── mem_*.v                 # Instruction ROM and data RAM
+│   └── peripheral/                 # CPU-facing MMIO wrappers
+│       ├── gpio_mmio.v
+│       ├── uart_mmio.v
+│       ├── i2c_mmio.v
+│       └── spi_mmio.v
+│
+├── libs/                           # Reusable serial protocol engines
+│   ├── uart/
+│   │   ├── uart_tx.v
+│   │   ├── uart_rx.v
+│   │   └── *_tb.sv                 # UART unit tests
+│   ├── i2c/
+│   │   ├── i2c_master.v
+│   │   ├── i2c_master_tb.sv
+│   │   └── i2c_register_slave_model.sv  # Generic test slave
+│   └── spi/
+│       ├── spi_master.v
+│       └── spi_master_tb.sv
+│
+├── sim/                            # Source-level integration tests
+│   ├── common/                     # Common RTL tests
+│   ├── cpu/                        # Core and full-SoC tests
+│   ├── firmware/                   # Host-side firmware tests
+│   ├── peripheral/                 # MMIO wrapper tests
+│   └── support/
+│       └── imem_test.hex           # Small ROM image used by ROM tests
+│
+├── sw/                             # Bare-metal firmware source
+│   ├── main.c                      # Boot and main clock loop
+│   ├── startup.s                   # .data/.bss setup and stack entry
+│   ├── sys_delay.*                 # Calibrated busy-loop delay
+│   ├── gpio_led.*                  # Onboard LED access
+│   ├── uart_io.*                   # Console output and input
+│   ├── i2c_bus.*                   # I2C MMIO frame access
+│   ├── spi_bus.*                   # SPI MMIO byte access
+│   ├── ds3231_rtc.*                # RTC read, validation and setup
+│   ├── st7735_panel.*              # Panel init and drawing primitives
+│   ├── font_8x8.*                  # Printable ASCII bitmap font
+│   └── ui_clock.*                  # Clock screen layout
+│
+├── rom/
+│   └── firmware.hex                # 8 KB instruction ROM image
+│
+└── tools/                          # Reproducible command-line flow
+    ├── run_tests.sh                # Run all 34 tests
+    ├── build_firmware.sh           # Compile firmware and update ROM image
+    ├── linker_script.ld            # 8 KB ROM and 4 KB RAM layout
+    ├── make_hex.py                 # Pad binary to the ROM depth
+    ├── build_fpga.sh               # Start the headless Gowin build
+    ├── build_gowin.tcl             # Gowin synthesis/P&R file list
+    └── program_fpga.sh             # Program the SRAM bitstream
+```
 
-`libs/i2c/i2c_slave_model.sv` is a behavioural slave used by the I2C
-testbenches. It is verification only and is never synthesized.
+## Limitations
 
-## Verification
-
-| Layer | Result |
-|---|---|
-| Simulation | 34 / 34 tests pass: 33 RTL testbenches on Icarus Verilog 12.0 and one host-side DS3231 calendar validation test |
-| Timing | Fmax 31.317 MHz against a 27 MHz constraint, 0 setup and 0 hold violations. The critical path is the ROM data window through the load formatter, and it moves with the firmware image |
-| Resources | Logic 3256 / 8640 (38%), registers 1598 / 6693 (24%), BSRAM 12 / 26 (47%) |
-| Hardware | Banner reads `BOOT 5A5A5A5A 00000000`, the ST7735 shows red, green and blue bars and then the date and time from the DS3231, whose oscillator stop flag reads clear and whose time survives reprogramming. The 4392-byte image runs from beyond the old 4 KB ROM boundary. The RX FIFO board protocol passed its 16-byte, overrun and W1C cases when it was run; that firmware has since been retired to make ROM room and the result is kept in the fix log |
-
-Measurements and the logs behind them are in
-[docs/verification/rv32i_pipeline.md](docs/verification/rv32i_pipeline.md).
-
-## Known limitations
-
-- **UART RX has no flow control.** Its 16-byte FIFO absorbs short bursts and
-  reports overrun, but a sustained stream faster than software can consume
-  still loses bytes.
-- **ECALL and EBREAK are not implemented.** The core covers 38 of the 40 RV32I
-  base instructions; there is no trap or privilege machinery for them to hook into.
-- **Timing margin is 12%.** Fmax 30.210 MHz against the 27 MHz oscillator. The
-  binding path is the half-cycle memory read into MEM/WB.
-
-Defects found and fixed, each with the evidence behind it, are recorded in
-[docs/fix_log.md](docs/fix_log.md).
-
-## Documentation
-
-| Document | Contents |
-|---|---|
-| [docs/design_report.md](docs/design_report.md) | Full design report |
-| [docs/hardware/register_map.md](docs/hardware/register_map.md) | MMIO register reference |
-| [docs/bringup.md](docs/bringup.md) | Board bring-up procedure and pitfalls |
-| [docs/fix_log.md](docs/fix_log.md) | Defects found, fixes applied and the evidence for each |
-| [docs/verification/rv32i_pipeline.md](docs/verification/rv32i_pipeline.md) | Simulation, timing and hardware results |
-| [rules/](rules/) | Coding style, commit style, git flow |
-| [docs/images/README.md](docs/images/README.md) | What each figure shows, and which ones are not from this project |
+The ST7735 interface has no read path. The DS3231 is used in 24-hour mode and
+the firmware represents years from 2000 through 2099. UART has no hardware
+flow control, and its receive FIFO can overflow when software does not consume
+bytes quickly enough.

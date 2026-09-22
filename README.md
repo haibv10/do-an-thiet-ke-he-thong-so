@@ -13,6 +13,16 @@ Design and implement a complete FPGA-based digital system around a five-stage
 RV32I processor, using I2C to read time from a DS3231, SPI to display the clock
 on an ST7735 TFT, and UART to communicate with a host computer.
 
+## RV32I processor
+
+RV32I is the 32-bit base integer instruction set of RISC-V. The processor
+implements integer arithmetic and logic, shifts, signed and unsigned
+comparisons, conditional branches, `JAL`, `JALR`, `LUI`, `AUIPC`, byte and
+halfword loads and stores, word loads and stores, and `FENCE` as an ordering
+no-op because the core is in-order and has no cache or write buffer. `ECALL`
+and `EBREAK` are not implemented. Multiplication, division, floating point,
+caches, virtual memory and an operating system are outside this design.
+
 The CPU implements the RV32I integer datapath with IF, ID, EX, MEM and WB
 stages. Forwarding, load-use interlocking and control-flow flushing are handled
 in hardware. GPIO, UART, I2C and SPI are ordinary memory-mapped peripherals, so

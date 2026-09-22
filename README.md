@@ -1,126 +1,263 @@
-# RISC-V SoC trên FPGA
+# RV32I FPGA Digital System
 
-## Mục tiêu project
+This project implements a complete digital system on a Tang Nano 9K. At its
+centre is a five-stage RV32I processor written in Verilog. The processor boots
+C firmware from an 8 KB instruction ROM, uses 4 KB of data RAM, reads date and
+time from a DS3231 over I2C, and renders a clock interface on an ST7735
+128x160 TFT over SPI. An external USB-UART provides the boot log and a command
+for setting the RTC from a host computer.
 
-Project hướng tới thiết kế một **System-on-Chip (SoC)** bằng Verilog/SystemVerilog và triển khai trên kit FPGA.
-SoC sử dụng CPU RISC-V RV32I 32-bit làm trung tâm xử lý. CPU sẽ chạy chương trình trong Instruction Memory,
-truy cập Data Memory và điều khiển các peripheral thông qua cơ chế **Memory-Mapped I/O**.
+The CPU implements the RV32I integer datapath with IF, ID, EX, MEM and WB
+stages. Forwarding, load-use interlocking and control-flow flushing are handled
+in hardware. GPIO, UART, I2C and SPI are ordinary memory-mapped peripherals, so
+firmware reaches them with normal loads and stores rather than custom CPU
+instructions.
 
-Mục tiêu của project là xây dựng một hệ thống có cách hoạt động tương tự một vi điều khiển đơn giản:
-software chạy trên CPU sẽ đọc input, xử lý dữ liệu và điều khiển các thiết bị bên ngoài thông qua các địa chỉ
-được ánh xạ trong không gian memory.
+## Hardware and pinout
 
-## Kiến trúc dự kiến
+The target is a Tang Nano 9K carrying a Gowin GW1NR-LV9QN88PC6/I5 and using
+the onboard 27 MHz oscillator. The external modules must share ground with the
+FPGA. The ST7735 and DS3231 are powered from 3.3 V. SDA and SCL must never be
+pulled up to 5 V, and the TFT backlight pin is tied directly to 3.3 V instead
+of being driven by an FPGA I/O pin.
 
-```text
-                         RISC-V RV32I CPU
-                                  │
-                ┌─────────────────┴─────────────────┐
-                │                                   │
-        Instruction bus                       Data/MMIO bus
-                │                                   │
-       Instruction Memory                  Address Decoder
-                                                    │
-                                  ┌─────────────────┼─────────────────┐
-                                  │                 │                 │
-                             Data Memory         GPIO              UART
-                                  │                 │                 │
-                                  │           LED/Switch       Laptop terminal
-                                  │
-                                  └────────────── I2C ────────────────┐
-                                                                         │
-                                                                        LCD
+| Tang Nano 9K pin | RTL signal | Connection |
+|---|---|---|
+| 52 | `clk` | Onboard 27 MHz oscillator |
+| 3 | `rst_n` | Onboard S2 reset button |
+| 10 | `led_out` | Onboard active-low LED |
+| 34 | `uart_tx_out` | RXD on the external USB-UART |
+| 33 | `uart_rx_in` | TXD on the external USB-UART |
+| 31 | `i2c_sda` | SDA on the DS3231 |
+| 32 | `i2c_scl` | SCL on the DS3231 |
+| 25 | `spi_sck_out` | SCK on the ST7735 |
+| 26 | `spi_mosi_out` | SDA or MOSI on the ST7735 |
+| 27 | `spi_cs_n_out` | CS on the ST7735 |
+| 28 | `spi_dc_out` | AO or DC on the ST7735 |
+| 29 | `spi_rst_n_out` | RESET on the ST7735 |
+| 3V3 | — | VCC on the DS3231; VCC and LED on the ST7735 |
+| GND | — | DS3231, ST7735 and USB-UART ground |
+
+UART is crossed: FPGA TX connects to adapter RXD, and FPGA RX connects to
+adapter TXD. Pins 25 through 29 are used for the external TFT rather than the
+Tang Nano TF-card signals. The SPI link is write-only because the TFT breakout
+does not expose MISO.
+
+## System architecture
+
+The instruction ROM occupies region `0x0` and also has a second port for
+firmware constants and the load image of `.data`. Data RAM occupies region
+`0x2`. The four peripherals use one region each:
+
+| Base address | Device | Purpose |
+|---|---|---|
+| `0x00000000` | Instruction ROM | Instructions, `.rodata` and `.data` load image |
+| `0x20000000` | Data RAM | Globals, `.bss` and stack |
+| `0x40000000` | GPIO | Onboard LED |
+| `0x50000000` | UART | 115200 8N1 transmit and 16-byte receive FIFO |
+| `0x60000000` | I2C | Bidirectional DS3231 transactions at 50 kHz |
+| `0x70000000` | SPI | Write-only ST7735 transfers at 6.75 MHz |
+
+The I2C master supports repeated START, slave ACK and master ACK/NACK, allowing
+firmware to set a register pointer and turn the bus around for a read. The SPI
+master operates in mode 0 and shifts bytes most-significant bit first. The
+firmware validates the DS3231 oscillator-stop flag, 24-hour mode, BCD fields,
+field ranges and calendar date before presenting the value as a real clock.
+
+## Toolchain
+
+The command-line flow uses Icarus Verilog for RTL simulation, the bare-metal
+RISC-V GCC toolchain for firmware, picocom for the serial console, and Gowin
+EDA V1.9.12.03 for synthesis, place and route, bitstream generation and SRAM
+programming. Install the Ubuntu packages with:
+
+```bash
+sudo apt update
+sudo apt install -y \
+  build-essential \
+  gcc-riscv64-unknown-elf \
+  iverilog \
+  picocom
 ```
 
-CPU được tổ chức theo pipeline 5 tầng:
+The commands below use Gowin from this installation path:
 
-1. **IF — Instruction Fetch:** lấy instruction từ Instruction Memory.
-2. **ID — Instruction Decode:** giải mã instruction và đọc Register File.
-3. **EX — Execute:** thực hiện phép toán hoặc tính địa chỉ.
-4. **MEM — Memory Access:** truy cập memory hoặc peripheral.
-5. **WB — Write Back:** ghi kết quả về Register File.
+```text
+/home/haihbv/tools/Gowin_V1.9.12.03
+```
 
-Các khối chính cần hoàn thiện gồm PC, ALU, Register File, Decoder, Control Unit, Immediate Generator,
-datapath pipeline, hazard handling, Instruction Memory, Data Memory và address decoder.
+Run every command from the project root:
 
-## Peripheral và chức năng demo
+```bash
+cd /home/haihbv/Desktop/work/fpga/thiet_ke_he_thong_so
+```
 
-### GPIO
+## Test, build and program
 
-GPIO dùng để đọc các input vật lý như switch hoặc button và điều khiển LED trên kit FPGA.
-Ví dụ demo: CPU đọc trạng thái switch rồi bật/tắt LED tương ứng. GPIO được truy cập thông qua các
-register Memory-Mapped I/O.
+Run the complete verification suite first. It contains 33 RTL testbenches and
+one host-side C test for DS3231 calendar validation:
 
-### UART
+```bash
+bash tools/run_tests.sh
+```
 
-UART dùng để giao tiếp serial giữa FPGA và laptop:
+A successful run prints 34 `PASS` lines. Build the firmware next. This command
+links the C and assembly sources and updates the ROM image committed at
+`rom/firmware.hex`:
 
-- `TX`: FPGA gửi thông báo khởi động, log debug hoặc kết quả xử lý tới terminal trên laptop.
-- `RX`: FPGA nhận lệnh hoặc dữ liệu từ laptop.
+```bash
+bash tools/build_firmware.sh
+```
 
-Tốc độ baud rate, cách ánh xạ register và giao diện vật lý sẽ được xác định theo kit FPGA và mạch
-USB-UART được sử dụng.
+Generate the FPGA bitstream with the Gowin headless flow:
 
-### I2C và LCD
+```bash
+GOWIN_ROOT=/home/haihbv/tools/Gowin_V1.9.12.03 \
+  bash tools/build_fpga.sh
+```
 
-I2C chỉ được sử dụng để demo điều khiển LCD. LCD có thể hiển thị thông báo khởi động, trạng thái input,
-kết quả xử lý hoặc dữ liệu nhận từ UART.
+The resulting SRAM image is
+`build/gowin/impl/pnr/fpga_project.fs`. Program it into the board with:
 
-Về kiến trúc SoC, I2C nên được tích hợp như một peripheral có các register Memory-Mapped I/O để software
-trên CPU điều khiển việc truyền dữ liệu tới LCD.
+```bash
+sudo env GOWIN_ROOT=/home/haihbv/tools/Gowin_V1.9.12.03 \
+  bash tools/program_fpga.sh
+```
 
-## Demo cuối cùng dự kiến
+A successful programming operation reaches 100 percent and ends with
+`Finished.`. The FPGA configuration is held in SRAM, so it must be programmed
+again after removing board power.
 
-Chương trình RISC-V chạy trên CPU sẽ thực hiện một chu trình đơn giản:
+## Console and RTC setup
 
-1. Khởi động và gửi thông báo tới laptop qua UART TX.
-2. Đọc switch hoặc button thông qua GPIO.
-3. Xử lý input và điều khiển LED.
-4. Hiển thị trạng thái hoặc kết quả lên LCD thông qua I2C.
-5. Có thể nhận lệnh điều khiển từ laptop qua UART RX.
+Open the external USB-UART at 115200 baud, then press S2 to capture the boot
+from its first line:
 
-Demo cần chứng minh rằng CPU có thể điều khiển GPIO, UART và I2C thông qua Memory-Mapped I/O.
+```bash
+picocom -b 115200 --flow n /dev/ttyUSB0
+```
 
-## Trạng thái hiện tại
+A valid boot produces output similar to:
 
-Project đang được phát triển theo từng lớp, từ các module cơ bản đến hệ thống SoC hoàn chỉnh.
-Phần I2C-LCD được xem là nền tảng cho peripheral hiển thị, nhưng chưa được kết nối với CPU thông qua
-Memory-Mapped I/O.
+```text
+BOOT 5A5A5A5A 00000000
+TFT INIT
+TFT BARS
+RTC OSF CLEAR
+RTC 2026-09-22 12:07:23
+```
 
-Các phần còn cần triển khai cho mục tiêu SoC gồm:
+The two banner words check firmware startup: the first comes from `.data` and
+the second from `.bss`. The TFT displays red, green and blue bars for one
+second before switching to the clock interface. If the RTC oscillator-stop
+flag is set or its registers do not contain a valid calendar value, the panel
+shows `NOT SET` instead of displaying an untrusted reading.
 
-- CPU RISC-V RV32I và pipeline 5 tầng.
-- Instruction Memory, Data Memory và address decoder.
-- UART TX/RX dạng Memory-Mapped peripheral.
-- GPIO dạng Memory-Mapped peripheral cho LED, switch và button.
-- I2C peripheral dạng Memory-Mapped để điều khiển LCD.
-- Chương trình firmware RISC-V dùng để chạy demo.
-- Simulation, verification, synthesis, timing analysis và triển khai trên FPGA.
+To set the clock, exit picocom with `Ctrl-A`, then `Ctrl-X`. Configure the
+serial device and send `WYYMMDDhhmmss`. This example sets
+2026-09-22 12:30:00:
 
-## Phạm vi project
+```bash
+stty -F /dev/ttyUSB0 115200 raw -echo
+printf 'W260922123000' > /dev/ttyUSB0
+```
 
-Project tập trung vào:
+The firmware replies with `RTC SET OK`. An impossible date is rejected without
+changing a clock that was already trusted:
 
-- CPU RISC-V RV32I 32-bit.
-- Pipeline 5 tầng và xử lý hazard cần thiết.
-- Instruction Memory và Data Memory.
-- Memory-Mapped I/O.
-- UART TX/RX với laptop.
-- GPIO cho LED, switch và button.
-- I2C cho LCD.
-- Simulation, verification và triển khai trên kit FPGA.
+```bash
+printf 'W260231120000' > /dev/ttyUSB0
+```
 
-Các thành phần không thuộc phạm vi hiện tại:
+The response is `RTC SET RANGE`, and the existing time continues to run.
 
-- Cache và MMU.
-- DDR và AXI.
-- Linux.
-- Multi-core.
-- FPU.
-- Out-of-Order Execution.
+## Source tree
 
-## Công cụ và phần cứng
+The tree is split by responsibility rather than by tool. `source/` contains
+the SoC RTL, `libs/` contains reusable protocol engines and their unit tests,
+and `sim/` contains integration and peripheral testbenches. Firmware is kept
+under `sw/`; its generated boot image is committed under `rom/` because the
+instruction ROM reads it during elaboration. Build, test and programming logic
+is kept under `tools/`. `PROJECT_DECISIONS.txt` briefly records the reasons
+behind the ROM size, the three external interfaces and the module boundaries.
 
-Project không bị ràng buộc trong README này bởi một FPGA vendor, kit cụ thể hoặc một công cụ EDA cụ thể.
-Các lựa chọn về FPGA kit, pin assignment, toolchain, synthesis tool và USB-UART interface sẽ được cập nhật
-theo phần cứng và môi trường triển khai thực tế.
+```text
+.
+├── README.md                       # Project setup and operating guide
+├── PROJECT_DECISIONS.txt           # Short architecture decision notes
+├── .gitignore                      # Local and generated file exclusions
+├── fpga_project.gprj               # Gowin IDE project
+│
+├── constr/                         # Tang Nano 9K constraints
+│   ├── fpga_project.cst            # Physical pin assignments
+│   └── fpga_project.sdc            # 27 MHz timing constraint
+│
+├── source/                         # Synthesizable SoC RTL
+│   ├── common/                     # Shared clock and reset blocks
+│   │   ├── clock_enable.v
+│   │   └── reset_sync.v
+│   ├── cpu/                        # RV32I core, pipeline and memories
+│   │   ├── cpu_top.v               # FPGA top module
+│   │   ├── cpu_address_decoder.v   # ROM, RAM and MMIO region decoder
+│   │   ├── core_*.v                # ALU, control, PC and register file
+│   │   ├── pipe_*.v                # Pipeline registers and hazards
+│   │   └── mem_*.v                 # Instruction ROM and data RAM
+│   └── peripheral/                 # CPU-facing MMIO wrappers
+│       ├── gpio_mmio.v
+│       ├── uart_mmio.v
+│       ├── i2c_mmio.v
+│       └── spi_mmio.v
+│
+├── libs/                           # Reusable serial protocol engines
+│   ├── uart/
+│   │   ├── uart_tx.v
+│   │   ├── uart_rx.v
+│   │   └── *_tb.sv                 # UART unit tests
+│   ├── i2c/
+│   │   ├── i2c_master.v
+│   │   ├── i2c_master_tb.sv
+│   │   └── i2c_register_slave_model.sv  # Generic test slave
+│   └── spi/
+│       ├── spi_master.v
+│       └── spi_master_tb.sv
+│
+├── sim/                            # Source-level integration tests
+│   ├── common/                     # Common RTL tests
+│   ├── cpu/                        # Core and full-SoC tests
+│   ├── firmware/                   # Host-side firmware tests
+│   ├── peripheral/                 # MMIO wrapper tests
+│   └── support/
+│       └── imem_test.hex           # Small ROM image used by ROM tests
+│
+├── sw/                             # Bare-metal firmware source
+│   ├── main.c                      # Boot and main clock loop
+│   ├── startup.s                   # .data/.bss setup and stack entry
+│   ├── sys_delay.*                 # Calibrated busy-loop delay
+│   ├── gpio_led.*                  # Onboard LED access
+│   ├── uart_io.*                   # Console output and input
+│   ├── i2c_bus.*                   # I2C MMIO frame access
+│   ├── spi_bus.*                   # SPI MMIO byte access
+│   ├── ds3231_rtc.*                # RTC read, validation and setup
+│   ├── st7735_panel.*              # Panel init and drawing primitives
+│   ├── font_8x8.*                  # Printable ASCII bitmap font
+│   └── ui_clock.*                  # Clock screen layout
+│
+├── rom/
+│   └── firmware.hex                # 8 KB instruction ROM image
+│
+└── tools/                          # Reproducible command-line flow
+    ├── run_tests.sh                # Run all 34 tests
+    ├── build_firmware.sh           # Compile firmware and update ROM image
+    ├── linker_script.ld            # 8 KB ROM and 4 KB RAM layout
+    ├── make_hex.py                 # Pad binary to the ROM depth
+    ├── build_fpga.sh               # Start the headless Gowin build
+    ├── build_gowin.tcl             # Gowin synthesis/P&R file list
+    └── program_fpga.sh             # Program the SRAM bitstream
+```
+
+## Limitations
+
+The ST7735 interface has no read path. The DS3231 is used in 24-hour mode and
+the firmware represents years from 2000 through 2099. UART has no hardware
+flow control, and its receive FIFO can overflow when software does not consume
+bytes quickly enough.

@@ -1,0 +1,46 @@
+// Pin constraints for Tang Nano 9K (GW1NR-LV9QN88PC6/I5)
+
+// 27 MHz onboard oscillator
+IO_LOC "clk" 52;
+IO_PORT "clk" PULL_MODE=UP;
+
+// Reset button S2
+IO_LOC "rst_n" 3;
+IO_PORT "rst_n" PULL_MODE=UP;
+
+// Onboard LED, active low
+IO_LOC "led_out" 10;
+IO_PORT "led_out" PULL_MODE=UP DRIVE=8;
+
+// UART TX to the RXD pin of the external USB-UART module
+IO_LOC "uart_tx_out" 34;
+IO_PORT "uart_tx_out" IO_TYPE=LVCMOS33 PULL_MODE=UP DRIVE=8;
+
+// UART RX from the TXD pin of the external USB-UART module
+IO_LOC "uart_rx_in" 33;
+IO_PORT "uart_rx_in" IO_TYPE=LVCMOS33 PULL_MODE=UP;
+
+// SPI to the ST7735 1.8" TFT module, wired to the header by jumper.
+// Pins 25 through 30 are the only run of bank 2 header pins with no onboard
+// component on them; 36 through 39 next to them belong to the TF card slot.
+IO_LOC "spi_sck_out" 25;
+IO_PORT "spi_sck_out" IO_TYPE=LVCMOS33 DRIVE=8;
+
+IO_LOC "spi_mosi_out" 26;
+IO_PORT "spi_mosi_out" IO_TYPE=LVCMOS33 DRIVE=8;
+
+IO_LOC "spi_cs_n_out" 27;
+IO_PORT "spi_cs_n_out" IO_TYPE=LVCMOS33 PULL_MODE=UP DRIVE=8;
+
+IO_LOC "spi_dc_out" 28;
+IO_PORT "spi_dc_out" IO_TYPE=LVCMOS33 DRIVE=8;
+
+IO_LOC "spi_rst_n_out" 29;
+IO_PORT "spi_rst_n_out" IO_TYPE=LVCMOS33 PULL_MODE=UP DRIVE=8;
+
+// I2C to the DS3231 real-time clock, open-drain with 3.3 V pull-ups
+IO_LOC "i2c_sda" 31;
+IO_PORT "i2c_sda" IO_TYPE=LVCMOS33 PULL_MODE=UP DRIVE=8;
+
+IO_LOC "i2c_scl" 32;
+IO_PORT "i2c_scl" IO_TYPE=LVCMOS33 PULL_MODE=UP;

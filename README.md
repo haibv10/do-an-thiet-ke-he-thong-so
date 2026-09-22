@@ -7,6 +7,12 @@ time from a DS3231 over I2C, and renders a clock interface on an ST7735
 128x160 TFT over SPI. An external USB-UART provides the boot log and a command
 for setting the RTC from a host computer.
 
+## Objective
+
+Design and implement a complete FPGA-based digital system around a five-stage
+RV32I processor, using I2C to read time from a DS3231, SPI to display the clock
+on an ST7735 TFT, and UART to communicate with a host computer.
+
 The CPU implements the RV32I integer datapath with IF, ID, EX, MEM and WB
 stages. Forwarding, load-use interlocking and control-flow flushing are handled
 in hardware. GPIO, UART, I2C and SPI are ordinary memory-mapped peripherals, so

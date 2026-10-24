@@ -25,8 +25,11 @@ cd "$build_dir"
   -mabi=ilp32 \
   -nostdlib \
   -O1 \
+  -ffunction-sections \
+  -fdata-sections \
   -msmall-data-limit=0 \
   -T "$repo_dir/tools/linker_script.ld" \
+  -Wl,--gc-sections \
   -Wl,-Map=firmware.map \
   "$sw_dir/startup.s" \
   "$sw_dir/main.c" \

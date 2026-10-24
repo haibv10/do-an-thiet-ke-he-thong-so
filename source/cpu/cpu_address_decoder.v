@@ -6,12 +6,14 @@ module cpu_address_decoder (
   output wire        we_uart,
   output wire        we_i2c,
   output wire        we_spi,
+  output wire        we_dht,
   input  wire [31:0] rd_rom,
   input  wire [31:0] rd_dmem,
   input  wire [31:0] rd_gpio,
   input  wire [31:0] rd_uart,
   input  wire [31:0] rd_i2c,
   input  wire [31:0] rd_spi,
+  input  wire [31:0] rd_dht,
   output reg  [31:0] rd_out
 );
   // Region 0x0 is the instruction ROM. It answers loads but has no write enable,
@@ -22,6 +24,7 @@ module cpu_address_decoder (
   assign we_uart = (addr[31:28] == 4'h5) ? we_mask[0] : 1'b0;
   assign we_i2c  = (addr[31:28] == 4'h6) ? we_mask[0] : 1'b0;
   assign we_spi  = (addr[31:28] == 4'h7) ? we_mask[0] : 1'b0;
+  assign we_dht  = (addr[31:28] == 4'h8) ? we_mask[0] : 1'b0;
 
   always @(*) begin
     case (addr[31:28])
@@ -31,6 +34,7 @@ module cpu_address_decoder (
       4'h5: rd_out = rd_uart;
       4'h6: rd_out = rd_i2c;
       4'h7: rd_out = rd_spi;
+      4'h8: rd_out = rd_dht;
       default: rd_out = 32'd0;
     endcase
   end

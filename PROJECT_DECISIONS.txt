@@ -10,15 +10,16 @@ while still demonstrating a real pipelined processor.
 
 Standard instructions for peripheral access
 -------------------------------------------
-GPIO, UART, I2C and SPI are memory mapped. The CPU uses ordinary loads and
-stores instead of custom peripheral instructions, so the core stays reusable
-and firmware can be written in C.
+GPIO, UART, I2C, SPI and DHT11 are memory mapped. The CPU uses ordinary loads
+and stores instead of custom peripheral instructions, so the core stays
+reusable and firmware can be written in C.
 
 Sparse region decoding
 ----------------------
 The address decoder uses addr[31:28]: ROM is 0x0, RAM is 0x2, GPIO is 0x4,
-UART is 0x5, I2C is 0x6 and SPI is 0x7. High-nibble decoding costs less logic
-than full 32-bit address comparisons and leaves room inside each region.
+UART is 0x5, I2C is 0x6, SPI is 0x7 and DHT11 is 0x8. High-nibble decoding
+costs less logic than full 32-bit address comparisons and leaves room inside
+each region. The MQ-5 ADS1115 shares the existing I2C region with the RTC.
 
 8 KB instruction ROM
 --------------------
@@ -81,6 +82,22 @@ The DS3231 exposes register data on a two-wire bus. The master supports both
 directions, repeated START and master ACK/NACK so firmware can write the
 register pointer, turn the bus around and read a consistent time snapshot.
 
+DHT11 protocol timing in hardware
+---------------------------------
+The DHT11 data line requires microsecond sampling and a long host start pulse.
+An RTL controller performs that timing in the 27 MHz clock domain and exposes
+busy, checksum-valid and measurement registers at MMIO region 0x8. Firmware
+polls it at a two-second interval and leaves the existing I2C bus available
+for both the DS3231 and the MQ-5 ADC.
+
+MQ-5 analog input through ADS1115
+--------------------------------
+The FPGA has no ADC, so the MQ-5 analog output is sampled by an ADS1115 at AIN0.
+The ADC shares the DS3231 I2C wires. A resistor divider is required because
+the MQ-5 module output may exceed the ADC's 3.3 V supply range. Voltage-to-level
+thresholds live in firmware so they can be calibrated without changing the
+RTL.
+
 SPI for the ST7735
 ------------------
 The display consumes many pixel bytes, so SPI is a better fit than I2C. The
@@ -89,16 +106,18 @@ does not expose MISO, so the interface is deliberately write-only.
 
 UART, I2C and SPI have different jobs
 -------------------------------------
-I2C obtains stable time from the RTC, SPI moves display pixels efficiently,
-and UART connects the system to the host. Combining them would couple three
-different timing and framing contracts without saving useful hardware.
+I2C obtains time from the RTC and samples the MQ-5 through ADS1115, SPI moves
+display pixels efficiently, UART connects the system to the host, and the
+DHT11 controller handles its separate single-wire timing. Combining them
+would couple different timing and framing contracts without saving useful
+hardware.
 
 Protocol RTL, device firmware
 -----------------------------
-uart_tx/uart_rx, i2c_master and spi_master implement wire timing. MMIO modules
-expose those engines to the CPU. DS3231 register meaning, ST7735 commands and
-screen layout remain in firmware because changing device policy should not
-require resynthesizing protocol RTL.
+uart_tx/uart_rx, i2c_master, spi_master and dht11_mmio implement wire timing.
+MMIO modules expose those engines to the CPU. DS3231 and ADS1115 register
+meaning, MQ-5 thresholds, ST7735 commands and screen layout remain in firmware
+because changing device policy should not require resynthesizing protocol RTL.
 
 Software layers
 ---------------

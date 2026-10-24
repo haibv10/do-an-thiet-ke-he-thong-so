@@ -4,14 +4,17 @@ This project implements a complete digital system on a Tang Nano 9K. At its
 centre is a five-stage RV32I processor written in Verilog. The processor boots
 C firmware from an 8 KB instruction ROM, uses 4 KB of data RAM, reads date and
 time from a DS3231 over I2C, and renders a clock interface on an ST7735
-128x160 TFT over SPI. An external USB-UART provides the boot log and a command
-for setting the RTC from a host computer.
+128x160 TFT over SPI. It also reads an MQ-5 gas sensor through an ADS1115 on
+the shared I2C bus and a DHT11 temperature/humidity sensor on a dedicated
+single-wire pin. An external USB-UART provides the boot log and a command for
+setting the RTC from a host computer.
 
 ## Objective
 
 Design and implement a complete FPGA-based digital system around a five-stage
-RV32I processor, using I2C to read time from a DS3231, SPI to display the clock
-on an ST7735 TFT, and UART to communicate with a host computer.
+RV32I processor, using I2C to read a DS3231 and an ADS1115/MQ-5 sensor, a
+single-wire controller for DHT11, SPI to display the readings and clock on an
+ST7735 TFT, and UART to communicate with a host computer.
 
 ## RV32I processor
 
@@ -25,9 +28,9 @@ caches, virtual memory and an operating system are outside this design.
 
 The CPU implements the RV32I integer datapath with IF, ID, EX, MEM and WB
 stages. Forwarding, load-use interlocking and control-flow flushing are handled
-in hardware. GPIO, UART, I2C and SPI are ordinary memory-mapped peripherals, so
-firmware reaches them with normal loads and stores rather than custom CPU
-instructions.
+in hardware. GPIO, UART, I2C, SPI and DHT11 are ordinary memory-mapped
+peripherals, so firmware reaches them with normal loads and stores rather than
+custom CPU instructions. MQ-5 uses the ADS1115 on the existing I2C peripheral.
 
 ## Hardware and pinout
 
@@ -51,19 +54,27 @@ of being driven by an FPGA I/O pin.
 | 27 | `spi_cs_n_out` | CS on the ST7735 |
 | 28 | `spi_dc_out` | AO or DC on the ST7735 |
 | 29 | `spi_rst_n_out` | RESET on the ST7735 |
-| 3V3 | — | VCC on the DS3231; VCC and LED on the ST7735 |
-| GND | — | DS3231, ST7735 and USB-UART ground |
+| 30 | `dht11_data` | DHT11 DATA, with 4.7 kΩ pull-up to 3.3 V |
+| 3V3 | — | DS3231, ST7735, ADS1115 and DHT11 VCC; pull-ups |
+| GND | — | DS3231, ST7735, ADS1115, DHT11 and USB-UART ground |
 
 UART is crossed: FPGA TX connects to adapter RXD, and FPGA RX connects to
 adapter TXD. Pins 25 through 29 are used for the external TFT rather than the
 Tang Nano TF-card signals. The SPI link is write-only because the TFT breakout
 does not expose MISO.
 
+Connect the MQ-5 analog output (AO) to ADS1115 AIN0. The ADS1115 uses I2C
+address `0x48` (ADDR to GND) and shares SDA/SCL with the DS3231. Since MQ-5 AO
+can reach 5 V, use a 10 kΩ upper / 20 kΩ lower divider before AIN0; the firmware
+converts the ADS1115 reading back to the sensor output voltage. The MQ-5 module
+needs its own supply as specified by its board. Do not connect a 5 V signal
+directly to the FPGA or 3.3 V ADC input.
+
 ## System architecture
 
 The instruction ROM occupies region `0x0` and also has a second port for
 firmware constants and the load image of `.data`. Data RAM occupies region
-`0x2`. The four peripherals use one region each:
+`0x2`. Each memory-mapped peripheral uses one region:
 
 | Base address | Device | Purpose |
 |---|---|---|
@@ -71,12 +82,16 @@ firmware constants and the load image of `.data`. Data RAM occupies region
 | `0x20000000` | Data RAM | Globals, `.bss` and stack |
 | `0x40000000` | GPIO | Onboard LED |
 | `0x50000000` | UART | 115200 8N1 transmit and 16-byte receive FIFO |
-| `0x60000000` | I2C | Bidirectional DS3231 transactions at 50 kHz |
+| `0x60000000` | I2C | DS3231 RTC and ADS1115 transactions at 50 kHz |
 | `0x70000000` | SPI | Write-only ST7735 transfers at 6.75 MHz |
+| `0x80000000` | DHT11 | Start, status and whole-number temperature/humidity data |
 
-The I2C master supports repeated START, slave ACK and master ACK/NACK, allowing
-firmware to set a register pointer and turn the bus around for a read. The SPI
-master operates in mode 0 and shifts bytes most-significant bit first. The
+The DHT11 controller holds DATA low for 18 ms, times the response and samples
+the 40-bit frame in hardware. Firmware starts a reading about every two seconds
+and checks the checksum before displaying it. The I2C master supports repeated
+START, slave ACK and master ACK/NACK, allowing firmware to set a register
+pointer and turn the bus around for a read. The SPI master operates in mode 0
+and shifts bytes most-significant bit first. The
 firmware validates the DS3231 oscillator-stop flag, 24-hour mode, BCD fields,
 field ranges and calendar date before presenting the value as a real clock.
 
@@ -255,7 +270,8 @@ behind the ROM size, the three external interfaces and the module boundaries.
 │       ├── gpio_mmio.v
 │       ├── uart_mmio.v
 │       ├── i2c_mmio.v
-│       └── spi_mmio.v
+│       ├── spi_mmio.v
+│       └── dht11_mmio.v
 │
 ├── libs/                           # Reusable serial protocol engines
 │   ├── uart/
@@ -287,6 +303,8 @@ behind the ROM size, the three external interfaces and the module boundaries.
 │   ├── i2c_bus.*                   # I2C MMIO frame access
 │   ├── spi_bus.*                   # SPI MMIO byte access
 │   ├── ds3231_rtc.*                # RTC read, validation and setup
+│   ├── mq5_sensor.*                # ADS1115 and MQ-5 voltage conversion
+│   ├── dht11_sensor.*              # DHT11 MMIO access
 │   ├── st7735_panel.*              # Panel init and drawing primitives
 │   ├── font_8x8.*                  # Printable ASCII bitmap font
 │   └── ui_clock.*                  # Clock screen layout

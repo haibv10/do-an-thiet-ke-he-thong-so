@@ -13,7 +13,8 @@ module cpu_top #(
   output wire spi_dc_out,
   output wire spi_rst_n_out,
   inout  wire i2c_sda,
-  inout  wire i2c_scl
+  inout  wire i2c_scl,
+  inout  wire dht11_data
 );
 
   // Every sequential block below runs on the synchronised reset, never on the
@@ -215,9 +216,9 @@ module cpu_top #(
   );
 
   // --- MEM: memory, byte alignment and MMIO ---
-  wire we_gpio, we_uart, we_i2c, we_spi;
+  wire we_gpio, we_uart, we_i2c, we_spi, we_dht;
   wire [3:0]  we_dmem;
-  wire [31:0] dmem_rd, gpio_rd, uart_rd, i2c_rd, spi_rd, mem_read_data;
+  wire [31:0] dmem_rd, gpio_rd, uart_rd, i2c_rd, spi_rd, dht_rd, mem_read_data;
 
   wire i2c_tick;
 
@@ -250,9 +251,9 @@ module cpu_top #(
   cpu_address_decoder bus_matrix (
     .addr(mem_alu_result), .we_mask(mem_we_mask),
     .we_dmem(we_dmem), .we_gpio(we_gpio), .we_uart(we_uart), .we_i2c(we_i2c),
-    .we_spi(we_spi),
+    .we_spi(we_spi), .we_dht(we_dht),
     .rd_rom(rom_rd), .rd_dmem(dmem_rd), .rd_gpio(gpio_rd), .rd_uart(uart_rd),
-    .rd_i2c(i2c_rd), .rd_spi(spi_rd), .rd_out(mem_read_data)
+    .rd_i2c(i2c_rd), .rd_spi(spi_rd), .rd_dht(dht_rd), .rd_out(mem_read_data)
   );
 
   mem_data_ram ram (
@@ -295,6 +296,12 @@ module cpu_top #(
     .wd(mem_store_data), .rd(spi_rd),
     .spi_sck(spi_sck_out), .spi_mosi(spi_mosi_out), .spi_cs_n(spi_cs_n_out),
     .spi_dc(spi_dc_out), .spi_rst_n(spi_rst_n_out)
+  );
+
+  wire dht_read = mem_MemRead && (mem_alu_result[31:28] == 4'h8);
+  dht11_mmio dht_port (
+    .clk(clk), .rst_n(rst_n_sync), .we(we_dht), .re(dht_read),
+    .a(mem_alu_result), .wd(mem_store_data), .rd(dht_rd), .dht_io(dht11_data)
   );
 
   // Loads come back as a full word and are shifted down to the addressed byte.

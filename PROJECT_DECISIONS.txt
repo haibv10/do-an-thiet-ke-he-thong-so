@@ -151,9 +151,11 @@ contract. SoC integration tests stay under sim/.
 
 Firmware delay loop without LTO
 -------------------------------
-The delay loop is calibrated against the instruction shape produced by -O1.
-Link-time optimization is not enabled because cross-file inlining could change
-that loop and invalidate all firmware timing delays.
+The firmware is built with -Os to fit the 8 KiB ROM. The delay loop is kept at
+-O1 using a function-level optimization attribute because DELAY_MS is
+calibrated against the instruction shape produced by -O1. Link-time
+optimization is not enabled because cross-file inlining could change that loop
+and invalidate all firmware timing delays.
 
 Source handover scope
 ---------------------

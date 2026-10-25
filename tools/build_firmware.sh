@@ -24,7 +24,7 @@ cd "$build_dir"
   -march=rv32i \
   -mabi=ilp32 \
   -nostdlib \
-  -O1 \
+  -Os \
   -ffunction-sections \
   -fdata-sections \
   -msmall-data-limit=0 \

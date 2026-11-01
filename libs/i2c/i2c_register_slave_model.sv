@@ -4,7 +4,7 @@
 // byte of a write, and auto-increment on every byte after it. That is the
 // shape almost every register-mapped I2C device presents, so the master can be
 // exercised against it without naming a part.
-module i2c_slave_model #(
+module i2c_register_slave_model #(
   parameter logic [6:0] ADDRESS = 7'h50,
   parameter int REGISTERS = 19
 ) (inout wire sda, input wire scl);

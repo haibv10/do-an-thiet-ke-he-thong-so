@@ -24,9 +24,12 @@ cd "$build_dir"
   -march=rv32i \
   -mabi=ilp32 \
   -nostdlib \
-  -O1 \
+  -Os \
+  -ffunction-sections \
+  -fdata-sections \
   -msmall-data-limit=0 \
   -T "$repo_dir/tools/linker_script.ld" \
+  -Wl,--gc-sections \
   -Wl,-Map=firmware.map \
   "$sw_dir/startup.s" \
   "$sw_dir/main.c" \
@@ -35,6 +38,8 @@ cd "$build_dir"
   "$sw_dir/uart_io.c" \
   "$sw_dir/i2c_bus.c" \
   "$sw_dir/ds3231_rtc.c" \
+  "$sw_dir/dht11_sensor.c" \
+  "$sw_dir/mq5_sensor.c" \
   "$sw_dir/spi_bus.c" \
   "$sw_dir/font_8x8.c" \
   "$sw_dir/st7735_panel.c" \

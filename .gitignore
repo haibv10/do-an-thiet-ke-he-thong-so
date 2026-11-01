@@ -1,4 +1,4 @@
-# OS and editor files
+# Local editor and agent state
 .DS_Store
 Thumbs.db
 *.swp
@@ -6,19 +6,18 @@ Thumbs.db
 *~
 .vscode/
 .idea/
+.agents/
+.codex/
 
-# Local tool licenses
+# Local tool state and generated FPGA output
 *.lic
-
-# Generic build and coverage output
 build/
-out/
-dist/
-coverage/
 logs/
-/docs/reference/
+docs/
+impl/
+*.gprj.user
 
-# Simulation output
+# Simulator output
 work/
 transcript
 vsim.wlf
@@ -26,46 +25,10 @@ vsim.wlf
 *.vcd
 *.fst
 *.ghw
-*.log
-
-# Intel Quartus generated output
-db/
-incremental_db/
-output_files/
-greybox_tmp/
-*.qws
-*.rpt
-*.summary
-*.smsg
-*.jdi
-*.sof
-*.pof
-*.rbf
-
-# AMD/Xilinx generated output
-.Xil/
-*.cache/
-*.gen/
-*.runs/
-*.sim/
-*.hw/
-*.ip_user_files/
-*.jou
-*.str
-*.bit
-*.ltx
-
-# Temporary synthesis and simulator files
-*.bak
-*.tmp
 *.dump
 
-# RISC-V firmware build output
+# Firmware build intermediates
 sw/*.asm
 sw/*.bin
 sw/*.elf
 sw/*.map
-
-# Gowin generated output and per-user project state
-impl/
-*.gprj.user

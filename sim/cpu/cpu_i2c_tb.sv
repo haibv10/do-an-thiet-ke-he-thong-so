@@ -31,7 +31,7 @@ module cpu_i2c_tb;
     .spi_rst_n_out(spi_rst_n_out)
   );
 
-  i2c_slave_model #(.ADDRESS(7'h68)) slave (.sda(i2c_sda), .scl(i2c_scl));
+  i2c_register_slave_model #(.ADDRESS(7'h68)) slave (.sda(i2c_sda), .scl(i2c_scl));
 
   initial begin
     #6000000;

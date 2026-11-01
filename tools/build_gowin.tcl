@@ -36,6 +36,7 @@ add_file [file join $repo_dir libs uart uart_rx.v]
 add_file [file join $repo_dir source peripheral i2c_mmio.v]
 add_file [file join $repo_dir libs i2c i2c_master.v]
 add_file [file join $repo_dir source peripheral spi_mmio.v]
+add_file [file join $repo_dir source peripheral dht11_mmio.v]
 add_file [file join $repo_dir libs spi spi_master.v]
 add_file [file join $repo_dir source common clock_enable.v]
 

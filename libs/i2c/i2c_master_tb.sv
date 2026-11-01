@@ -39,7 +39,7 @@ module i2c_master_tb;
     .data, .sda, .scl, .done, .busy, .data_out, .ack, .sda_en
   );
 
-  i2c_slave_model #(.ADDRESS(SLAVE_ADDRESS)) slave (.sda, .scl);
+  i2c_register_slave_model #(.ADDRESS(SLAVE_ADDRESS)) slave (.sda, .scl);
 
   // One frame, held until the master reports it finished.
   task automatic frame(input logic do_start, input logic is_read,

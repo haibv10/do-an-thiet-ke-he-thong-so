@@ -1,8 +1,9 @@
-# RV32I FPGA Digital System
+# Design and Implementation of an FPGA-Based RISC-V SoC for Environmental Monitoring
 
-This project implements a complete digital system on a Tang Nano 9K. At its
-centre is a five-stage RV32I processor written in Verilog. The processor boots
-C firmware from an 8 KB instruction ROM, uses 4 KB of data RAM, reads date and
+This project implements an environmental monitoring system-on-chip (SoC) on a
+Tang Nano 9K FPGA. At its centre is a five-stage RV32I processor written in
+Verilog. The processor boots C firmware from an 8 KB instruction ROM, uses
+4 KB of data RAM, reads date and
 time from a DS3231 over I2C, and renders a clock interface on an ST7735
 128x160 TFT over SPI. It also reads an MQ-5 gas sensor through an ADS1115 on
 the shared I2C bus and a DHT11 temperature/humidity sensor on a dedicated
@@ -11,10 +12,14 @@ setting the RTC from a host computer.
 
 ## Objective
 
-Design and implement a complete FPGA-based digital system around a five-stage
-RV32I processor, using I2C to read a DS3231 and an ADS1115/MQ-5 sensor, a
-single-wire controller for DHT11, SPI to display the readings and clock on an
-ST7735 TFT, and UART to communicate with a host computer.
+Design and implement an FPGA-based RISC-V SoC for monitoring temperature,
+relative humidity and the MQ-5 gas sensor output voltage, with date and time
+provided by a DS3231 RTC. The system uses a five-stage RV32I processor, I2C for
+the DS3231 and ADS1115/MQ-5, a single-wire controller for DHT11, SPI for the
+ST7735 TFT, and UART for host communication and RTC setup.
+
+Gas indications are based on voltage thresholds, not calibrated concentrations
+in ppm. The RTC and clock display provide time context for the sensor readings.
 
 ## RV32I processor
 
@@ -295,7 +300,7 @@ behind the ROM size, the three external interfaces and the module boundaries.
 │       └── imem_test.hex           # Small ROM image used by ROM tests
 │
 ├── sw/                             # Bare-metal firmware source
-│   ├── main.c                      # Boot and main clock loop
+│   ├── main.c                      # Boot, clock and sensor polling loop
 │   ├── startup.s                   # .data/.bss setup and stack entry
 │   ├── sys_delay.*                 # Calibrated busy-loop delay
 │   ├── gpio_led.*                  # Onboard LED access
@@ -307,7 +312,7 @@ behind the ROM size, the three external interfaces and the module boundaries.
 │   ├── dht11_sensor.*              # DHT11 MMIO access
 │   ├── st7735_panel.*              # Panel init and drawing primitives
 │   ├── font_8x8.*                  # Printable ASCII bitmap font
-│   └── ui_clock.*                  # Clock screen layout
+│   └── ui_clock.*                  # Clock and environmental readings layout
 │
 ├── rom/
 │   └── firmware.hex                # 8 KB instruction ROM image

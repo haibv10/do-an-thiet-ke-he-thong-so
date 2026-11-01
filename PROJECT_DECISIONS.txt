@@ -1,6 +1,17 @@
 PROJECT DECISIONS
 =================
 
+Project title and scope
+-----------------------
+Design and Implementation of an FPGA-Based RISC-V SoC for
+Environmental Monitoring.
+
+The SoC combines a five-stage RV32I processor with temperature and humidity
+monitoring through DHT11, MQ-5 output voltage measurement through ADS1115,
+DS3231 date and time, ST7735 display output, and UART host communication.
+The clock is one part of the environmental monitoring application. MQ-5
+indications use voltage thresholds rather than calibrated gas concentrations.
+
 Five-stage RV32I pipeline
 -------------------------
 The CPU uses IF, ID, EX, MEM and WB stages. Forwarding handles most data

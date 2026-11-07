@@ -6,13 +6,14 @@ module cpu_address_decoder_tb;
   logic [31:0] addr = 32'd0;
   logic [3:0]  we_mask = 4'b0000;
   wire  [3:0]  we_dmem;
-  wire         we_gpio, we_uart, we_i2c, we_spi;
+  wire         we_gpio, we_uart, we_i2c, we_spi, we_dht;
   logic [31:0] rd_rom  = 32'h0000_0000;
   logic [31:0] rd_dmem = 32'h1111_1111;
   logic [31:0] rd_gpio = 32'h2222_2222;
   logic [31:0] rd_uart = 32'h3333_3333;
   logic [31:0] rd_i2c  = 32'h4444_4444;
   logic [31:0] rd_spi  = 32'h5555_5555;
+  logic [31:0] rd_dht  = 32'd0;
   wire  [31:0] rd_out;
 
   cpu_address_decoder dut (.*);
@@ -70,7 +71,7 @@ module cpu_address_decoder_tb;
     // Unmapped regions read as zero rather than floating.
     expect_read(32'h1000_0000, 32'd0, "unmapped 0x1");
     expect_read(32'h3000_0000, 32'd0, "unmapped 0x3");
-    expect_read(32'h8000_0000, 32'd0, "unmapped 0x8");
+    expect_read(32'h9000_0000, 32'd0, "unmapped 0x9");
     expect_read(32'hF000_0000, 32'd0, "unmapped 0xF");
 
     // RAM takes the full byte mask; peripherals take a single enable.

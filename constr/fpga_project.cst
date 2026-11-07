@@ -38,6 +38,10 @@ IO_PORT "spi_dc_out" IO_TYPE=LVCMOS33 DRIVE=8;
 IO_LOC "spi_rst_n_out" 29;
 IO_PORT "spi_rst_n_out" IO_TYPE=LVCMOS33 PULL_MODE=UP DRIVE=8;
 
+// DHT11 single-wire data, with an external 4.7k pull-up to 3.3 V
+IO_LOC "dht11_data" 30;
+IO_PORT "dht11_data" IO_TYPE=LVCMOS33 PULL_MODE=UP;
+
 // I2C to the DS3231 real-time clock, open-drain with 3.3 V pull-ups
 IO_LOC "i2c_sda" 31;
 IO_PORT "i2c_sda" IO_TYPE=LVCMOS33 PULL_MODE=UP DRIVE=8;

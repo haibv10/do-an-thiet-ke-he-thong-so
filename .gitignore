@@ -16,6 +16,15 @@ logs/
 docs/
 impl/
 *.gprj.user
+*.log
+*.fs
+*.binx
+*.vg
+*.rpt
+*.rpt.html
+*.tr
+*.tr.html
+*.timing_paths
 
 # Simulator output
 work/
@@ -26,9 +35,19 @@ vsim.wlf
 *.fst
 *.ghw
 *.dump
+*.vvp
 
 # Firmware build intermediates
+*.o
+*.elf
+*.bin
+*.map
 sw/*.asm
-sw/*.bin
-sw/*.elf
-sw/*.map
+sw/*.hex
+
+# The committed ROM boot image and simulation HEX fixtures are intentional.
+# Other build products belong under build/.
+
+# Python tool caches
+__pycache__/
+*.py[cod]

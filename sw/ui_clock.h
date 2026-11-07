@@ -11,4 +11,9 @@ void ui_show_time(const unsigned char *time);
 // the digits anyway would present a fault as a reading.
 void ui_show_unset(void);
 
+void ui_show_environment(unsigned char temperature, unsigned char humidity);
+void ui_show_environment_fault(void);
+void ui_show_gas(unsigned int mv, unsigned int level);
+void ui_show_gas_fault(void);
+
 #endif

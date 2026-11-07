@@ -7,6 +7,8 @@
 #include "ds3231_rtc.h"
 #include "st7735_panel.h"
 #include "ui_clock.h"
+#include "mq5_sensor.h"
+#include "dht11_sensor.h"
 
 // load them back, instead of folding the initialiser into an immediate.
 unsigned int data_marker = 0x5a5a5a5a;  // .data, copied out of ROM by startup.s
@@ -18,6 +20,13 @@ int main(void) {
   unsigned int led = 0;
   unsigned int rtc_time_trusted;
   unsigned char command;
+  unsigned int gas_tick = 0;
+  unsigned int gas_mv;
+  unsigned int dht_tick = 0;
+  unsigned int dht_pending = 0;
+  unsigned int dht_status;
+  unsigned char humidity;
+  unsigned char temperature;
 
   led_set(0);
 
@@ -45,6 +54,27 @@ int main(void) {
       // A rejected command never touched the clock, so it must not make a
       // time that was already trusted disappear from the panel.
       if (ds3231_set_from_uart()) rtc_time_trusted = 1;
+    }
+
+    if (++gas_tick >= 10u) {
+      gas_tick = 0;
+      if (mq5_read_mv(&gas_mv)) ui_show_gas(gas_mv, mq5_level_of(gas_mv));
+      else ui_show_gas_fault();
+    }
+
+    if (!dht_pending && ++dht_tick >= 40u) {
+      dht_tick = 0;
+      dht11_start();
+      dht_pending = 1;
+    }
+    if (dht_pending) {
+      dht_status = dht11_status();
+      if (!(dht_status & DHT11_BUSY)) {
+        if (dht11_read(&humidity, &temperature))
+          ui_show_environment(temperature, humidity);
+        else ui_show_environment_fault();
+        dht_pending = 0;
+      }
     }
 
     if (!ds3231_read_time(time)) {

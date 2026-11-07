@@ -1,8 +1,5 @@
 `timescale 1ns/1ps
 
-// Add this as a second top-level module to enable waveform dumping without
-// modifying a self-checking testbench. Override the output path with
-// +vcd=<path>; otherwise build/sim/wave.vcd is used.
 module dump_vcd;
   string vcd_path;
 

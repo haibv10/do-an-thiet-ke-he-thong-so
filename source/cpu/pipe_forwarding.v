@@ -1,5 +1,3 @@
-// Covers dependencies one and two instructions apart. Distance three is caught
-// by the write-first bypass inside the register file.
 module pipe_forwarding (
   input  wire [4:0] id_ex_rs1,
   input  wire [4:0] id_ex_rs2,
@@ -15,8 +13,7 @@ module pipe_forwarding (
 );
 
   always @(*) begin
-    // MEM is checked before WB: when both stages target the same register, the
-    // younger instruction in MEM holds the value that must win.
+
     if (ex_mem_RegWrite && (ex_mem_rd != 5'd0) && (ex_mem_rd == id_ex_rs1)) begin
       forward_a = 2'b10;
     end

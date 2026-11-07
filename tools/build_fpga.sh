@@ -31,9 +31,6 @@ if [[ ! -f "$system_libfreetype" ]]; then
 fi
 
 mkdir -p "$build_dir"
-# mem_instruction_rom.v reads $readmemh("rom/firmware.hex"), and the path is
-# relative to the synthesis working directory rather than to the repository,
-# so the image has to be reachable by that name from inside build/.
 ln -sfn "$repo_dir/rom" "$build_dir/rom"
 cd "$build_dir"
 

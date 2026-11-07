@@ -24,26 +24,31 @@ cd "$build_dir"
   -march=rv32i \
   -mabi=ilp32 \
   -nostdlib \
+  -I"$sw_dir/app" \
+  -I"$sw_dir/hal" \
+  -I"$sw_dir/drivers" \
+  -I"$sw_dir/graphics" \
+  -I"$sw_dir/common" \
   -Os \
   -ffunction-sections \
   -fdata-sections \
   -msmall-data-limit=0 \
-  -T "$repo_dir/tools/linker_script.ld" \
+  -T "$repo_dir/sw/startup/linker.ld" \
   -Wl,--gc-sections \
   -Wl,-Map=firmware.map \
-  "$sw_dir/startup.s" \
-  "$sw_dir/main.c" \
-  "$sw_dir/sys_delay.c" \
-  "$sw_dir/gpio_led.c" \
-  "$sw_dir/uart_io.c" \
-  "$sw_dir/i2c_bus.c" \
-  "$sw_dir/ds3231_rtc.c" \
-  "$sw_dir/dht11_sensor.c" \
-  "$sw_dir/mq5_sensor.c" \
-  "$sw_dir/spi_bus.c" \
-  "$sw_dir/font_8x8.c" \
-  "$sw_dir/st7735_panel.c" \
-  "$sw_dir/ui_clock.c" \
+  "$sw_dir/startup/startup.s" \
+  "$sw_dir/app/main.c" \
+  "$sw_dir/common/sys_delay.c" \
+  "$sw_dir/hal/gpio_led.c" \
+  "$sw_dir/hal/uart_io.c" \
+  "$sw_dir/hal/i2c_bus.c" \
+  "$sw_dir/drivers/ds3231_rtc.c" \
+  "$sw_dir/hal/dht11_sensor.c" \
+  "$sw_dir/drivers/mq5_sensor.c" \
+  "$sw_dir/hal/spi_bus.c" \
+  "$sw_dir/graphics/font_8x8.c" \
+  "$sw_dir/drivers/st7735_panel.c" \
+  "$sw_dir/app/ui_clock.c" \
   -o firmware.elf
 
 "$objcopy_bin" -O binary firmware.elf firmware.bin

@@ -10,7 +10,6 @@ module core_regfile (
   output wire [31:0] rd2
 );
 
-  // x0 reads as zero by construction below, so it needs no storage.
   reg [31:0] x [31:1];
   integer i;
 
@@ -24,9 +23,6 @@ module core_regfile (
     end
   end
 
-  // Write-first: the forwarding unit only reaches back two instructions, so
-  // without returning the pending write data here a dependency three
-  // instructions apart would read the stale value.
   wire bypass_rs1 = we && (rd != 5'd0) && (rd == rs1);
   wire bypass_rs2 = we && (rd != 5'd0) && (rd == rs2);
 

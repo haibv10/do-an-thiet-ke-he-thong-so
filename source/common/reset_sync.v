@@ -1,11 +1,3 @@
-// Reset bridge: asserts as soon as the pin goes low, releases only in step with
-// the clock.
-//
-// rst_n comes straight off a mechanical button. Feeding its rising edge to the
-// asynchronous reset pin of every flop in the design leaves the release time
-// unrelated to the clock, so recovery and removal cannot be met and different
-// flops can leave reset on different cycles. Holding the pipeline in an
-// inconsistent state that way is indistinguishable from an RTL fault.
 module reset_sync #(
   parameter integer STAGES = 2
 ) (

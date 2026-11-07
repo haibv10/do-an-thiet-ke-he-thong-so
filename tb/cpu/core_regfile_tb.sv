@@ -15,7 +15,6 @@ module core_regfile_tb;
 
   always #5 clk = ~clk;
 
-  // Drive a write for one cycle, holding the write ports stable across the edge.
   task automatic write_reg(input logic [4:0] index, input logic [31:0] value);
     begin
       @(negedge clk);
@@ -31,25 +30,20 @@ module core_regfile_tb;
     repeat (2) @(negedge clk);
     rst_n = 1'b1;
 
-    // Reset clears every slot.
     rs1 = 5'd7;
     #1;
     if (rd1 !== 32'd0) $fatal(1, "x7 after reset = %h", rd1);
 
-    // Plain write then read on a later cycle.
     write_reg(5'd7, 32'hdead_beef);
     rs1 = 5'd7;
     #1;
     if (rd1 !== 32'hdead_beef) $fatal(1, "x7 readback = %h", rd1);
 
-    // x0 is hardwired to zero and never stores a write.
     write_reg(5'd0, 32'hffff_ffff);
     rs1 = 5'd0;
     #1;
     if (rd1 !== 32'd0) $fatal(1, "x0 = %h, must stay zero", rd1);
 
-    // Write-first bypass: while the write is still pending at the clock edge,
-    // both read ports must already return the incoming data.
     @(negedge clk);
     we = 1'b1;
     rd = 5'd9;
@@ -60,12 +54,10 @@ module core_regfile_tb;
     if (rd1 !== 32'h1234_5678 || rd2 !== 32'h1234_5678)
       $fatal(1, "bypass rd1=%h rd2=%h expected 12345678", rd1, rd2);
 
-    // A non-matching index must not pick up the bypass.
     rs2 = 5'd7;
     #1;
     if (rd2 !== 32'hdead_beef) $fatal(1, "x7 during unrelated write = %h", rd2);
 
-    // The bypass must not fire for x0 even when rd is x0.
     @(negedge clk);
     we = 1'b1;
     rd = 5'd0;
@@ -74,7 +66,6 @@ module core_regfile_tb;
     #1;
     if (rd1 !== 32'd0) $fatal(1, "x0 bypassed a write = %h", rd1);
 
-    // The bypass must not fire while write enable is low.
     @(negedge clk);
     we = 1'b0;
     rd = 5'd7;

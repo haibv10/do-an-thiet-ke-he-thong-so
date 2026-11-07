@@ -1,7 +1,5 @@
 `timescale 1ns/1ps
 
-// The reset bridge has to behave asymmetrically: assert the moment the pin
-// drops, regardless of the clock, but release only on a clock edge.
 module reset_sync_tb;
   localparam integer STAGES = 2;
 
@@ -17,8 +15,7 @@ module reset_sync_tb;
   );
 
   initial begin
-    // Assertion is asynchronous. Drop the pin midway between two clock edges;
-    // the output must follow without waiting for one.
+
     @(negedge clk);
     #2;
     rst_n_in = 1'b0;
@@ -26,13 +23,10 @@ module reset_sync_tb;
     if (rst_n_out !== 1'b0)
       $fatal(1, "output = %b, should have fallen with the pin", rst_n_out);
 
-    // It stays asserted for as long as the pin is low, however many edges pass.
     repeat (5) @(posedge clk);
     #1;
     if (rst_n_out !== 1'b0) $fatal(1, "output released while the pin is still low");
 
-    // Release between clock edges: the output must not move until the chain has
-    // clocked STAGES times.
     @(negedge clk);
     rst_n_in = 1'b1;
     #1;
@@ -48,7 +42,6 @@ module reset_sync_tb;
     if (rst_n_out !== 1'b1)
       $fatal(1, "output still low after %0d clock edges", STAGES);
 
-    // A second press must behave the same way, so the chain is not one-shot.
     @(posedge clk);
     #2;
     rst_n_in = 1'b0;

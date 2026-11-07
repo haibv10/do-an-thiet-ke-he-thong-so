@@ -3,12 +3,12 @@ module core_control (
   input  wire [2:0] funct3,
   input  wire       funct7_5,
   output reg        Branch,
-  output reg [1:0]  Jump,      // 00 = none, 01 = JAL, 10 = JALR
+  output reg [1:0]  Jump,
   output reg        MemRead,
   output reg        MemtoReg,
   output reg        MemWrite,
-  output reg        ALUSrc,   // 0 = register rs2, 1 = immediate, for the B input
-  output reg        ALUSrcA,  // 0 = register rs1, 1 = program counter, for the A input
+  output reg        ALUSrc,
+  output reg        ALUSrcA,
   output reg        RegWrite,
   output reg        UsesRs1,
   output reg        UsesRs2,
@@ -30,7 +30,7 @@ module core_control (
     alu_ctrl = 4'b0000;
 
     case (opcode)
-      7'b0110011: begin // R-Type
+      7'b0110011: begin
         RegWrite = 1'b1;
         UsesRs1  = 1'b1;
         UsesRs2  = 1'b1;
@@ -46,7 +46,7 @@ module core_control (
         endcase
       end
 
-      7'b0010011: begin // I-Type
+      7'b0010011: begin
         ALUSrc   = 1'b1;
         RegWrite = 1'b1;
         UsesRs1  = 1'b1;
@@ -62,20 +62,20 @@ module core_control (
         endcase
       end
 
-      7'b0110111: begin // LUI
+      7'b0110111: begin
         ALUSrc   = 1'b1;
         RegWrite = 1'b1;
         alu_ctrl = 4'b1111;
       end
 
-      7'b0010111: begin // AUIPC
+      7'b0010111: begin
         ALUSrc   = 1'b1;
         ALUSrcA  = 1'b1;
         RegWrite = 1'b1;
         alu_ctrl = 4'b0000;
       end
 
-      7'b0000011: begin // Load
+      7'b0000011: begin
         ALUSrc   = 1'b1;
         MemtoReg = 1'b1;
         RegWrite = 1'b1;
@@ -83,26 +83,26 @@ module core_control (
         UsesRs1  = 1'b1;
       end
 
-      7'b0100011: begin // Store
+      7'b0100011: begin
         ALUSrc   = 1'b1;
         MemWrite = 1'b1;
         UsesRs1  = 1'b1;
         UsesRs2  = 1'b1;
       end
 
-      7'b1100011: begin // Branch
+      7'b1100011: begin
         Branch   = 1'b1;
         alu_ctrl = 4'b1000;
         UsesRs1  = 1'b1;
         UsesRs2  = 1'b1;
       end
 
-      7'b1101111: begin // JAL
+      7'b1101111: begin
         Jump     = 2'b01;
-        RegWrite = 1'b1; // the link register, written in EX from pc + 4
+        RegWrite = 1'b1;
       end
 
-      7'b1100111: begin // JALR
+      7'b1100111: begin
         Jump     = 2'b10;
         RegWrite = 1'b1;
         ALUSrc   = 1'b1;
@@ -110,9 +110,9 @@ module core_control (
         UsesRs1  = 1'b1;
       end
 
-      7'b0001111: begin // FENCE
+      7'b0001111: begin
         if (funct3 == 3'b000)
-          // One in-order memory port already makes all earlier accesses visible.
+
           Fence = 1'b1;
       end
     endcase

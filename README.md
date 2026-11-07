@@ -1,49 +1,46 @@
-# Design and Implementation of an FPGA-Based RISC-V SoC for Environmental Monitoring
+# FPGA-Based RISC-V SoC for Environmental Monitoring
 
-This project implements an environmental monitoring system-on-chip (SoC) on a
-Tang Nano 9K FPGA. At its centre is a five-stage RV32I processor written in
-Verilog. The processor boots C firmware from an 8 KB instruction ROM, uses
-4 KB of data RAM, reads date and
-time from a DS3231 over I2C, and renders a clock interface on an ST7735
-128x160 TFT over SPI. It also reads an MQ-5 gas sensor through an ADS1115 on
-the shared I2C bus and a DHT11 temperature/humidity sensor on a dedicated
-single-wire pin. An external USB-UART provides the boot log and a command for
-setting the RTC from a host computer.
+A Tang Nano 9K SoC with a five-stage RV32I processor, 8 KiB instruction ROM
+and 4 KiB data RAM. Firmware reads DHT11 temperature/humidity, MQ-5 output
+voltage through an ADS1115, and DS3231 date/time, then displays readings on
+an ST7735 128x160 TFT. UART provides status output and RTC setup.
 
-## Objective
+MQ-5 levels use voltage thresholds, not calibrated gas concentrations in ppm.
 
-Design and implement an FPGA-based RISC-V SoC for monitoring temperature,
-relative humidity and the MQ-5 gas sensor output voltage, with date and time
-provided by a DS3231 RTC. The system uses a five-stage RV32I processor, I2C for
-the DS3231 and ADS1115/MQ-5, a single-wire controller for DHT11, SPI for the
-ST7735 TFT, and UART for host communication and RTC setup.
+## Source layout
 
-Gas indications are based on voltage thresholds, not calibrated concentrations
-in ppm. The RTC and clock display provide time context for the sensor readings.
+```text
+source/
+├── soc_top.v          SoC integration and FPGA top module
+├── cpu/               Core, pipeline, forwarding and hazards
+├── bus/               Address decoder
+├── memory/            Instruction ROM and data RAM
+├── common/            Clock enable and reset synchronizer
+└── peripheral/        GPIO, UART, I2C, SPI and DHT11 controllers/MMIO
+sw/
+├── startup/           Startup assembly and linker.ld
+├── hal/               MMIO access
+├── drivers/           DS3231, MQ-5/ADS1115 and ST7735
+├── graphics/          ASCII font
+├── app/               Main loop and display layout
+└── common/            Delay utility
+tb/                    CPU, bus, memory, common and peripheral unit tests
+├── integration/       Full-SoC execution and firmware startup tests
+└── support/           I2C slave model, ROM fixture and VCD helper
+constr/                Pin and timing constraints
+rom/                   Committed firmware.hex
+tools/                 Build, test and programming scripts
+build/                 Generated output, ignored by Git
+```
 
-## RV32I processor
+`fpga_project.gprj` is the Gowin IDE project. The command-line flow uses the
+Makefile and `tools/build_gowin.tcl`.
 
-RV32I is the 32-bit base integer instruction set of RISC-V. The processor
-implements integer arithmetic and logic, shifts, signed and unsigned
-comparisons, conditional branches, `JAL`, `JALR`, `LUI`, `AUIPC`, byte and
-halfword loads and stores, word loads and stores, and `FENCE` as an ordering
-no-op because the core is in-order and has no cache or write buffer. `ECALL`
-and `EBREAK` are not implemented. Multiplication, division, floating point,
-caches, virtual memory and an operating system are outside this design.
+## Hardware and wiring
 
-The CPU implements the RV32I integer datapath with IF, ID, EX, MEM and WB
-stages. Forwarding, load-use interlocking and control-flow flushing are handled
-in hardware. GPIO, UART, I2C, SPI and DHT11 are ordinary memory-mapped
-peripherals, so firmware reaches them with normal loads and stores rather than
-custom CPU instructions. MQ-5 uses the ADS1115 on the existing I2C peripheral.
-
-## Hardware and pinout
-
-The target is a Tang Nano 9K carrying a Gowin GW1NR-LV9QN88PC6/I5 and using
-the onboard 27 MHz oscillator. The external modules must share ground with the
-FPGA. The ST7735 and DS3231 are powered from 3.3 V. SDA and SCL must never be
-pulled up to 5 V, and the TFT backlight pin is tied directly to 3.3 V instead
-of being driven by an FPGA I/O pin.
+Target: GW1NR-LV9QN88PC6/I5, onboard 27 MHz clock. External modules share GND.
+Use 3.3 V logic and pull-ups; the TFT backlight is powered from 3.3 V rather
+than an FPGA I/O. UART TX/RX cross to adapter RXD/TXD.
 
 | Tang Nano 9K pin | RTL signal | Connection |
 |---|---|---|
@@ -52,8 +49,8 @@ of being driven by an FPGA I/O pin.
 | 10 | `led_out` | Onboard active-low LED |
 | 34 | `uart_tx_out` | RXD on the external USB-UART |
 | 33 | `uart_rx_in` | TXD on the external USB-UART |
-| 31 | `i2c_sda` | SDA on the DS3231 |
-| 32 | `i2c_scl` | SCL on the DS3231 |
+| 31 | `i2c_sda` | Shared SDA on DS3231 and ADS1115 |
+| 32 | `i2c_scl` | Shared SCL on DS3231 and ADS1115 |
 | 25 | `spi_sck_out` | SCK on the ST7735 |
 | 26 | `spi_mosi_out` | SDA or MOSI on the ST7735 |
 | 27 | `spi_cs_n_out` | CS on the ST7735 |
@@ -63,23 +60,19 @@ of being driven by an FPGA I/O pin.
 | 3V3 | — | DS3231, ST7735, ADS1115 and DHT11 VCC; pull-ups |
 | GND | — | DS3231, ST7735, ADS1115, DHT11 and USB-UART ground |
 
-UART is crossed: FPGA TX connects to adapter RXD, and FPGA RX connects to
-adapter TXD. Pins 25 through 29 are used for the external TFT rather than the
-Tang Nano TF-card signals. The SPI link is write-only because the TFT breakout
-does not expose MISO.
 
-Connect the MQ-5 analog output (AO) to ADS1115 AIN0. The ADS1115 uses I2C
-address `0x48` (ADDR to GND) and shares SDA/SCL with the DS3231. Since MQ-5 AO
-can reach 5 V, use a 10 kΩ upper / 20 kΩ lower divider before AIN0; the firmware
-converts the ADS1115 reading back to the sensor output voltage. The MQ-5 module
-needs its own supply as specified by its board. Do not connect a 5 V signal
-directly to the FPGA or 3.3 V ADC input.
+ADS1115 uses address `0x48` (ADDR to GND) and AIN0. Connect MQ-5 AO through a
+10 kΩ upper / 20 kΩ lower divider; firmware compensates for this divider.
+Power the MQ-5 module as specified by its board. Do not connect its 5 V AO
+directly to the FPGA or 3.3 V ADC input. DHT11 DATA needs a 4.7 kΩ pull-up
+to 3.3 V.
 
-## System architecture
+## Architecture and memory map
 
-The instruction ROM occupies region `0x0` and also has a second port for
-firmware constants and the load image of `.data`. Data RAM occupies region
-`0x2`. Each memory-mapped peripheral uses one region:
+The CPU uses IF/ID/EX/MEM/WB, forwarding, load-use interlocking and branch/jump
+flushing. Peripherals use ordinary loads/stores through MMIO. The system runs
+in one 27 MHz clock domain; reset asserts asynchronously and releases
+synchronously. I2C runs at 50 kHz; SPI uses mode 0, MSB first, at 6.75 MHz.
 
 | Base address | Device | Purpose |
 |---|---|---|
@@ -91,247 +84,95 @@ firmware constants and the load image of `.data`. Data RAM occupies region
 | `0x70000000` | SPI | Write-only ST7735 transfers at 6.75 MHz |
 | `0x80000000` | DHT11 | Start, status and whole-number temperature/humidity data |
 
-The DHT11 controller holds DATA low for 18 ms, times the response and samples
-the 40-bit frame in hardware. Firmware starts a reading about every two seconds
-and checks the checksum before displaying it. The I2C master supports repeated
-START, slave ACK and master ACK/NACK, allowing firmware to set a register
-pointer and turn the bus around for a read. The SPI master operates in mode 0
-and shifts bytes most-significant bit first. The
-firmware validates the DS3231 oscillator-stop flag, 24-hour mode, BCD fields,
-field ranges and calendar date before presenting the value as a real clock.
 
-## Toolchain
+ROM has separate instruction and data read ports. ROM/RAM reads register on
+the falling edge before pipeline capture on the rising edge. Startup copies
+`.data` from ROM to RAM, clears `.bss` and sets the stack to the top of RAM.
+If memory sizes change, update RTL depth/indexing, `sw/startup/linker.ld`,
+`tools/make_hex.py` and the affected tests together.
 
-The command-line flow uses Icarus Verilog for RTL simulation, the bare-metal
-RISC-V GCC toolchain for firmware, picocom for the serial console,
-openFPGALoader for persistent Flash programming, and Gowin EDA V1.9.12.03 for
-synthesis, place and route, bitstream generation and SRAM programming. Install
-the Ubuntu packages with:
+Firmware uses `-Os`; `delay_loop` retains `-O1` because its timing depends on
+the generated instruction sequence. Keep LTO disabled unless delays are
+revalidated. `rom/firmware.hex` is committed because simulation and synthesis
+load it during elaboration.
+
+## Toolchain and build
+
+On Ubuntu, install the command-line dependencies and install/license Gowin
+EDA V1.9.12.03 separately:
 
 ```bash
 sudo apt update
-sudo apt install -y \
-  build-essential \
-  gcc-riscv64-unknown-elf \
-  iverilog \
-  gtkwave \
-  openfpgaloader \
-  picocom
+sudo apt install -y build-essential python3 gcc-riscv64-unknown-elf iverilog openfpgaloader picocom
+export GOWIN_ROOT=/path/to/Gowin
 ```
 
-The commands below use Gowin from this installation path:
+Run from the repository root. `GOWIN_ROOT` must contain `IDE/bin/gw_sh` and,
+for SRAM programming, `Programmer/bin/programmer_cli`. There is no default
+installation path. Override the compiler prefix with `RISCV_TOOL_PREFIX` if
+needed; the default is `riscv64-unknown-elf`.
 
-```text
-/home/haihbv/tools/Gowin_V1.9.12.03
-```
+| Command | Result |
+|---|---|
+| `make test` | Run all 33 RTL testbenches; output under `build/sim/` |
+| `make firmware` | Compile C/assembly and update `rom/firmware.hex` |
+| `make fpga` | Build firmware and synthesize/place/route the FPGA |
+| `make program` | Build and program volatile FPGA SRAM with Gowin |
+| `make flash` | Build and program persistent Flash with openFPGALoader |
 
-Run every command from the project root:
+`make test` expects 33 `PASS` lines. It covers core logic, protocol controllers,
+SoC integration and startup; it does not validate sensor behavior on hardware.
+A short-ROM fixture intentionally produces a `$readmemh` warning in the ROM
+test, which checks that unused words read as zero.
 
-```bash
-cd /home/haihbv/Desktop/work/fpga
-```
+The bitstream is `build/gowin/impl/pnr/fpga_project.fs`. SRAM configuration is
+lost at power-off; Flash configuration persists. Close the serial console
+before programming. The Makefile uses `sudo` for device access. Flash JTAG
+frequency defaults to 1 MHz; override with `make flash FLASH_FREQ=500000`.
+After Flash programming, power-cycle the board to check automatic boot.
 
-## Test, build and program
+For optional waveforms, install `gtkwave`, compile the desired testbench with
+`tb/support/dump_vcd.sv` as a second top module (`-s dump_vcd`), and run with
+`+vcd=build/sim/wave.vcd`.
 
-Run the core verification suite first. It contains 33 RTL testbenches for the
-CPU, pipeline, memories, protocol controllers and SoC integration, including
-firmware startup. Application-specific DS3231 firmware tests are excluded:
+## Operation and RTC setup
 
-```bash
-make test
-```
+DHT11 acquisition and checksum validation run in RTL; firmware starts readings
+about every two seconds. MQ-5 voltage levels are defined in
+`sw/drivers/mq5_sensor.h`: `CLEAN` below 1500 mV, `WARN` from 1500 mV and
+`DANGER` from 2500 mV. These thresholds need calibration for the actual module.
+The display shows `--` for invalid DHT11 readings and `NO ADC` if ADC access
+fails.
 
-To inspect the UART MMIO waveform, compile the testbench together with the
-optional VCD helper, run it, and open the generated trace in GTKWave:
-
-```bash
-mkdir -p build/sim
-iverilog -g2012 \
-  -s uart_mmio_tb -s dump_vcd \
-  -o build/sim/uart.vvp \
-  libs/uart/uart_tx.v \
-  libs/uart/uart_rx.v \
-  source/peripheral/uart_mmio.v \
-  tb/peripheral/uart_mmio_tb.sv \
-  tb/support/dump_vcd.sv
-vvp build/sim/uart.vvp +vcd=build/sim/uart.vcd
-gtkwave build/sim/uart.vcd
-```
-
-A successful run prints 33 `PASS` lines. Build the firmware next. This command
-links the C and assembly sources and updates the ROM image committed at
-`rom/firmware.hex`:
-
-```bash
-make firmware
-```
-
-Generate the FPGA bitstream with the Gowin headless flow:
-
-```bash
-make fpga
-```
-
-The resulting SRAM image is
-`build/gowin/impl/pnr/fpga_project.fs`. Program it into the board with:
-
-```bash
-make program
-```
-
-The Makefile defaults `GOWIN_ROOT` to the installation path above. Override
-it for another installation, for example `make fpga GOWIN_ROOT=/opt/Gowin`.
-
-A successful programming operation reaches 100 percent and ends with
-`Finished.`. The FPGA configuration is held in SRAM, so it must be programmed
-again after removing board power.
-
-To program the generated image into persistent Flash instead, close the serial
-console and run:
-
-```bash
-make flash
-```
-
-The Flash flow uses openFPGALoader at 1 MHz. Override the JTAG frequency when
-needed with `make flash FLASH_FREQ=500000`. A successful operation reports
-`CRC check: Success`; remove and restore board power to verify automatic boot.
-
-## Console and RTC setup
-
-Open the external USB-UART at 115200 baud, then press S2 to capture the boot
-from its first line:
+Open the USB-UART at 115200 8N1, without flow control, and press S2:
 
 ```bash
 picocom -b 115200 --flow n /dev/ttyUSB0
 ```
 
-A valid boot produces output similar to:
+Startup prints `BOOT 5A5A5A5A 00000000` to check `.data`/`.bss` initialization.
+RTC status and time follow. An oscillator-stop flag or invalid calendar value
+causes the display to show `NOT SET`.
 
-```text
-BOOT 5A5A5A5A 00000000
-RTC OSF CLEAR
-RTC 2026-09-22 12:07:23
-```
-
-The two banner words check firmware startup: the first comes from `.data` and
-the second from `.bss`. After initialization, the TFT displays the clock and
-environmental monitoring interface. If the RTC oscillator-stop
-flag is set or its registers do not contain a valid calendar value, the panel
-shows `NOT SET` instead of displaying an untrusted reading.
-
-To set the clock, exit picocom with `Ctrl-A`, then `Ctrl-X`. Configure the
-serial device and send `WYYMMDDhhmmss`. This example sets
-2026-09-22 12:30:00:
+Exit picocom with `Ctrl-A`, then `Ctrl-X`. Send `WYYMMDDhhmmss` to set the RTC;
+for example, 2026-11-08 12:30:00:
 
 ```bash
 stty -F /dev/ttyUSB0 115200 raw -echo
-printf 'W260922123000' > /dev/ttyUSB0
+printf 'W261108123000' > /dev/ttyUSB0
 ```
 
-The firmware replies with `RTC SET OK`. An impossible date is rejected without
-changing a clock that was already trusted:
-
-```bash
-printf 'W260231120000' > /dev/ttyUSB0
-```
-
-The response is `RTC SET RANGE`, and the existing time continues to run.
-
-## Source tree
-
-The tree is split by responsibility rather than by tool. `source/` contains
-the SoC RTL, `libs/` contains reusable protocol engines, and `tb/` contains
-all retained testbenches and simulation support files. Firmware is kept
-under `sw/`; its generated boot image is committed under `rom/` because the
-instruction ROM reads it during elaboration. Build, test and programming logic
-is kept under `tools/`. `PROJECT_DECISIONS.txt` briefly records the reasons
-behind the ROM size, the three external interfaces and the module boundaries.
-
-```text
-.
-├── README.md                       # Project setup and operating guide
-├── LICENSE                         # MIT License, copyright haibv10
-├── PROJECT_DECISIONS.txt           # Short architecture decision notes
-├── .gitignore                      # Local and generated file exclusions
-├── fpga_project.gprj               # Gowin IDE project
-│
-├── constr/                         # Tang Nano 9K constraints
-│   ├── fpga_project.cst            # Physical pin assignments
-│   └── fpga_project.sdc            # 27 MHz timing constraint
-│
-├── source/                         # Synthesizable SoC RTL
-│   ├── common/                     # Shared clock and reset blocks
-│   │   ├── clock_enable.v
-│   │   └── reset_sync.v
-│   ├── cpu/                        # RV32I core, pipeline and memories
-│   │   ├── cpu_top.v               # FPGA top module
-│   │   ├── cpu_address_decoder.v   # ROM, RAM and MMIO region decoder
-│   │   ├── core_*.v                # ALU, control, PC and register file
-│   │   ├── pipe_*.v                # Pipeline registers and hazards
-│   │   └── mem_*.v                 # Instruction ROM and data RAM
-│   └── peripheral/                 # CPU-facing MMIO wrappers
-│       ├── gpio_mmio.v
-│       ├── uart_mmio.v
-│       ├── i2c_mmio.v
-│       ├── spi_mmio.v
-│       └── dht11_mmio.v
-│
-├── libs/                           # Reusable serial protocol engines
-│   ├── uart/
-│   │   ├── uart_tx.v
-│   │   └── uart_rx.v
-│   ├── i2c/
-│   │   └── i2c_master.v
-│   └── spi/
-│       └── spi_master.v
-│
-├── tb/                             # All 33 RTL testbenches and support
-│   ├── common/                     # Common RTL tests
-│   ├── cpu/                        # Core, full-SoC and startup tests
-│   ├── libs/                       # UART, I2C and SPI controller tests
-│   │   └── i2c/i2c_register_slave_model.sv  # Generic test slave
-│   ├── peripheral/                 # MMIO wrapper tests
-│   └── support/
-│       ├── dump_vcd.sv             # Optional waveform helper
-│       └── imem_test.hex           # Small ROM image used by ROM tests
-│
-├── sw/                             # Bare-metal firmware source
-│   ├── main.c                      # Boot, clock and sensor polling loop
-│   ├── startup.s                   # .data/.bss setup and stack entry
-│   ├── sys_delay.*                 # Calibrated busy-loop delay
-│   ├── gpio_led.*                  # Onboard LED access
-│   ├── uart_io.*                   # Console output and input
-│   ├── i2c_bus.*                   # I2C MMIO frame access
-│   ├── spi_bus.*                   # SPI MMIO byte access
-│   ├── ds3231_rtc.*                # RTC read, validation and setup
-│   ├── mq5_sensor.*                # ADS1115 and MQ-5 voltage conversion
-│   ├── dht11_sensor.*              # DHT11 MMIO access
-│   ├── st7735_panel.*              # Panel init and drawing primitives
-│   ├── font_8x8.*                  # Printable ASCII bitmap font
-│   └── ui_clock.*                  # Clock and environmental readings layout
-│
-├── rom/
-│   └── firmware.hex                # 8 KB instruction ROM image
-│
-└── tools/                          # Reproducible command-line flow
-    ├── run_tests.sh                # Run all 33 RTL testbenches
-    ├── build_firmware.sh           # Compile firmware and update ROM image
-    ├── linker_script.ld            # 8 KB ROM and 4 KB RAM layout
-    ├── make_hex.py                 # Pad binary to the ROM depth
-    ├── build_fpga.sh               # Start the headless Gowin build
-    ├── build_gowin.tcl             # Gowin synthesis/P&R file list
-    └── program_fpga.sh             # Program the SRAM bitstream
-```
+Use the actual adapter device path. Successful setup replies `RTC SET OK`;
+invalid dates return `RTC SET RANGE`.
 
 ## Limitations
 
-The ST7735 interface has no read path. The DS3231 is used in 24-hour mode and
-the firmware represents years from 2000 through 2099. UART has no hardware
-flow control, and its receive FIFO can overflow when software does not consume
-bytes quickly enough.
+The core has no multiply/divide, floating point, cache, virtual memory or OS.
+`ECALL`/`EBREAK` are not implemented; `FENCE` acts as an ordering no-op in this
+in-order design without a cache or write buffer. The ST7735 interface is
+write-only. RTC firmware uses 24-hour mode and years 2000–2099. UART has a
+16-byte RX FIFO and no hardware flow control.
 
 ## License
 
-This project is released under the MIT License. Copyright (c) 2026 haibv10.
-See `LICENSE` for the full terms.
+MIT License. See [LICENSE](LICENSE).

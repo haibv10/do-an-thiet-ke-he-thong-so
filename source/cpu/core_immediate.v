@@ -4,20 +4,18 @@ module core_immediate(
 );
   always @(*) begin
     case (instr[6:0])
-      7'b0000011, 7'b0010011, 7'b1100111: // I-type: load, ALU immediate, JALR
+      7'b0000011, 7'b0010011, 7'b1100111:
         imm_out = {{20{instr[31]}}, instr[31:20]};
 
-      7'b0100011: // S-type: store
+      7'b0100011:
         imm_out = {{20{instr[31]}}, instr[31:25], instr[11:7]};
 
-      7'b1100011: // B-type: branch
+      7'b1100011:
         imm_out = {{20{instr[31]}}, instr[7], instr[30:25], instr[11:8], 1'b0};
 
-      7'b0110111, 7'b0010111: // U-type: LUI, AUIPC
+      7'b0110111, 7'b0010111:
         imm_out = {instr[31:12], 12'b0};
 
-      // J-type. The encoding scatters the immediate bits so that every format
-      // keeps the sign bit in instr[31].
       7'b1101111:
         imm_out = {{12{instr[31]}}, instr[19:12], instr[20], instr[30:21], 1'b0};
 

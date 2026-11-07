@@ -60,7 +60,6 @@ than an FPGA I/O. UART TX/RX cross to adapter RXD/TXD.
 | 3V3 | — | DS3231, ST7735, ADS1115 and DHT11 VCC; pull-ups |
 | GND | — | DS3231, ST7735, ADS1115, DHT11 and USB-UART ground |
 
-
 ADS1115 uses address `0x48` (ADDR to GND) and AIN0. Connect MQ-5 AO through a
 10 kΩ upper / 20 kΩ lower divider; firmware compensates for this divider.
 Power the MQ-5 module as specified by its board. Do not connect its 5 V AO
@@ -84,17 +83,15 @@ synchronously. I2C runs at 50 kHz; SPI uses mode 0, MSB first, at 6.75 MHz.
 | `0x70000000` | SPI | Write-only ST7735 transfers at 6.75 MHz |
 | `0x80000000` | DHT11 | Start, status and whole-number temperature/humidity data |
 
-
 ROM has separate instruction and data read ports. ROM/RAM reads register on
 the falling edge before pipeline capture on the rising edge. Startup copies
 `.data` from ROM to RAM, clears `.bss` and sets the stack to the top of RAM.
-If memory sizes change, update RTL depth/indexing, `sw/startup/linker.ld`,
-`tools/make_hex.py` and the affected tests together.
+Memory capacity is defined by RTL depth/indexing, `sw/startup/linker.ld`
+and the HEX image depth in `tools/make_hex.py`.
 
 Firmware uses `-Os`; `delay_loop` retains `-O1` because its timing depends on
-the generated instruction sequence. Keep LTO disabled unless delays are
-revalidated. `rom/firmware.hex` is committed because simulation and synthesis
-load it during elaboration.
+the generated instruction sequence. LTO is disabled. Simulation and synthesis
+load `rom/firmware.hex` during elaboration.
 
 ## Toolchain and build
 
@@ -108,12 +105,13 @@ export GOWIN_ROOT=/path/to/Gowin
 ```
 
 Run from the repository root. `GOWIN_ROOT` must contain `IDE/bin/gw_sh` and,
-for SRAM programming, `Programmer/bin/programmer_cli`. There is no default
-installation path. Override the compiler prefix with `RISCV_TOOL_PREFIX` if
+for SRAM programming, `Programmer/bin/programmer_cli`.
+Override the compiler prefix with `RISCV_TOOL_PREFIX` if
 needed; the default is `riscv64-unknown-elf`.
 
 | Command | Result |
 |---|---|
+| `make clean` | Remove the entire `build/` directory |
 | `make test` | Run all 33 RTL testbenches; output under `build/sim/` |
 | `make firmware` | Compile C/assembly and update `rom/firmware.hex` |
 | `make fpga` | Build firmware and synthesize/place/route the FPGA |
@@ -153,13 +151,12 @@ settings are in `.clang-format` and `.verible-format.flags`.
 
 Install [Verible](https://github.com/chipsalliance/verible/releases),
 [clang-format](https://clang.llvm.org/docs/ClangFormat.html) and
-[shfmt](https://github.com/mvdan/sh/releases). The versions used for this source
-are Verible `v0.0-4298-g085eef05`, clang-format `21.1.8` and shfmt `v3.14.1`.
+[shfmt](https://github.com/mvdan/sh/releases). Formatter versions:
+Verible `v0.0-4298-g085eef05`, clang-format `21.1.8` and shfmt `v3.14.1`.
 Use matching versions for reproducible formatting. Tools are resolved from
 `PATH`, with a fallback to `build/format-tools/bin/` for project-local binaries.
 Explicit executable paths can be supplied through `VERIBLE_FORMAT`,
-`CLANG_FORMAT` and `SHFMT`. Binaries are not committed and formatting is not a
-prerequisite for normal build/test commands.
+`CLANG_FORMAT` and `SHFMT`.
 
 ## Operation and RTC setup
 

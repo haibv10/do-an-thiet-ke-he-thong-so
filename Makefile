@@ -1,10 +1,11 @@
 GOWIN_ROOT ?=
 FLASH_FREQ ?= 1000000
 
-.PHONY: help format format-check test firmware fpga program flash
+.PHONY: help clean format format-check test firmware fpga program flash
 
 help:
 	@printf '%s\n' \
+	  'make clean         Remove the entire build directory.' \
 	  'make format        Format RTL, C/header and shell sources.' \
 	  'make format-check  Check formatting without modifying files.' \
 	  'make test      Run all 33 RTL testbenches.' \
@@ -13,6 +14,9 @@ help:
 	  'make program   Build the bitstream and program FPGA SRAM.' \
 	  'make flash     Build the bitstream and program persistent Flash.' \
 	  'Set GOWIN_ROOT=/path/to/Gowin before FPGA build or programming.'
+
+clean:
+	rm -rf -- build
 
 format:
 	bash tools/format_source.sh --write

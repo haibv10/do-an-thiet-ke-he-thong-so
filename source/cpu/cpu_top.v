@@ -142,7 +142,6 @@ module cpu_top #(
 
   // --- EX: execute and operand forwarding ---
   wire [31:0] ex_alu_result;
-  wire        ex_zero;
   wire [1:0]  forward_a, forward_b;
   wire [31:0] alu_mux_a, alu_mux_b, alu_src_a, alu_src_b;
 
@@ -171,7 +170,7 @@ module cpu_top #(
     .b(alu_src_b),
     .alu_ctrl(ex_alu_ctrl),
     .result(ex_alu_result),
-    .zero(ex_zero)
+    .zero()
   );
 
   // Comparing the forwarded operands, not ex_rd1/ex_rd2, keeps a branch that
@@ -198,20 +197,18 @@ module cpu_top #(
 
   wire [31:0] ex_result_to_mem = (ex_Jump != 2'b00) ? (ex_pc + 32'd4) : ex_alu_result;
 
-  wire mem_Branch, mem_MemRead, mem_MemtoReg, mem_MemWrite, mem_zero;
+  wire mem_MemRead, mem_MemtoReg, mem_MemWrite;
   wire [2:0]  mem_funct3;
-  wire [31:0] mem_branch_target, mem_rd2;
+  wire [31:0] mem_rd2;
 
   pipe_ex_mem reg_ex_mem (
     .clk(clk), .rst_n(rst_n_sync),
     .ex_RegWrite(ex_RegWrite), .ex_MemtoReg(ex_MemtoReg), .ex_MemWrite(ex_MemWrite),
-    .ex_MemRead(ex_MemRead), .ex_Branch(ex_Branch), .ex_branch_target(ex_branch_target),
-    .ex_zero(ex_zero), .ex_alu_result(ex_result_to_mem), .ex_rd2(alu_mux_b), .ex_rd_idx(ex_rd_idx),
+    .ex_MemRead(ex_MemRead), .ex_alu_result(ex_result_to_mem), .ex_rd2(alu_mux_b), .ex_rd_idx(ex_rd_idx),
     .ex_funct3(ex_funct3),
 
     .mem_RegWrite(mem_RegWrite), .mem_MemtoReg(mem_MemtoReg), .mem_MemWrite(mem_MemWrite),
-    .mem_MemRead(mem_MemRead), .mem_Branch(mem_Branch), .mem_branch_target(mem_branch_target),
-    .mem_zero(mem_zero), .mem_alu_result(mem_alu_result), .mem_rd2(mem_rd2), .mem_rd_idx(mem_rd_idx),
+    .mem_MemRead(mem_MemRead), .mem_alu_result(mem_alu_result), .mem_rd2(mem_rd2), .mem_rd_idx(mem_rd_idx),
     .mem_funct3(mem_funct3)
   );
 

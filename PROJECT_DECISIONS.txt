@@ -154,11 +154,13 @@ Pins 25 through 29 form a free 3.3 V header run. The TF-card signals and the
 onboard RGB LCD connector are left alone, so the TFT does not contend with
 another board device.
 
-Library tests stay with libraries
+Core testbenches grouped under tb
 ---------------------------------
-Reusable UART, I2C and SPI RTL keeps its unit testbench beside it. A library
-copied to another project therefore carries the test that defines its protocol
-contract. SoC integration tests stay under sim/.
+All retained testbenches and simulation support files live under tb/. The suite
+covers CPU, pipeline, memory, protocol controllers and SoC integration, including
+firmware startup checks for .data and .bss initialization. Application-specific
+DS3231 firmware unit tests are excluded from the handover suite. Synthesizable
+protocol engines remain under libs/.
 
 Firmware delay loop without LTO
 -------------------------------

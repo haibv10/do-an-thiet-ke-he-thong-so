@@ -133,8 +133,9 @@ cd /home/haihbv/Desktop/work/fpga
 
 ## Test, build and program
 
-Run the complete verification suite first. It contains 33 RTL testbenches and
-one host-side C test for DS3231 calendar validation:
+Run the core verification suite first. It contains 33 RTL testbenches for the
+CPU, pipeline, memories, protocol controllers and SoC integration, including
+firmware startup. Application-specific DS3231 firmware tests are excluded:
 
 ```bash
 make test
@@ -151,13 +152,13 @@ iverilog -g2012 \
   libs/uart/uart_tx.v \
   libs/uart/uart_rx.v \
   source/peripheral/uart_mmio.v \
-  sim/peripheral/uart_mmio_tb.sv \
-  sim/support/dump_vcd.sv
+  tb/peripheral/uart_mmio_tb.sv \
+  tb/support/dump_vcd.sv
 vvp build/sim/uart.vvp +vcd=build/sim/uart.vcd
 gtkwave build/sim/uart.vcd
 ```
 
-A successful run prints 34 `PASS` lines. Build the firmware next. This command
+A successful run prints 33 `PASS` lines. Build the firmware next. This command
 links the C and assembly sources and updates the ROM image committed at
 `rom/firmware.hex`:
 
@@ -209,15 +210,13 @@ A valid boot produces output similar to:
 
 ```text
 BOOT 5A5A5A5A 00000000
-TFT INIT
-TFT BARS
 RTC OSF CLEAR
 RTC 2026-09-22 12:07:23
 ```
 
 The two banner words check firmware startup: the first comes from `.data` and
-the second from `.bss`. The TFT displays red, green and blue bars for one
-second before switching to the clock interface. If the RTC oscillator-stop
+the second from `.bss`. After initialization, the TFT displays the clock and
+environmental monitoring interface. If the RTC oscillator-stop
 flag is set or its registers do not contain a valid calendar value, the panel
 shows `NOT SET` instead of displaying an untrusted reading.
 
@@ -242,8 +241,8 @@ The response is `RTC SET RANGE`, and the existing time continues to run.
 ## Source tree
 
 The tree is split by responsibility rather than by tool. `source/` contains
-the SoC RTL, `libs/` contains reusable protocol engines and their unit tests,
-and `sim/` contains integration and peripheral testbenches. Firmware is kept
+the SoC RTL, `libs/` contains reusable protocol engines, and `tb/` contains
+all retained testbenches and simulation support files. Firmware is kept
 under `sw/`; its generated boot image is committed under `rom/` because the
 instruction ROM reads it during elaboration. Build, test and programming logic
 is kept under `tools/`. `PROJECT_DECISIONS.txt` briefly records the reasons
@@ -281,22 +280,20 @@ behind the ROM size, the three external interfaces and the module boundaries.
 ├── libs/                           # Reusable serial protocol engines
 │   ├── uart/
 │   │   ├── uart_tx.v
-│   │   ├── uart_rx.v
-│   │   └── *_tb.sv                 # UART unit tests
+│   │   └── uart_rx.v
 │   ├── i2c/
-│   │   ├── i2c_master.v
-│   │   ├── i2c_master_tb.sv
-│   │   └── i2c_register_slave_model.sv  # Generic test slave
+│   │   └── i2c_master.v
 │   └── spi/
-│       ├── spi_master.v
-│       └── spi_master_tb.sv
+│       └── spi_master.v
 │
-├── sim/                            # Source-level integration tests
+├── tb/                             # All 33 RTL testbenches and support
 │   ├── common/                     # Common RTL tests
-│   ├── cpu/                        # Core and full-SoC tests
-│   ├── firmware/                   # Host-side firmware tests
+│   ├── cpu/                        # Core, full-SoC and startup tests
+│   ├── libs/                       # UART, I2C and SPI controller tests
+│   │   └── i2c/i2c_register_slave_model.sv  # Generic test slave
 │   ├── peripheral/                 # MMIO wrapper tests
 │   └── support/
+│       ├── dump_vcd.sv             # Optional waveform helper
 │       └── imem_test.hex           # Small ROM image used by ROM tests
 │
 ├── sw/                             # Bare-metal firmware source
@@ -318,7 +315,7 @@ behind the ROM size, the three external interfaces and the module boundaries.
 │   └── firmware.hex                # 8 KB instruction ROM image
 │
 └── tools/                          # Reproducible command-line flow
-    ├── run_tests.sh                # Run all 34 tests
+    ├── run_tests.sh                # Run all 33 RTL testbenches
     ├── build_firmware.sh           # Compile firmware and update ROM image
     ├── linker_script.ld            # 8 KB ROM and 4 KB RAM layout
     ├── make_hex.py                 # Pad binary to the ROM depth

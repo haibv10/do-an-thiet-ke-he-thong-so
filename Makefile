@@ -5,7 +5,7 @@ FLASH_FREQ ?= 1000000
 
 help:
 	@printf '%s\n' \
-	  'make test      Run all RTL and firmware tests.' \
+	  'make test      Run all 33 RTL testbenches.' \
 	  'make firmware  Build the RISC-V firmware ROM image.' \
 	  'make fpga      Build firmware and generate the FPGA bitstream.' \
 	  'make program   Build the bitstream and program FPGA SRAM.' \

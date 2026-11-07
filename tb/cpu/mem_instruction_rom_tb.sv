@@ -14,7 +14,7 @@ module mem_instruction_rom_tb;
   // under which the zero-fill loop in mem_instruction_rom.v has to do its job.
   // Padding the fixture to the full depth would silence the warning and delete
   // the test.
-  mem_instruction_rom #(.HEX_PATH("sim/support/imem_test.hex")) dut (.*);
+  mem_instruction_rom #(.HEX_PATH("tb/support/imem_test.hex")) dut (.*);
 
   always #5 clk = ~clk;
 

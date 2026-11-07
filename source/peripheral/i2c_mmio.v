@@ -17,11 +17,9 @@ module i2c_mmio (
   inout  wire        scl
 );
 
-  wire       frame_done;
   wire       frame_busy;
   wire       frame_ack;
   wire [7:0] frame_data;
-  wire       sda_en;
 
   reg        en;
   reg        busy;
@@ -45,11 +43,11 @@ module i2c_mmio (
     .data(tx_data),
     .sda(sda),
     .scl(scl),
-    .done(frame_done),
+    .done(),
     .busy(frame_busy),
     .data_out(frame_data),
     .ack(frame_ack),
-    .sda_en(sda_en)
+    .sda_en()
   );
 
   // en is a request, not a duration: it is dropped once the master has left

@@ -38,15 +38,10 @@ int main(void) {
   uart_hex32(bss_marker);
   uart_puts("\r\n");
 
-  uart_puts("TFT INIT\r\n");
   tft_init();
-  tft_colour_bars();
-  uart_puts("TFT BARS\r\n");
 
   rtc_time_trusted = ds3231_report_osf();
 
-  // The bars stay up long enough to be read, then the panel becomes the clock.
-  delay_loop(DELAY_MS(1000));
   ui_draw_frame();
 
   while (1) {

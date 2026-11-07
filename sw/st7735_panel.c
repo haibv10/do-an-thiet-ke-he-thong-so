@@ -5,8 +5,7 @@
 
 // D7 MY and D6 MX mirror the row and column order, D3 selects BGR over RGB
 // subpixel order. Clearing MY and MX together turns the image through 180
-// degrees, which is what puts the panel the right way up on this board; the
-// bars come out red, green and blue in that order, so D3 stays set.
+// degrees to match the panel orientation on this board. D3 stays set for BGR.
 #define TFT_MADCTL    0x08
 
 // The control register moves cs_n and dc, so it must not change while a byte
@@ -167,15 +166,4 @@ void tft_draw_bcd(unsigned char x, unsigned char y, unsigned char value,
   tft_draw_char(x, y, (char) ('0' + ((value >> 4) & 0x0f)), fg, bg, scale);
   tft_draw_char((unsigned char) (x + FONT_SIZE * scale), y,
                 (char) ('0' + (value & 0x0f)), fg, bg, scale);
-}
-
-// Three vertical bars, not text. A bar shows byte order, MADCTL scan direction
-// and column addressing at once: a swapped subpixel order comes back as the
-// wrong colour, and a wrong scan direction as bars running the wrong way.
-void tft_colour_bars(void) {
-  unsigned char third = TFT_WIDTH / 3;
-
-  tft_fill_rect(0, 0, third - 1, TFT_HEIGHT - 1, TFT_RED);
-  tft_fill_rect(third, 0, (unsigned char) (2 * third - 1), TFT_HEIGHT - 1, TFT_GREEN);
-  tft_fill_rect(2 * third, 0, TFT_WIDTH - 1, TFT_HEIGHT - 1, TFT_BLUE);
 }

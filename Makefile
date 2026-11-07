@@ -1,16 +1,24 @@
 GOWIN_ROOT ?=
 FLASH_FREQ ?= 1000000
 
-.PHONY: help test firmware fpga program flash
+.PHONY: help format format-check test firmware fpga program flash
 
 help:
 	@printf '%s\n' \
+	  'make format        Format RTL, C/header and shell sources.' \
+	  'make format-check  Check formatting without modifying files.' \
 	  'make test      Run all 33 RTL testbenches.' \
 	  'make firmware  Build the RISC-V firmware ROM image.' \
 	  'make fpga      Build firmware and generate the FPGA bitstream.' \
 	  'make program   Build the bitstream and program FPGA SRAM.' \
 	  'make flash     Build the bitstream and program persistent Flash.' \
 	  'Set GOWIN_ROOT=/path/to/Gowin before FPGA build or programming.'
+
+format:
+	bash tools/format_source.sh --write
+
+format-check:
+	bash tools/format_source.sh --check
 
 test:
 	bash tools/run_tests.sh

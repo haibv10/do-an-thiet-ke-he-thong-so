@@ -1,15 +1,15 @@
-`timescale 1ns/1ps
+`timescale 1ns / 1ps
 
 module cpu_uart_fifo_tb;
   localparam integer CLKS_PER_BIT = 8;
 
-  logic clk = 1'b0;
-  logic rst_n = 1'b0;
-  logic uart_rx_in = 1'b1;
-  wire led_out;
-  wire uart_tx_out;
-  tri1 i2c_sda;
-  tri1 i2c_scl;
+  logic   clk = 1'b0;
+  logic   rst_n = 1'b0;
+  logic   uart_rx_in = 1'b1;
+  wire    led_out;
+  wire    uart_tx_out;
+  tri1    i2c_sda;
+  tri1    i2c_scl;
   integer word_index;
 
   always #5 clk = ~clk;
@@ -17,8 +17,11 @@ module cpu_uart_fifo_tb;
   soc_top #(
     .UART_CLKS_PER_BIT(CLKS_PER_BIT)
   ) dut (
-    .clk(clk), .rst_n(rst_n), .led_out(led_out),
-    .uart_rx_in(uart_rx_in), .uart_tx_out(uart_tx_out)
+    .clk        (clk),
+    .rst_n      (rst_n),
+    .led_out    (led_out),
+    .uart_rx_in (uart_rx_in),
+    .uart_tx_out(uart_tx_out)
   );
 
   task automatic send_byte(input logic [7:0] value);
@@ -36,7 +39,7 @@ module cpu_uart_fifo_tb;
   initial begin
     #1;
     for (word_index = 0; word_index < 1024; word_index = word_index + 1)
-      dut.rom.rom[word_index] = 32'h0000_0013;
+    dut.rom.rom[word_index] = 32'h0000_0013;
 
     dut.rom.rom[0] = 32'h5000_00b7;
     dut.rom.rom[1] = 32'h3e80_0213;

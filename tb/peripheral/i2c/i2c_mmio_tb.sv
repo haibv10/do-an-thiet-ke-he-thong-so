@@ -1,34 +1,34 @@
-`timescale 1ns/1ps
+`timescale 1ns / 1ps
 
 module i2c_mmio_tb;
   localparam logic [6:0] SLAVE_ADDRESS = 7'h68;
-  localparam logic [31:0] FRAME_REG  = 32'h0000_0000;
+  localparam logic [31:0] FRAME_REG = 32'h0000_0000;
   localparam logic [31:0] STATUS_REG = 32'h0000_0004;
-  localparam logic [31:0] DATA_REG   = 32'h0000_0008;
+  localparam logic [31:0] DATA_REG = 32'h0000_0008;
 
   localparam logic [31:0] START = 32'h0000_0100;
-  localparam logic [31:0] STOP  = 32'h0000_0200;
-  localparam logic [31:0] READ  = 32'h0000_0400;
-  localparam logic [31:0] NACK  = 32'h0000_0800;
+  localparam logic [31:0] STOP = 32'h0000_0200;
+  localparam logic [31:0] READ = 32'h0000_0400;
+  localparam logic [31:0] NACK = 32'h0000_0800;
 
   localparam logic [31:0] ADDR_W = {SLAVE_ADDRESS, 1'b0};
   localparam logic [31:0] ADDR_R = {SLAVE_ADDRESS, 1'b1};
 
   localparam logic [31:0] BUSY = 32'h0000_0001;
-  localparam logic [31:0] ACK  = 32'h0000_0002;
+  localparam logic [31:0] ACK = 32'h0000_0002;
 
-  logic clk = 1'b0;
-  wire tick;
-  logic rst_n = 1'b0;
-  logic we = 1'b0;
+  logic        clk = 1'b0;
+  wire         tick;
+  logic        rst_n = 1'b0;
+  logic        we = 1'b0;
   logic [31:0] a = STATUS_REG;
   logic [31:0] wd = 32'd0;
   wire  [31:0] rd;
-  tri1 sda;
-  tri1 scl;
+  tri1         sda;
+  tri1         scl;
 
-  logic [7:0] captured [0:6];
-  int index;
+  logic [ 7:0] captured       [0:6];
+  int          index;
 
   always #5 clk = ~clk;
 
@@ -37,23 +37,42 @@ module i2c_mmio_tb;
     $fatal(1, "I2C timeout, status=%h slave=%0d", rd, slave.state);
   end
 
-  clock_enable #(.divider(4)) tick_divider (.clk, .rst_n, .tick);
-
-  i2c_mmio dut (
-    .clk, .tick, .rst_n, .we, .a, .wd, .rd, .sda, .scl
+  clock_enable #(
+    .divider(4)
+  ) tick_divider (
+    .clk,
+    .rst_n,
+    .tick
   );
 
-  i2c_register_slave_model #(.ADDRESS(SLAVE_ADDRESS)) slave (.sda, .scl);
+  i2c_mmio dut (
+    .clk,
+    .tick,
+    .rst_n,
+    .we,
+    .a,
+    .wd,
+    .rd,
+    .sda,
+    .scl
+  );
+
+  i2c_register_slave_model #(
+    .ADDRESS(SLAVE_ADDRESS)
+  ) slave (
+    .sda,
+    .scl
+  );
 
   task automatic bus_write(input logic [31:0] addr, input logic [31:0] value);
     begin
       @(negedge clk);
-      a = addr;
+      a  = addr;
       wd = value;
       we = 1'b1;
       @(negedge clk);
       we = 1'b0;
-      a = STATUS_REG;
+      a  = STATUS_REG;
       #1;
     end
   endtask
@@ -74,23 +93,25 @@ module i2c_mmio_tb;
       a = DATA_REG;
       #1;
       value = rd[7:0];
-      a = STATUS_REG;
+      a     = STATUS_REG;
       #1;
     end
   endtask
 
   initial begin
-    for (index = 0; index < 19; index++)
-      slave.regs[index] = 8'h00;
-    slave.regs[0] = 8'h45; slave.regs[1] = 8'h30; slave.regs[2] = 8'h13;
-    slave.regs[3] = 8'h02; slave.regs[4] = 8'h21; slave.regs[5] = 8'h09;
+    for (index = 0; index < 19; index++) slave.regs[index] = 8'h00;
+    slave.regs[0] = 8'h45;
+    slave.regs[1] = 8'h30;
+    slave.regs[2] = 8'h13;
+    slave.regs[3] = 8'h02;
+    slave.regs[4] = 8'h21;
+    slave.regs[5] = 8'h09;
     slave.regs[6] = 8'h26;
 
     repeat (4) @(negedge clk);
     #1;
     if ((rd & BUSY) !== 32'd0) $fatal(1, "busy set during reset");
-    if (sda !== 1'b1 || scl !== 1'b1)
-      $fatal(1, "bus driven during reset, sda=%b scl=%b", sda, scl);
+    if (sda !== 1'b1 || scl !== 1'b1) $fatal(1, "bus driven during reset, sda=%b scl=%b", sda, scl);
     rst_n = 1'b1;
     repeat (4) @(negedge clk);
 
@@ -112,9 +133,8 @@ module i2c_mmio_tb;
     read_data(captured[6]);
 
     for (index = 0; index < 7; index++)
-      if (captured[index] !== slave.regs[index])
-        $fatal(1, "byte %0d read back %h, expected %h",
-               index, captured[index], slave.regs[index]);
+    if (captured[index] !== slave.regs[index])
+      $fatal(1, "byte %0d read back %h, expected %h", index, captured[index], slave.regs[index]);
 
     if (slave.stop_conditions !== 1)
       $fatal(1, "%0d STOP conditions, expected 1", slave.stop_conditions);
@@ -126,11 +146,9 @@ module i2c_mmio_tb;
     repeat (40) @(posedge clk);
     bus_write(FRAME_REG, START | 32'h0000_0020);
     wait (rd[0] === 1'b0);
-    if ((rd & ACK) === 32'd0)
-      $fatal(1, "the frame in flight was replaced by the dropped store");
+    if ((rd & ACK) === 32'd0) $fatal(1, "the frame in flight was replaced by the dropped store");
     if (slave.start_conditions !== 3)
-      $fatal(1, "%0d START conditions, the dropped store emitted its own",
-             slave.start_conditions);
+      $fatal(1, "%0d START conditions, the dropped store emitted its own", slave.start_conditions);
 
     frame(32'h0000_000e);
     frame(32'h0000_001c | STOP);

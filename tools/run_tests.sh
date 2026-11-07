@@ -20,11 +20,11 @@ run_test() {
   vvp "$test_build_dir/$top.vvp"
 }
 
-run_test core_alu_tb       source/cpu/core_alu.v       tb/cpu/core_alu_tb.sv
-run_test core_control_tb   source/cpu/core_control.v   tb/cpu/core_control_tb.sv
+run_test core_alu_tb source/cpu/core_alu.v tb/cpu/core_alu_tb.sv
+run_test core_control_tb source/cpu/core_control.v tb/cpu/core_control_tb.sv
 run_test core_immediate_tb source/cpu/core_immediate.v tb/cpu/core_immediate_tb.sv
-run_test core_regfile_tb   source/cpu/core_regfile.v   tb/cpu/core_regfile_tb.sv
-run_test core_pc_tb        source/cpu/core_pc.v        tb/cpu/core_pc_tb.sv
+run_test core_regfile_tb source/cpu/core_regfile.v tb/cpu/core_regfile_tb.sv
+run_test core_pc_tb source/cpu/core_pc.v tb/cpu/core_pc_tb.sv
 
 run_test reset_sync_tb source/common/reset_sync.v tb/common/reset_sync_tb.sv
 run_test clock_enable_tb source/common/clock_enable.v tb/common/clock_enable_tb.sv

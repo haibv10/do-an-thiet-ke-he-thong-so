@@ -1,25 +1,27 @@
-`timescale 1ns/1ps
+`timescale 1ns / 1ps
 
 module uart_rx_tb;
   localparam integer CLKS_PER_BIT = 8;
 
-  logic clk = 1'b0;
-  logic rst_n = 1'b0;
-  logic rx = 1'b1;
-  logic pop = 1'b0;
-  logic clear_overrun = 1'b0;
-  logic [7:0] data;
-  logic valid;
-  logic overrun;
-  logic [4:0] level;
-  integer bit_index;
+  logic         clk = 1'b0;
+  logic         rst_n = 1'b0;
+  logic         rx = 1'b1;
+  logic         pop = 1'b0;
+  logic         clear_overrun = 1'b0;
+  logic   [7:0] data;
+  logic         valid;
+  logic         overrun;
+  logic   [4:0] level;
+  integer       bit_index;
 
   always #5 clk = ~clk;
 
   uart_rx #(
     .CLKS_PER_BIT(CLKS_PER_BIT),
-    .FIFO_DEPTH(16)
-  ) dut (.*);
+    .FIFO_DEPTH  (16)
+  ) dut (
+    .*
+  );
 
   task automatic send_byte(input logic [7:0] value, input logic stop_bit);
     integer data_bit;
@@ -71,11 +73,9 @@ module uart_rx_tb;
     repeat (3) @(posedge clk);
     pop_byte(8'h5a);
 
-    for (bit_index = 0; bit_index < 16; bit_index = bit_index + 1)
-      send_byte(bit_index, 1'b1);
+    for (bit_index = 0; bit_index < 16; bit_index = bit_index + 1) send_byte(bit_index, 1'b1);
     repeat (3) @(posedge clk);
-    if (level !== 5'd16 || data !== 8'h00)
-      $fatal(1, "FIFO full level=%d head=%h", level, data);
+    if (level !== 5'd16 || data !== 8'h00) $fatal(1, "FIFO full level=%d head=%h", level, data);
 
     send_byte(8'hff, 1'b1);
     repeat (3) @(posedge clk);
@@ -86,8 +86,7 @@ module uart_rx_tb;
     @(negedge clk) clear_overrun = 1'b0;
     if (overrun) $fatal(1, "overrun did not clear");
 
-    for (bit_index = 0; bit_index < 16; bit_index = bit_index + 1)
-      pop_byte(bit_index);
+    for (bit_index = 0; bit_index < 16; bit_index = bit_index + 1) pop_byte(bit_index);
     if (valid || level !== 5'd0) $fatal(1, "FIFO did not drain");
 
     $display("uart_rx_tb: PASS");

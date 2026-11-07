@@ -6,9 +6,7 @@ module core_pc (
   output reg  [31:0] pc
 );
   always @(posedge clk or negedge rst_n) begin
-    if (!rst_n)
-      pc <= 32'h00000000;
-    else if (!stall)
-      pc <= pc_next;
+    if (!rst_n) pc <= 32'h00000000;
+    else if (!stall) pc <= pc_next;
   end
 endmodule

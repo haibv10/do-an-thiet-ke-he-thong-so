@@ -1,17 +1,21 @@
-`timescale 1ns/1ps
+`timescale 1ns / 1ps
 
 module reset_sync_tb;
   localparam integer STAGES = 2;
 
-  logic clk = 1'b0;
-  logic rst_n_in = 1'b1;
-  wire  rst_n_out;
+  logic   clk = 1'b0;
+  logic   rst_n_in = 1'b1;
+  wire    rst_n_out;
   integer edges;
 
   always #5 clk = ~clk;
 
-  reset_sync #(.STAGES(STAGES)) dut (
-    .clk(clk), .rst_n_in(rst_n_in), .rst_n_out(rst_n_out)
+  reset_sync #(
+    .STAGES(STAGES)
+  ) dut (
+    .clk      (clk),
+    .rst_n_in (rst_n_in),
+    .rst_n_out(rst_n_out)
   );
 
   initial begin
@@ -20,8 +24,7 @@ module reset_sync_tb;
     #2;
     rst_n_in = 1'b0;
     #1;
-    if (rst_n_out !== 1'b0)
-      $fatal(1, "output = %b, should have fallen with the pin", rst_n_out);
+    if (rst_n_out !== 1'b0) $fatal(1, "output = %b, should have fallen with the pin", rst_n_out);
 
     repeat (5) @(posedge clk);
     #1;
@@ -30,8 +33,7 @@ module reset_sync_tb;
     @(negedge clk);
     rst_n_in = 1'b1;
     #1;
-    if (rst_n_out !== 1'b0)
-      $fatal(1, "output rose on the pin edge instead of a clock edge");
+    if (rst_n_out !== 1'b0) $fatal(1, "output rose on the pin edge instead of a clock edge");
 
     for (edges = 1; edges <= STAGES; edges = edges + 1) begin
       @(posedge clk);
@@ -39,8 +41,7 @@ module reset_sync_tb;
       if (edges < STAGES && rst_n_out !== 1'b0)
         $fatal(1, "output rose after %0d of %0d clock edges", edges, STAGES);
     end
-    if (rst_n_out !== 1'b1)
-      $fatal(1, "output still low after %0d clock edges", STAGES);
+    if (rst_n_out !== 1'b1) $fatal(1, "output still low after %0d clock edges", STAGES);
 
     @(posedge clk);
     #2;

@@ -1,4 +1,4 @@
-`timescale 1ns/1ps
+`timescale 1ns / 1ps
 
 module pipe_ex_mem_tb;
   logic clk = 1'b0;
@@ -16,18 +16,19 @@ module pipe_ex_mem_tb;
   pipe_ex_mem dut (.*);
 
   initial begin
-    rst_n = 1'b0;
+    rst_n                                               = 1'b0;
     {ex_RegWrite, ex_MemtoReg, ex_MemWrite, ex_MemRead} = 4'b1010;
-    ex_alu_result = 32'h200;
-    ex_rd2 = 32'h300;
-    ex_rd_idx = 5'd7;
-    ex_funct3 = 3'h2;
+    ex_alu_result                                       = 32'h200;
+    ex_rd2                                              = 32'h300;
+    ex_rd_idx                                           = 5'd7;
+    ex_funct3                                           = 3'h2;
     #2;
-    if ({mem_RegWrite, mem_MemtoReg, mem_MemWrite,
-         mem_MemRead} !== '0) $fatal(1, "reset");
+    if ({mem_RegWrite, mem_MemtoReg, mem_MemWrite, mem_MemRead} !== '0) $fatal(1, "reset");
     @(negedge clk) rst_n = 1'b1;
-    @(posedge clk); #1;
-    if ({mem_RegWrite, mem_MemtoReg, mem_MemWrite, mem_MemRead} !== 4'b1010) $fatal(1, "control capture");
+    @(posedge clk);
+    #1;
+    if ({mem_RegWrite, mem_MemtoReg, mem_MemWrite, mem_MemRead} !== 4'b1010)
+      $fatal(1, "control capture");
     if (mem_alu_result !== ex_alu_result || mem_rd2 !== ex_rd2 ||
         mem_rd_idx !== ex_rd_idx || mem_funct3 !== ex_funct3)
       $fatal(1, "data capture");

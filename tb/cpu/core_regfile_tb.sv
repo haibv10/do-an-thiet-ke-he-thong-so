@@ -1,15 +1,15 @@
-`timescale 1ns/1ps
+`timescale 1ns / 1ps
 
 module core_regfile_tb;
-  logic clk = 1'b0;
-  logic rst_n = 1'b0;
-  logic we = 1'b0;
-  logic [4:0] rs1 = 5'd0;
-  logic [4:0] rs2 = 5'd0;
-  logic [4:0] rd = 5'd0;
+  logic        clk = 1'b0;
+  logic        rst_n = 1'b0;
+  logic        we = 1'b0;
+  logic [ 4:0] rs1 = 5'd0;
+  logic [ 4:0] rs2 = 5'd0;
+  logic [ 4:0] rd = 5'd0;
   logic [31:0] wd = 32'd0;
-  wire [31:0] rd1;
-  wire [31:0] rd2;
+  wire  [31:0] rd1;
+  wire  [31:0] rd2;
 
   core_regfile dut (.*);
 
@@ -30,7 +30,7 @@ module core_regfile_tb;
     repeat (2) @(negedge clk);
     rst_n = 1'b1;
 
-    rs1 = 5'd7;
+    rs1   = 5'd7;
     #1;
     if (rd1 !== 32'd0) $fatal(1, "x7 after reset = %h", rd1);
 
@@ -45,9 +45,9 @@ module core_regfile_tb;
     if (rd1 !== 32'd0) $fatal(1, "x0 = %h, must stay zero", rd1);
 
     @(negedge clk);
-    we = 1'b1;
-    rd = 5'd9;
-    wd = 32'h1234_5678;
+    we  = 1'b1;
+    rd  = 5'd9;
+    wd  = 32'h1234_5678;
     rs1 = 5'd9;
     rs2 = 5'd9;
     #1;
@@ -59,17 +59,17 @@ module core_regfile_tb;
     if (rd2 !== 32'hdead_beef) $fatal(1, "x7 during unrelated write = %h", rd2);
 
     @(negedge clk);
-    we = 1'b1;
-    rd = 5'd0;
-    wd = 32'hffff_ffff;
+    we  = 1'b1;
+    rd  = 5'd0;
+    wd  = 32'hffff_ffff;
     rs1 = 5'd0;
     #1;
     if (rd1 !== 32'd0) $fatal(1, "x0 bypassed a write = %h", rd1);
 
     @(negedge clk);
-    we = 1'b0;
-    rd = 5'd7;
-    wd = 32'h0bad_0bad;
+    we  = 1'b0;
+    rd  = 5'd7;
+    wd  = 32'h0bad_0bad;
     rs1 = 5'd7;
     #1;
     if (rd1 !== 32'hdead_beef) $fatal(1, "bypassed with we low = %h", rd1);

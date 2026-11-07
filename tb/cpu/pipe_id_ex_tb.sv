@@ -1,4 +1,4 @@
-`timescale 1ns/1ps
+`timescale 1ns / 1ps
 
 module pipe_id_ex_tb;
   logic clk = 1'b0;
@@ -42,12 +42,15 @@ module pipe_id_ex_tb;
          ex_Branch, ex_ALUSrc, ex_ALUSrcA, ex_Jump} !== '0)
       $fatal(1, "reset controls");
     @(negedge clk) rst_n = 1'b1;
-    @(posedge clk); #1;
+    @(posedge clk);
+    #1;
     if (ex_pc !== id_pc || ex_rd1 !== id_rd1 || ex_rd2 !== id_rd2 ||
         ex_imm !== id_imm || ex_rd_idx !== id_rd_idx ||
-        ex_Jump !== id_Jump || ex_ALUSrcA !== id_ALUSrcA) $fatal(1, "capture");
+        ex_Jump !== id_Jump || ex_ALUSrcA !== id_ALUSrcA)
+      $fatal(1, "capture");
     @(negedge clk) flush = 1'b1;
-    @(posedge clk); #1;
+    @(posedge clk);
+    #1;
     if ({ex_RegWrite, ex_MemtoReg, ex_MemWrite, ex_MemRead,
          ex_Branch, ex_ALUSrc, ex_ALUSrcA, ex_Jump} !== '0)
       $fatal(1, "flush controls");

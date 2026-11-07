@@ -2,16 +2,16 @@ module core_regfile (
   input  wire        clk,
   input  wire        rst_n,
   input  wire        we,
-  input  wire [4:0]  rs1,
-  input  wire [4:0]  rs2,
-  input  wire [4:0]  rd,
+  input  wire [ 4:0] rs1,
+  input  wire [ 4:0] rs2,
+  input  wire [ 4:0] rd,
   input  wire [31:0] wd,
   output wire [31:0] rd1,
   output wire [31:0] rd2
 );
 
-  reg [31:0] x [31:1];
-  integer i;
+  reg     [31:0] x [31:1];
+  integer        i;
 
   always @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin

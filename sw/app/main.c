@@ -41,13 +41,16 @@ int main(void) {
   while (1) {
     if (uart_poll(&command) && command == 'W') {
 
-      if (ds3231_set_from_uart()) rtc_time_trusted = 1;
+      if (ds3231_set_from_uart())
+        rtc_time_trusted = 1;
     }
 
     if (++gas_tick >= 10u) {
       gas_tick = 0;
-      if (mq5_read_mv(&gas_mv)) ui_show_gas(gas_mv, mq5_level_of(gas_mv));
-      else ui_show_gas_fault();
+      if (mq5_read_mv(&gas_mv))
+        ui_show_gas(gas_mv, mq5_level_of(gas_mv));
+      else
+        ui_show_gas_fault();
     }
 
     if (!dht_pending && ++dht_tick >= 40u) {
@@ -60,7 +63,8 @@ int main(void) {
       if (!(dht_status & DHT11_BUSY)) {
         if (dht11_read(&humidity, &temperature))
           ui_show_environment(temperature, humidity);
-        else ui_show_environment_fault();
+        else
+          ui_show_environment_fault();
         dht_pending = 0;
       }
     }

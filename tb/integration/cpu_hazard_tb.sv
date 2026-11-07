@@ -1,66 +1,53 @@
-`timescale 1ns/1ps
+`timescale 1ns / 1ps
 
 module cpu_hazard_tb;
   localparam logic [31:0] NOP = 32'h0000_0013;
 
-  logic clk = 1'b0;
-  logic rst_n = 1'b0;
-  wire  led_out;
-  wire  uart_tx_out;
+  logic   clk = 1'b0;
+  logic   rst_n = 1'b0;
+  wire    led_out;
+  wire    uart_tx_out;
   integer index;
   integer stall_count = 0;
 
   always #18.5 clk = ~clk;
 
   soc_top dut (
-    .clk(clk), .rst_n(rst_n), .led_out(led_out),
-    .uart_rx_in(1'b1), .uart_tx_out(uart_tx_out),
-    .i2c_sda(i2c_sda), .i2c_scl(i2c_scl)
+    .clk        (clk),
+    .rst_n      (rst_n),
+    .led_out    (led_out),
+    .uart_rx_in (1'b1),
+    .uart_tx_out(uart_tx_out),
+    .i2c_sda    (i2c_sda),
+    .i2c_scl    (i2c_scl)
   );
 
-  always @(posedge clk)
-    if (rst_n && dut.stall) stall_count <= stall_count + 1;
+  always @(posedge clk) if (rst_n && dut.stall) stall_count <= stall_count + 1;
 
-  function automatic logic [31:0] encode_i(
-    input logic [11:0] immediate,
-    input logic [4:0] rs1,
-    input logic [2:0] funct3,
-    input logic [4:0] rd,
-    input logic [6:0] opcode
-  );
+  function automatic logic [31:0] encode_i(input logic [11:0] immediate, input logic [4:0] rs1,
+                                           input logic [2:0] funct3, input logic [4:0] rd,
+                                           input logic [6:0] opcode);
     encode_i = {immediate, rs1, funct3, rd, opcode};
   endfunction
 
-  function automatic logic [31:0] encode_r(
-    input logic [4:0] rs2,
-    input logic [4:0] rs1,
-    input logic [4:0] rd
-  );
+  function automatic logic [31:0] encode_r(input logic [4:0] rs2, input logic [4:0] rs1,
+                                           input logic [4:0] rd);
     encode_r = {7'd0, rs2, rs1, 3'b000, rd, 7'b0110011};
   endfunction
 
-  function automatic logic [31:0] addi(
-    input logic [4:0] rd,
-    input logic [4:0] rs1,
-    input logic [11:0] immediate
-  );
+  function automatic logic [31:0] addi(input logic [4:0] rd, input logic [4:0] rs1,
+                                       input logic [11:0] immediate);
     addi = encode_i(immediate, rs1, 3'b000, rd, 7'b0010011);
   endfunction
 
-  task automatic expect_reg(
-    input integer number,
-    input logic [31:0] value,
-    input string label
-  );
+  task automatic expect_reg(input integer number, input logic [31:0] value, input string label);
     if (dut.rf.x[number] !== value)
-      $fatal(1, "%s: x%0d = %0d, expected %0d",
-             label, number, dut.rf.x[number], value);
+      $fatal(1, "%s: x%0d = %0d, expected %0d", label, number, dut.rf.x[number], value);
   endtask
 
   initial begin
     #1;
-    for (index = 0; index < 2048; index = index + 1)
-      dut.rom.rom[index] = NOP;
+    for (index = 0; index < 2048; index = index + 1) dut.rom.rom[index] = NOP;
 
     dut.rom.rom[0]  = {20'h20000, 5'd20, 7'b0110111};
     dut.rom.rom[1]  = addi(5'd1, 5'd0, 12'd4);
@@ -89,13 +76,13 @@ module cpu_hazard_tb;
     @(negedge clk) rst_n = 1'b1;
     repeat (70) @(posedge clk);
 
-    expect_reg(5,  32'd5,   "distance 1, forwarded from EX/MEM");
-    expect_reg(6,  32'd11,  "distance 2, forwarded from MEM/WB");
-    expect_reg(7,  32'd21,  "distance 3, write-first bypass");
-    expect_reg(8,  32'd31,  "distance 4, plain register read");
+    expect_reg(5, 32'd5, "distance 1, forwarded from EX/MEM");
+    expect_reg(6, 32'd11, "distance 2, forwarded from MEM/WB");
+    expect_reg(7, 32'd21, "distance 3, write-first bypass");
+    expect_reg(8, 32'd31, "distance 4, plain register read");
     expect_reg(10, 32'd200, "distance 3 on both operands");
-    expect_reg(13, 32'd77,  "distance 3 where the producer is a load");
-    expect_reg(15, 32'd78,  "load-use interlock");
+    expect_reg(13, 32'd77, "distance 3 where the producer is a load");
+    expect_reg(15, 32'd78, "load-use interlock");
     expect_reg(17, 32'h0008_0000, "LUI after a load");
     expect_reg(19, 32'h0009_0078, "AUIPC after a load");
 

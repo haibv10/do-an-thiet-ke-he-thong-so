@@ -8,8 +8,8 @@ module mem_instruction_rom #(
   input  wire [31:0] a_data,
   output reg  [31:0] rd_data
 );
-  reg [31:0] rom [0:2047];
-  integer index;
+  reg     [31:0] rom   [0:2047];
+  integer        index;
 
   initial begin
 

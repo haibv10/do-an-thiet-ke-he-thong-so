@@ -1,21 +1,21 @@
-`timescale 1ns/1ps
+`timescale 1ns / 1ps
 
 module spi_master_tb;
   localparam integer CLK_DIV = 3;
 
-  logic clk = 1'b0;
-  logic rst_n = 1'b0;
-  logic start = 1'b0;
-  logic [7:0] tx_byte = 8'd0;
-  wire busy;
-  wire sck;
-  wire mosi;
+  logic         clk = 1'b0;
+  logic         rst_n = 1'b0;
+  logic         start = 1'b0;
+  logic   [7:0] tx_byte = 8'd0;
+  wire          busy;
+  wire          sck;
+  wire          mosi;
 
-  logic [7:0] captured;
-  integer index;
-  integer sck_rises = 0;
-  time last_rise;
-  time high_width;
+  logic   [7:0] captured;
+  integer       index;
+  integer       sck_rises = 0;
+  time          last_rise;
+  time          high_width;
 
   spi_master #(.CLK_DIV(CLK_DIV)) dut (.*);
 
@@ -32,7 +32,7 @@ module spi_master_tb;
     begin
       @(negedge clk);
       tx_byte = value;
-      start = 1'b1;
+      start   = 1'b1;
       @(negedge clk);
       start = 1'b0;
     end
@@ -73,7 +73,8 @@ module spi_master_tb;
     join
     if (captured !== 8'h01) $fatal(1, "captured %h, expected 01", captured);
     wait (busy === 1'b0);
-    if (sck_rises !== 8) $fatal(1, "%0d sck rising edges for the second byte, expected 8", sck_rises);
+    if (sck_rises !== 8)
+      $fatal(1, "%0d sck rising edges for the second byte, expected 8", sck_rises);
 
     sck_rises = 0;
     send_byte(8'hf0);
@@ -94,7 +95,8 @@ module spi_master_tb;
         send_byte(8'hff);
       end
     join
-    if (captured !== 8'h3c) $fatal(1, "captured %h, expected 3c, the mid-transfer start was not dropped", captured);
+    if (captured !== 8'h3c)
+      $fatal(1, "captured %h, expected 3c, the mid-transfer start was not dropped", captured);
     wait (busy === 1'b0);
     repeat (CLK_DIV * 4) @(posedge clk);
     if (sck_rises !== 8)

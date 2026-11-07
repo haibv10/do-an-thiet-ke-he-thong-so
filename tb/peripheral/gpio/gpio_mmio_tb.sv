@@ -1,13 +1,13 @@
-`timescale 1ns/1ps
+`timescale 1ns / 1ps
 
 module gpio_mmio_tb;
-  logic clk = 1'b0;
-  logic rst_n = 1'b0;
-  logic we = 1'b0;
+  logic        clk = 1'b0;
+  logic        rst_n = 1'b0;
+  logic        we = 1'b0;
   logic [31:0] a = 32'd0;
   logic [31:0] wd = 32'd0;
   wire  [31:0] rd;
-  wire  led;
+  wire         led;
 
   gpio_mmio dut (.*);
 
@@ -16,7 +16,7 @@ module gpio_mmio_tb;
   task automatic write_reg(input logic [31:0] offset, input logic [31:0] value);
     begin
       @(negedge clk);
-      a = offset;
+      a  = offset;
       wd = value;
       we = 1'b1;
       @(negedge clk);
@@ -28,7 +28,7 @@ module gpio_mmio_tb;
     repeat (2) @(negedge clk);
     rst_n = 1'b1;
 
-    a = 32'h0000_0000;
+    a     = 32'h0000_0000;
     #1;
     if (rd[0] !== 1'b0 || led !== 1'b0) $fatal(1, "LED not clear after reset");
 

@@ -1,21 +1,21 @@
-`timescale 1ns/1ps
+`timescale 1ns / 1ps
 
 module uart_tx_tb;
   localparam integer CLKS_PER_BIT = 8;
-  localparam logic [31:0] DATA_REG   = 32'h0000_0000;
+  localparam logic [31:0] DATA_REG = 32'h0000_0000;
   localparam logic [31:0] STATUS_REG = 32'h0000_0004;
 
-  logic clk = 1'b0;
-  logic rst_n = 1'b0;
-  logic we = 1'b0;
-  logic [31:0] a = STATUS_REG;
-  logic [31:0] wd = 32'd0;
-  wire  [31:0] rd;
-  wire         tx;
+  logic          clk = 1'b0;
+  logic          rst_n = 1'b0;
+  logic          we = 1'b0;
+  logic   [31:0] a = STATUS_REG;
+  logic   [31:0] wd = 32'd0;
+  wire    [31:0] rd;
+  wire           tx;
 
-  logic [7:0] captured;
-  integer index;
-  integer accepted_writes = 0;
+  logic   [ 7:0] captured;
+  integer        index;
+  integer        accepted_writes = 0;
 
   uart_tx #(.CLKS_PER_BIT(CLKS_PER_BIT)) dut (.*);
 
@@ -31,12 +31,12 @@ module uart_tx_tb;
   task automatic send_byte(input logic [7:0] value);
     begin
       @(negedge clk);
-      a = DATA_REG;
+      a  = DATA_REG;
       wd = {24'd0, value};
       we = 1'b1;
       @(negedge clk);
       we = 1'b0;
-      a = STATUS_REG;
+      a  = STATUS_REG;
     end
   endtask
 
@@ -89,8 +89,7 @@ module uart_tx_tb;
     wait (rd[0] === 1'b0);
     repeat (CLKS_PER_BIT * 12) @(posedge clk);
     if (accepted_writes !== 1)
-      $fatal(1, "%0d writes accepted, the one arriving mid-frame was not dropped",
-             accepted_writes);
+      $fatal(1, "%0d writes accepted, the one arriving mid-frame was not dropped", accepted_writes);
 
     a = DATA_REG;
     #1;

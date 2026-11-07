@@ -1,9 +1,9 @@
 #ifndef SPI_BUS_H
 #define SPI_BUS_H
 
-#define SPI_CS_N      0x01
-#define SPI_DC        0x02
-#define SPI_RST_N     0x04
+#define SPI_CS_N 0x01
+#define SPI_DC 0x02
+#define SPI_RST_N 0x04
 
 void spi_set_control(unsigned int bits);
 

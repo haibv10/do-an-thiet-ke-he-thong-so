@@ -1,7 +1,7 @@
 module cpu_address_decoder (
   input  wire [31:0] addr,
-  input  wire [3:0]  we_mask,
-  output wire [3:0]  we_dmem,
+  input  wire [ 3:0] we_mask,
+  output wire [ 3:0] we_dmem,
   output wire        we_gpio,
   output wire        we_uart,
   output wire        we_i2c,
@@ -26,13 +26,13 @@ module cpu_address_decoder (
 
   always @(*) begin
     case (addr[31:28])
-      4'h0: rd_out = rd_rom;
-      4'h2: rd_out = rd_dmem;
-      4'h4: rd_out = rd_gpio;
-      4'h5: rd_out = rd_uart;
-      4'h6: rd_out = rd_i2c;
-      4'h7: rd_out = rd_spi;
-      4'h8: rd_out = rd_dht;
+      4'h0:    rd_out = rd_rom;
+      4'h2:    rd_out = rd_dmem;
+      4'h4:    rd_out = rd_gpio;
+      4'h5:    rd_out = rd_uart;
+      4'h6:    rd_out = rd_i2c;
+      4'h7:    rd_out = rd_spi;
+      4'h8:    rd_out = rd_dht;
       default: rd_out = 32'd0;
     endcase
   end

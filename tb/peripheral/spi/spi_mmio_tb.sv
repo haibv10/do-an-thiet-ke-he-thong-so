@@ -1,26 +1,26 @@
-`timescale 1ns/1ps
+`timescale 1ns / 1ps
 
 module spi_mmio_tb;
   localparam integer CLK_DIV = 3;
-  localparam logic [31:0] DATA_REG   = 32'h0000_0000;
+  localparam logic [31:0] DATA_REG = 32'h0000_0000;
   localparam logic [31:0] STATUS_REG = 32'h0000_0004;
-  localparam logic [31:0] CTRL_REG   = 32'h0000_0008;
+  localparam logic [31:0] CTRL_REG = 32'h0000_0008;
 
-  logic clk = 1'b0;
-  logic rst_n = 1'b0;
-  logic we = 1'b0;
-  logic [31:0] a = STATUS_REG;
-  logic [31:0] wd = 32'd0;
-  wire  [31:0] rd;
-  wire spi_sck;
-  wire spi_mosi;
-  wire spi_cs_n;
-  wire spi_dc;
-  wire spi_rst_n;
+  logic          clk = 1'b0;
+  logic          rst_n = 1'b0;
+  logic          we = 1'b0;
+  logic   [31:0] a = STATUS_REG;
+  logic   [31:0] wd = 32'd0;
+  wire    [31:0] rd;
+  wire           spi_sck;
+  wire           spi_mosi;
+  wire           spi_cs_n;
+  wire           spi_dc;
+  wire           spi_rst_n;
 
-  logic [7:0] captured;
-  integer index;
-  integer sck_rises = 0;
+  logic   [ 7:0] captured;
+  integer        index;
+  integer        sck_rises = 0;
 
   spi_mmio #(.CLK_DIV(CLK_DIV)) dut (.*);
 
@@ -36,12 +36,12 @@ module spi_mmio_tb;
   task automatic bus_write(input logic [31:0] addr, input logic [31:0] value);
     begin
       @(negedge clk);
-      a = addr;
+      a  = addr;
       wd = value;
       we = 1'b1;
       @(negedge clk);
       we = 1'b0;
-      a = STATUS_REG;
+      a  = STATUS_REG;
       #1;
     end
   endtask
@@ -60,7 +60,8 @@ module spi_mmio_tb;
     repeat (2) @(negedge clk);
     #1;
     if (spi_cs_n !== 1'b1) $fatal(1, "cs_n = %b during reset, should be deselected", spi_cs_n);
-    if (spi_rst_n !== 1'b0) $fatal(1, "panel rst_n = %b during reset, should be asserted", spi_rst_n);
+    if (spi_rst_n !== 1'b0)
+      $fatal(1, "panel rst_n = %b during reset, should be asserted", spi_rst_n);
     if (spi_sck !== 1'b0) $fatal(1, "sck = %b during reset", spi_sck);
     rst_n = 1'b1;
     @(negedge clk);
@@ -74,7 +75,7 @@ module spi_mmio_tb;
     if (spi_dc !== 1'b1) $fatal(1, "dc = %b after control write", spi_dc);
     if (spi_rst_n !== 1'b1) $fatal(1, "panel rst_n = %b after control write", spi_rst_n);
     if (rd[2:0] !== 3'b110) $fatal(1, "control read back %b", rd[2:0]);
-    a = STATUS_REG;
+    a         = STATUS_REG;
 
     sck_rises = 0;
     fork

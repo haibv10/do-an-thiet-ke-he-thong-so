@@ -15,12 +15,12 @@ module spi_master #(
   localparam STATE_SCK_HIGH = 2'b10;
   localparam STATE_FINISH   = 2'b11;
 
-  reg [1:0]  state;
-  reg [15:0] half_count;
-  reg [2:0]  bit_idx;
-  reg [7:0]  shift_data;
+  reg  [ 1:0] state;
+  reg  [15:0] half_count;
+  reg  [ 2:0] bit_idx;
+  reg  [ 7:0] shift_data;
 
-  wire half_period_done = (half_count >= CLK_DIV - 1);
+  wire        half_period_done = (half_count >= CLK_DIV - 1);
 
   always @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
@@ -65,7 +65,7 @@ module spi_master #(
               state <= STATE_FINISH;
             end else begin
               bit_idx <= bit_idx - 1'b1;
-              mosi    <= shift_data[bit_idx - 1'b1];
+              mosi    <= shift_data[bit_idx-1'b1];
               state   <= STATE_SCK_LOW;
             end
           end

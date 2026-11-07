@@ -1,27 +1,22 @@
-`timescale 1ns/1ps
+`timescale 1ns / 1ps
 
 module core_alu_tb;
   logic [31:0] a;
   logic [31:0] b;
-  logic [3:0] alu_ctrl;
+  logic [ 3:0] alu_ctrl;
   logic [31:0] result;
-  logic zero;
+  logic        zero;
 
   core_alu dut (.*);
 
-  task automatic check(
-    input logic [3:0] control,
-    input logic [31:0] lhs,
-    input logic [31:0] rhs,
-    input logic [31:0] expected
-  );
+  task automatic check(input logic [3:0] control, input logic [31:0] lhs, input logic [31:0] rhs,
+                       input logic [31:0] expected);
     alu_ctrl = control;
-    a = lhs;
-    b = rhs;
+    a        = lhs;
+    b        = rhs;
     #1;
     if (result !== expected) begin
-      $fatal(1, "control=%h a=%h b=%h result=%h expected=%h",
-             control, lhs, rhs, result, expected);
+      $fatal(1, "control=%h a=%h b=%h result=%h expected=%h", control, lhs, rhs, result, expected);
     end
     if (zero !== (expected == 32'd0)) begin
       $fatal(1, "zero flag mismatch for result=%h", expected);

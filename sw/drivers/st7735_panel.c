@@ -3,7 +3,7 @@
 #include "font_8x8.h"
 #include "st7735_panel.h"
 
-#define TFT_MADCTL    0x08
+#define TFT_MADCTL 0x08
 
 static void tft_command(unsigned char value) {
   spi_set_control(SPI_RST_N);
@@ -15,9 +15,7 @@ static void tft_data(unsigned char value) {
   spi_write(value);
 }
 
-static void tft_deselect(void) {
-  spi_set_control(SPI_RST_N | SPI_CS_N);
-}
+static void tft_deselect(void) { spi_set_control(SPI_RST_N | SPI_CS_N); }
 
 static void tft_reset(void) {
   spi_set_control(SPI_CS_N);
@@ -49,8 +47,7 @@ void tft_init(void) {
   tft_deselect();
 }
 
-static void tft_set_window(unsigned char x0, unsigned char y0,
-                           unsigned char x1, unsigned char y1) {
+static void tft_set_window(unsigned char x0, unsigned char y0, unsigned char x1, unsigned char y1) {
   tft_command(0x2a);
   tft_data(0x00);
   tft_data(x0);
@@ -66,11 +63,10 @@ static void tft_set_window(unsigned char x0, unsigned char y0,
   tft_command(0x2c);
 }
 
-void tft_fill_rect(unsigned char x0, unsigned char y0,
-                          unsigned char x1, unsigned char y1,
-                          unsigned short colour) {
-  unsigned int columns = (unsigned int) (x1 - x0) + 1;
-  unsigned int rows = (unsigned int) (y1 - y0) + 1;
+void tft_fill_rect(unsigned char x0, unsigned char y0, unsigned char x1, unsigned char y1,
+                   unsigned short colour) {
+  unsigned int columns = (unsigned int)(x1 - x0) + 1;
+  unsigned int rows = (unsigned int)(y1 - y0) + 1;
   unsigned int row;
   unsigned int column;
 
@@ -80,18 +76,16 @@ void tft_fill_rect(unsigned char x0, unsigned char y0,
 
   for (row = 0; row < rows; row++) {
     for (column = 0; column < columns; column++) {
-      spi_write((unsigned char) (colour >> 8));
-      spi_write((unsigned char) colour);
+      spi_write((unsigned char)(colour >> 8));
+      spi_write((unsigned char)colour);
     }
   }
 
   tft_deselect();
 }
 
-void tft_draw_glyph(unsigned char x, unsigned char y,
-                           const unsigned char *glyph,
-                           unsigned short fg, unsigned short bg,
-                           unsigned int scale) {
+void tft_draw_glyph(unsigned char x, unsigned char y, const unsigned char *glyph, unsigned short fg,
+                    unsigned short bg, unsigned int scale) {
   unsigned int row;
   unsigned int column;
   unsigned int down;
@@ -100,8 +94,7 @@ void tft_draw_glyph(unsigned char x, unsigned char y,
   unsigned char bits;
   unsigned short colour;
 
-  tft_set_window(x, y, (unsigned char) (x + span - 1),
-                 (unsigned char) (y + span - 1));
+  tft_set_window(x, y, (unsigned char)(x + span - 1), (unsigned char)(y + span - 1));
   spi_set_control(SPI_RST_N | SPI_DC);
 
   for (row = 0; row < FONT_SIZE; row++) {
@@ -110,8 +103,8 @@ void tft_draw_glyph(unsigned char x, unsigned char y,
       for (column = 0; column < FONT_SIZE; column++) {
         colour = (bits & (0x80 >> column)) ? fg : bg;
         for (across = 0; across < scale; across++) {
-          spi_write((unsigned char) (colour >> 8));
-          spi_write((unsigned char) colour);
+          spi_write((unsigned char)(colour >> 8));
+          spi_write((unsigned char)colour);
         }
       }
     }
@@ -120,27 +113,25 @@ void tft_draw_glyph(unsigned char x, unsigned char y,
   tft_deselect();
 }
 
-void tft_draw_char(unsigned char x, unsigned char y, char value,
-                          unsigned short fg, unsigned short bg,
-                          unsigned int scale) {
-  if (value < FONT_FIRST || value > FONT_LAST) value = ' ';
-  tft_draw_glyph(x, y, &font8x8[(unsigned int) (value - FONT_FIRST) * FONT_SIZE],
-                 fg, bg, scale);
+void tft_draw_char(unsigned char x, unsigned char y, char value, unsigned short fg,
+                   unsigned short bg, unsigned int scale) {
+  if (value < FONT_FIRST || value > FONT_LAST)
+    value = ' ';
+  tft_draw_glyph(x, y, &font8x8[(unsigned int)(value - FONT_FIRST) * FONT_SIZE], fg, bg, scale);
 }
 
-void tft_draw_string(unsigned char x, unsigned char y, const char *text,
-                            unsigned short fg, unsigned short bg,
-                            unsigned int scale) {
+void tft_draw_string(unsigned char x, unsigned char y, const char *text, unsigned short fg,
+                     unsigned short bg, unsigned int scale) {
   while (*text != '\0') {
     tft_draw_char(x, y, *text, fg, bg, scale);
-    x = (unsigned char) (x + FONT_SIZE * scale);
+    x = (unsigned char)(x + FONT_SIZE * scale);
     text++;
   }
 }
 
-void tft_draw_bcd(unsigned char x, unsigned char y, unsigned char value,
-                  unsigned short fg, unsigned short bg, unsigned int scale) {
-  tft_draw_char(x, y, (char) ('0' + ((value >> 4) & 0x0f)), fg, bg, scale);
-  tft_draw_char((unsigned char) (x + FONT_SIZE * scale), y,
-                (char) ('0' + (value & 0x0f)), fg, bg, scale);
+void tft_draw_bcd(unsigned char x, unsigned char y, unsigned char value, unsigned short fg,
+                  unsigned short bg, unsigned int scale) {
+  tft_draw_char(x, y, (char)('0' + ((value >> 4) & 0x0f)), fg, bg, scale);
+  tft_draw_char((unsigned char)(x + FONT_SIZE * scale), y, (char)('0' + (value & 0x0f)), fg, bg,
+                scale);
 }

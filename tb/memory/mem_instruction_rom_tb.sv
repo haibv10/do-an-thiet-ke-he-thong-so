@@ -1,7 +1,7 @@
-`timescale 1ns/1ps
+`timescale 1ns / 1ps
 
 module mem_instruction_rom_tb;
-  logic clk = 1'b0;
+  logic        clk = 1'b0;
   logic [31:0] a = 32'd0;
   wire  [31:0] rd;
   logic [31:0] a_data = 32'd0;
@@ -11,16 +11,13 @@ module mem_instruction_rom_tb;
 
   always #5 clk = ~clk;
 
-  task automatic fetch(input logic [31:0] addr,
-                       input logic [31:0] value,
-                       input string label);
+  task automatic fetch(input logic [31:0] addr, input logic [31:0] value, input string label);
     begin
       @(posedge clk);
       a = addr;
       @(posedge clk);
       #1;
-      if (rd !== value)
-        $fatal(1, "%s: fetch [%h] = %h, expected %h", label, addr, rd, value);
+      if (rd !== value) $fatal(1, "%s: fetch [%h] = %h, expected %h", label, addr, rd, value);
     end
   endtask
 
@@ -52,8 +49,7 @@ module mem_instruction_rom_tb;
     @(posedge clk);
     #1;
     if (rd !== 32'h9abc_def0 || rd_data !== 32'hcafe_babe)
-      $fatal(1, "ports interfered on the second pair: rd=%h rd_data=%h",
-             rd, rd_data);
+      $fatal(1, "ports interfered on the second pair: rd=%h rd_data=%h", rd, rd_data);
 
     @(posedge clk);
     a      = 32'h0000_0004;

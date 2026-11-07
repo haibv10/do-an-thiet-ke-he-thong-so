@@ -1,4 +1,4 @@
-`timescale 1ns/1ps
+`timescale 1ns / 1ps
 
 module cpu_firmware_boot_tb;
   localparam integer CLKS_PER_UART_BIT = 234;
@@ -6,19 +6,23 @@ module cpu_firmware_boot_tb;
 
   localparam [BANNER_LEN*8-1:0] BANNER = "BOOT 5A5A5A5A 00000000\015\012";
 
-  logic clk = 1'b0;
-  logic rst_n = 1'b0;
-  wire  led_out;
-  wire  uart_tx_out;
-  logic [7:0] received;
-  integer index;
+  logic         clk = 1'b0;
+  logic         rst_n = 1'b0;
+  wire          led_out;
+  wire          uart_tx_out;
+  logic   [7:0] received;
+  integer       index;
 
   always #18.5 clk = ~clk;
 
   soc_top dut (
-    .clk(clk), .rst_n(rst_n), .led_out(led_out),
-    .uart_rx_in(1'b1), .uart_tx_out(uart_tx_out),
-    .i2c_sda(i2c_sda), .i2c_scl(i2c_scl)
+    .clk        (clk),
+    .rst_n      (rst_n),
+    .led_out    (led_out),
+    .uart_rx_in (1'b1),
+    .uart_tx_out(uart_tx_out),
+    .i2c_sda    (i2c_sda),
+    .i2c_scl    (i2c_scl)
   );
 
   task automatic capture_uart_byte(output logic [7:0] value);
@@ -29,8 +33,7 @@ module cpu_firmware_boot_tb;
         @(posedge clk);
         wait_index = wait_index + 1;
       end
-      if (uart_tx_out !== 1'b0)
-        $fatal(1, "timeout waiting for a UART start bit");
+      if (uart_tx_out !== 1'b0) $fatal(1, "timeout waiting for a UART start bit");
 
       repeat (CLKS_PER_UART_BIT / 2) @(posedge clk);
       if (uart_tx_out !== 1'b0) $fatal(1, "UART start bit");
@@ -49,11 +52,16 @@ module cpu_firmware_boot_tb;
 
     for (index = 0; index < BANNER_LEN; index = index + 1) begin
       capture_uart_byte(received);
-      if (received !== BANNER[(BANNER_LEN - index) * 8 - 1 -: 8])
-        $fatal(1, "banner byte %0d = %h ('%c'), expected %h ('%c')",
-               index, received, received,
-               BANNER[(BANNER_LEN - index) * 8 - 1 -: 8],
-               BANNER[(BANNER_LEN - index) * 8 - 1 -: 8]);
+      if (received !== BANNER[(BANNER_LEN-index)*8-1-:8])
+        $fatal(
+            1,
+            "banner byte %0d = %h ('%c'), expected %h ('%c')",
+            index,
+            received,
+            received,
+            BANNER[(BANNER_LEN-index)*8-1-:8],
+            BANNER[(BANNER_LEN-index)*8-1-:8]
+        );
     end
 
     $display("cpu_firmware_boot_tb: PASS (banner \"BOOT 5A5A5A5A 00000000\")");

@@ -2,15 +2,15 @@
 #include "sys_delay.h"
 #include "mq5_sensor.h"
 
-#define ADS_WRITE      0x90
-#define ADS_READ       0x91
-#define ADS_REG_CONV   0x00
+#define ADS_WRITE 0x90
+#define ADS_READ 0x91
+#define ADS_REG_CONV 0x00
 #define ADS_REG_CONFIG 0x01
 
-#define ADS_CFG_HI     0xc3
-#define ADS_CFG_LO     0x83
+#define ADS_CFG_HI 0xc3
+#define ADS_CFG_LO 0x83
 
-#define ADS_WAIT_MS    9U
+#define ADS_WAIT_MS 9U
 
 static int ads_write_config(void) {
   if (!i2c_frame(I2C_START | ADS_WRITE)) {
@@ -52,30 +52,35 @@ static int ads_read_conversion(int *raw) {
   high = i2c_last_byte();
   i2c_frame(I2C_READ | I2C_NACK | I2C_STOP);
 
-  *raw = (int) (short) ((high << 8) | i2c_last_byte());
+  *raw = (int)(short)((high << 8) | i2c_last_byte());
   return 1;
 }
 
 unsigned int mq5_raw_to_mv(int raw) {
   unsigned int pin_mv;
 
-  if (raw < 0) return 0;
-  pin_mv = ((unsigned int) raw) >> 3;
+  if (raw < 0)
+    return 0;
+  pin_mv = ((unsigned int)raw) >> 3;
   return pin_mv + (pin_mv >> 1);
 }
 
 unsigned int mq5_level_of(unsigned int mv) {
-  if (mv >= MQ5_DANGER_MV) return MQ5_LEVEL_DANGER;
-  if (mv >= MQ5_WARN_MV) return MQ5_LEVEL_WARN;
+  if (mv >= MQ5_DANGER_MV)
+    return MQ5_LEVEL_DANGER;
+  if (mv >= MQ5_WARN_MV)
+    return MQ5_LEVEL_WARN;
   return MQ5_LEVEL_CLEAN;
 }
 
 int mq5_read_mv(unsigned int *mv) {
   int raw;
 
-  if (!ads_write_config()) return 0;
+  if (!ads_write_config())
+    return 0;
   delay_loop(DELAY_MS(ADS_WAIT_MS));
-  if (!ads_read_conversion(&raw)) return 0;
+  if (!ads_read_conversion(&raw))
+    return 0;
 
   *mv = mq5_raw_to_mv(raw);
   return 1;

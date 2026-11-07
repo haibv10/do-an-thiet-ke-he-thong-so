@@ -135,6 +135,32 @@ For optional waveforms, install `gtkwave`, compile the desired testbench with
 `tb/support/dump_vcd.sv` as a second top module (`-s dump_vcd`), and run with
 `+vcd=build/sim/wave.vcd`.
 
+## Source formatting
+
+```bash
+make format
+make format-check
+```
+
+The first command formats RTL (`source/**/*.v`, `tb/**/*.sv`), C/header files
+(`sw/`) and shell scripts (`tools/*.sh`). The check command reports differences
+without modifying files. HEX images, constraints, linker/assembly, Python and
+Tcl files are outside the formatter scope.
+
+Formatting uses two-space indentation and a 100-column target for RTL/C.
+Makefile recipes retain tabs. Editor defaults are in `.editorconfig`; formatter
+settings are in `.clang-format` and `.verible-format.flags`.
+
+Install [Verible](https://github.com/chipsalliance/verible/releases),
+[clang-format](https://clang.llvm.org/docs/ClangFormat.html) and
+[shfmt](https://github.com/mvdan/sh/releases). The versions used for this source
+are Verible `v0.0-4298-g085eef05`, clang-format `21.1.8` and shfmt `v3.14.1`.
+Use matching versions for reproducible formatting. Tools are resolved from
+`PATH`, with a fallback to `build/format-tools/bin/` for project-local binaries.
+Explicit executable paths can be supplied through `VERIBLE_FORMAT`,
+`CLANG_FORMAT` and `SHFMT`. Binaries are not committed and formatting is not a
+prerequisite for normal build/test commands.
+
 ## Operation and RTC setup
 
 DHT11 acquisition and checksum validation run in RTL; firmware starts readings

@@ -1,8 +1,8 @@
-`timescale 1ns/1ps
+`timescale 1ns / 1ps
 
 module mem_data_ram_tb;
-  logic clk = 1'b0;
-  logic [3:0]  we = 4'b0000;
+  logic        clk = 1'b0;
+  logic [ 3:0] we = 4'b0000;
   logic [31:0] a = 32'd0;
   logic [31:0] wd = 32'd0;
   wire  [31:0] rd;
@@ -11,12 +11,11 @@ module mem_data_ram_tb;
 
   always #5 clk = ~clk;
 
-  task automatic write_word(input logic [31:0] addr,
-                            input logic [3:0] mask,
+  task automatic write_word(input logic [31:0] addr, input logic [3:0] mask,
                             input logic [31:0] value);
     begin
       @(posedge clk);
-      a = addr;
+      a  = addr;
       we = mask;
       wd = value;
       @(posedge clk);
@@ -24,16 +23,13 @@ module mem_data_ram_tb;
     end
   endtask
 
-  task automatic expect_word(input logic [31:0] addr,
-                             input logic [31:0] value,
-                             input string label);
+  task automatic expect_word(input logic [31:0] addr, input logic [31:0] value, input string label);
     begin
       @(posedge clk);
       a = addr;
       @(posedge clk);
       #1;
-      if (rd !== value)
-        $fatal(1, "%s: [%h] = %h, expected %h", label, addr, rd, value);
+      if (rd !== value) $fatal(1, "%s: [%h] = %h, expected %h", label, addr, rd, value);
     end
   endtask
 
@@ -68,14 +64,13 @@ module mem_data_ram_tb;
 
     write_word(32'h2000_0020, 4'b1111, 32'h1111_1111);
     @(posedge clk);
-    a = 32'h2000_0020;
+    a  = 32'h2000_0020;
     we = 4'b1111;
     wd = 32'h2222_2222;
     @(posedge clk);
     #1;
     we = 4'b0000;
-    if (rd !== 32'h1111_1111)
-      $fatal(1, "read during write returned %h, expected the old word", rd);
+    if (rd !== 32'h1111_1111) $fatal(1, "read during write returned %h, expected the old word", rd);
     expect_word(32'h2000_0020, 32'h2222_2222, "write did land");
 
     $display("mem_data_ram_tb: PASS");

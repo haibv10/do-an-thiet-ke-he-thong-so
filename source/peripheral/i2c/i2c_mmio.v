@@ -22,25 +22,25 @@ module i2c_mmio (
   reg        rw;
   reg        ack_out;
 
-  wire launch = we && (a[7:0] == 8'h00) && !busy;
+  wire       launch = we && (a[7:0] == 8'h00) && !busy;
 
   i2c_master master_inst (
-    .clk(clk),
-    .tick(tick),
-    .rst_n(rst_n),
-    .en(en),
-    .rw(rw),
+    .clk        (clk),
+    .tick       (tick),
+    .rst_n      (rst_n),
+    .en         (en),
+    .rw         (rw),
     .start_frame(start_frame),
-    .stop_frame(stop_frame),
-    .ack_out(ack_out),
-    .data(tx_data),
-    .sda(sda),
-    .scl(scl),
-    .done(),
-    .busy(frame_busy),
-    .data_out(frame_data),
-    .ack(frame_ack),
-    .sda_en()
+    .stop_frame (stop_frame),
+    .ack_out    (ack_out),
+    .data       (tx_data),
+    .sda        (sda),
+    .scl        (scl),
+    .done       (),
+    .busy       (frame_busy),
+    .data_out   (frame_data),
+    .ack        (frame_ack),
+    .sda_en     ()
   );
 
   always @(posedge clk or negedge rst_n) begin
@@ -61,9 +61,9 @@ module i2c_mmio (
       en          <= 1'b1;
       busy        <= 1'b1;
     end else if (en && frame_busy) begin
-      en          <= 1'b0;
+      en <= 1'b0;
     end else if (busy && !en && !frame_busy) begin
-      busy        <= 1'b0;
+      busy <= 1'b0;
     end
   end
 
@@ -74,7 +74,7 @@ module i2c_mmio (
         rd[0] = busy;
         rd[1] = frame_ack;
       end
-      8'h08: rd = {24'd0, frame_data};
+      8'h08:   rd = {24'd0, frame_data};
       default: ;
     endcase
   end

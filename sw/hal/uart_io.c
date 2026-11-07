@@ -1,10 +1,10 @@
 #include "uart_io.h"
 
-#define UART_BASE     0x50000000
-#define UART_TX_REG   (*((volatile unsigned int *) UART_BASE))
-#define UART_STAT_REG (*((volatile unsigned int *) (UART_BASE + 4)))
-#define UART_RX_REG   (*((volatile unsigned int *) (UART_BASE + 8)))
-#define UART_TX_BUSY  0x01
+#define UART_BASE 0x50000000
+#define UART_TX_REG (*((volatile unsigned int *)UART_BASE))
+#define UART_STAT_REG (*((volatile unsigned int *)(UART_BASE + 4)))
+#define UART_RX_REG (*((volatile unsigned int *)(UART_BASE + 8)))
+#define UART_TX_BUSY 0x01
 #define UART_RX_VALID 0x02
 
 static const char hex_digits[] = "0123456789ABCDEF";
@@ -19,7 +19,7 @@ void uart_putc(unsigned char value) {
 
 void uart_puts(const char *text) {
   while (*text != '\0') {
-    uart_putc((unsigned char) *text);
+    uart_putc((unsigned char)*text);
     text++;
   }
 }
@@ -30,10 +30,10 @@ void uart_hex8(unsigned char value) {
 }
 
 void uart_hex32(unsigned int value) {
-  uart_hex8((unsigned char) (value >> 24));
-  uart_hex8((unsigned char) (value >> 16));
-  uart_hex8((unsigned char) (value >> 8));
-  uart_hex8((unsigned char) value);
+  uart_hex8((unsigned char)(value >> 24));
+  uart_hex8((unsigned char)(value >> 16));
+  uart_hex8((unsigned char)(value >> 8));
+  uart_hex8((unsigned char)value);
 }
 
 void uart_bcd(unsigned char value) {
@@ -46,7 +46,7 @@ int uart_getc(unsigned char *value) {
 
   while (timeout != 0) {
     if (UART_STAT_REG & UART_RX_VALID) {
-      *value = (unsigned char) UART_RX_REG;
+      *value = (unsigned char)UART_RX_REG;
       return 1;
     }
     timeout--;
@@ -56,7 +56,8 @@ int uart_getc(unsigned char *value) {
 }
 
 int uart_poll(unsigned char *value) {
-  if (!(UART_STAT_REG & UART_RX_VALID)) return 0;
-  *value = (unsigned char) UART_RX_REG;
+  if (!(UART_STAT_REG & UART_RX_VALID))
+    return 0;
+  *value = (unsigned char)UART_RX_REG;
   return 1;
 }

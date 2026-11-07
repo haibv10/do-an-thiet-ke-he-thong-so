@@ -15,10 +15,10 @@ module uart_tx #(
   localparam STATE_DATA  = 2'b10;
   localparam STATE_STOP  = 2'b11;
 
-  reg [1:0]  state;
+  reg [ 1:0] state;
   reg [15:0] clk_count;
-  reg [2:0]  bit_idx;
-  reg [7:0]  tx_data;
+  reg [ 2:0] bit_idx;
+  reg [ 7:0] tx_data;
   reg        busy;
 
   assign rd = (a[7:0] == 8'h04) ? {31'd0, busy} : 32'd0;
@@ -65,7 +65,7 @@ module uart_tx #(
             if (bit_idx < 3'd7) begin
               bit_idx <= bit_idx + 1'b1;
             end else begin
-              state   <= STATE_STOP;
+              state <= STATE_STOP;
             end
           end
         end

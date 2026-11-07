@@ -21,13 +21,13 @@ module spi_mmio #(
   spi_master #(
     .CLK_DIV(CLK_DIV)
   ) master_inst (
-    .clk(clk),
-    .rst_n(rst_n),
-    .start(start),
+    .clk    (clk),
+    .rst_n  (rst_n),
+    .start  (start),
     .tx_byte(wd[7:0]),
-    .busy(busy),
-    .sck(spi_sck),
-    .mosi(spi_mosi)
+    .busy   (busy),
+    .sck    (spi_sck),
+    .mosi   (spi_mosi)
   );
 
   always @(posedge clk or negedge rst_n) begin
@@ -45,8 +45,8 @@ module spi_mmio #(
   always @(*) begin
     rd = 32'd0;
     case (a[7:0])
-      8'h04: rd[0] = busy;
-      8'h08: rd[2:0] = {spi_rst_n, spi_dc, spi_cs_n};
+      8'h04:   rd[0] = busy;
+      8'h08:   rd[2:0] = {spi_rst_n, spi_dc, spi_cs_n};
       default: ;
     endcase
   end

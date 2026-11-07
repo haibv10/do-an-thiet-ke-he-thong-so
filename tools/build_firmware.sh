@@ -52,7 +52,7 @@ cd "$build_dir"
   -o firmware.elf
 
 "$objcopy_bin" -O binary firmware.elf firmware.bin
-"$objdump_bin" -d firmware.elf > firmware.asm
+"$objdump_bin" -d firmware.elf >firmware.asm
 python3 "$repo_dir/tools/make_hex.py" firmware.bin firmware.hex
 mkdir -p "$repo_dir/rom"
 cp firmware.hex "$repo_dir/rom/firmware.hex"

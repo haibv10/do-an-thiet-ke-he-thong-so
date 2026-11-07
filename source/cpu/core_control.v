@@ -3,7 +3,7 @@ module core_control (
   input  wire [2:0] funct3,
   input  wire       funct7_5,
   output reg        Branch,
-  output reg [1:0]  Jump,
+  output reg  [1:0] Jump,
   output reg        MemRead,
   output reg        MemtoReg,
   output reg        MemWrite,
@@ -13,7 +13,7 @@ module core_control (
   output reg        UsesRs1,
   output reg        UsesRs2,
   output reg        Fence,
-  output reg [3:0]  alu_ctrl
+  output reg  [3:0] alu_ctrl
 );
   always @(*) begin
     Branch   = 1'b0;
@@ -26,7 +26,7 @@ module core_control (
     RegWrite = 1'b0;
     UsesRs1  = 1'b0;
     UsesRs2  = 1'b0;
-    Fence     = 1'b0;
+    Fence    = 1'b0;
     alu_ctrl = 4'b0000;
 
     case (opcode)
@@ -111,9 +111,7 @@ module core_control (
       end
 
       7'b0001111: begin
-        if (funct3 == 3'b000)
-
-          Fence = 1'b1;
+        if (funct3 == 3'b000) Fence = 1'b1;
       end
     endcase
   end

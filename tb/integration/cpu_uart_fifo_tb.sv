@@ -38,7 +38,7 @@ module cpu_uart_fifo_tb;
 
   initial begin
     #1;
-    for (word_index = 0; word_index < 1024; word_index = word_index + 1)
+    for (word_index = 0; word_index < $size(dut.rom.rom); word_index = word_index + 1)
     dut.rom.rom[word_index] = 32'h0000_0013;
 
     dut.rom.rom[0] = 32'h5000_00b7;

@@ -8,8 +8,8 @@ module cpu_address_decoder (
   input wire [31:0] rd_rom, rd_dmem, rd_gpio, rd_uart, rd_i2c, rd_spi, rd_dht,
   output reg [31:0] rd_out
 );
-  wire sel_rom = addr < 32'h00002000;
-  wire sel_ram = addr >= 32'h20000000 && addr < 32'h20001000;
+  wire sel_rom = addr < 32'h00004000;
+  wire sel_ram = addr >= 32'h20000000 && addr < 32'h20002000;
   // Peripheral registers support aligned 32-bit accesses and low-byte stores.
   wire aligned = addr[1:0] == 2'b00;
   wire sel_gpio = aligned && addr == 32'h40000000;

@@ -12,7 +12,7 @@ module cpu_dht11_tb;
   end
   initial begin
     #1;
-    for (index = 0; index < 2048; index++) dut.rom.rom[index] = 32'h00000013;
+    for (index = 0; index < $size(dut.rom.rom); index++) dut.rom.rom[index] = 32'h00000013;
     dut.rom.rom[0] = 32'h800000b7; // lui x1,0x80000
     dut.rom.rom[1] = 32'h00100113; // addi x2,x0,1
     dut.rom.rom[2] = 32'h0020a023; // sw x2,0(x1): start

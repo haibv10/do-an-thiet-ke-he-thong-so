@@ -46,7 +46,7 @@ module cpu_i2c_tb;
 
   initial begin
     #1;
-    for (index = 0; index < 2048; index = index + 1) dut.rom.rom[index] = 32'h0000_0013;
+    for (index = 0; index < $size(dut.rom.rom); index = index + 1) dut.rom.rom[index] = 32'h0000_0013;
 
     slave.regs[0] = 8'h45;
     slave.regs[1] = 8'h30;

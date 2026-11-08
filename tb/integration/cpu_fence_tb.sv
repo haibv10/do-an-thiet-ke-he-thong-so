@@ -29,7 +29,7 @@ module cpu_fence_tb;
 
   initial begin
     #1;
-    for (index = 0; index < 2048; index = index + 1) dut.rom.rom[index] = NOP;
+    for (index = 0; index < $size(dut.rom.rom); index = index + 1) dut.rom.rom[index] = NOP;
 
     dut.rom.rom[0] = 32'h2000_00b7;
     dut.rom.rom[1] = 32'h05a0_0113;

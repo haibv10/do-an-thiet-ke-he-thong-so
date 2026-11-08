@@ -19,12 +19,12 @@ module cpu_mmio_bounds_tb;
   endtask
   initial begin
     #1;
-    for (index = 0; index < 2048; index++) dut.rom.rom[index] = 32'h00000013;
+    for (index = 0; index < $size(dut.rom.rom); index++) dut.rom.rom[index] = 32'h00000013;
     // UART receives a byte while CPU executes the initial NOPs.
     dut.rom.rom[100] = 32'h200000b7; // x1=RAM
     dut.rom.rom[101] = 32'h05b00113; // x2=0x5b
     dut.rom.rom[102] = 32'h0020a023; // store at RAM base
-    dut.rom.rom[103] = 32'h200011b7; // x3=first byte beyond RAM
+    dut.rom.rom[103] = 32'h200021b7; // x3=first byte beyond RAM
     dut.rom.rom[104] = 32'h0001a023; // invalid store must not alias
     dut.rom.rom[105] = load(4, 3, 0);
     dut.rom.rom[106] = load(5, 1, 0);
@@ -34,8 +34,16 @@ module cpu_mmio_bounds_tb;
     dut.rom.rom[110] = 32'h80000537; // x10=DHT
     dut.rom.rom[111] = 32'h10252023; // sw x2,0x100(x10): invalid register write
     dut.rom.rom[112] = load(11, 10, 12'h100);
-    dut.rom.rom[113] = 32'h00002637; // x12=first byte beyond ROM
-    dut.rom.rom[114] = 32'h00060067; // jalr x0,x12,0
+    dut.rom.rom[113] = 32'h06c00893; // x17=0x6c
+    dut.rom.rom[114] = 32'h200016b7; // x13=upper half of RAM
+    dut.rom.rom[115] = 32'h0116a023; // sw x17,0(x13)
+    dut.rom.rom[116] = load(14, 13, 0);
+    dut.rom.rom[117] = load(15, 1, 0);
+    dut.rom.rom[118] = 32'h00002637; // x12=upper half of ROM
+    dut.rom.rom[119] = 32'h00060067; // jalr x0,x12,0
+    dut.rom.rom[2048] = 32'h07b00813; // addi x16,x0,123
+    dut.rom.rom[2049] = 32'h00004637; // x12=first byte beyond ROM
+    dut.rom.rom[2050] = 32'h00060067; // invalid instruction fetch
     repeat (3) @(negedge clk); rst_n = 1;
     send_byte(8'ha5);
     repeat (180) @(negedge clk);
@@ -45,7 +53,10 @@ module cpu_mmio_bounds_tb;
       $fatal(1, "invalid UART read popped data: %h %h", dut.cpu.rf.x[8], dut.cpu.rf.x[9]);
     if (dut.serial_port.rx_inst.valid) $fatal(1, "valid UART read did not pop");
     if (dut.cpu.rf.x[11] !== 0 || dut.dht_port.busy) $fatal(1, "DHT alias decoded");
-    if (dut.instr_addr < 32'h2000 || dut.instr_data !== 0)
+    if (dut.cpu.rf.x[14] !== 32'h6c || dut.cpu.rf.x[15] !== 32'h5b)
+      $fatal(1, "expanded RAM not independent of lower RAM");
+    if (dut.cpu.rf.x[16] !== 123) $fatal(1, "CPU did not execute upper ROM");
+    if (dut.instr_addr < 32'h4000 || dut.instr_data !== 0)
       $fatal(1, "instruction fetch beyond ROM aliased");
     $display("cpu_mmio_bounds_tb: PASS");
     $finish;

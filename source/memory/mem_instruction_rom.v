@@ -8,13 +8,13 @@ module mem_instruction_rom #(
   input  wire [31:0] a_data,
   output reg  [31:0] rd_data
 );
-  reg     [31:0] rom   [0:2047];
+  reg     [31:0] rom   [0:4095];
   integer        index;
 
   initial begin
 
     // synthesis translate_off
-    for (index = 0; index < 2048; index = index + 1) begin
+    for (index = 0; index < 4096; index = index + 1) begin
       rom[index] = 32'd0;
     end
     // synthesis translate_on
@@ -22,7 +22,7 @@ module mem_instruction_rom #(
   end
 
   always @(negedge clk) begin
-    rd      <= rom[a[12:2]];
-    rd_data <= rom[a_data[12:2]];
+    rd      <= rom[a[13:2]];
+    rd_data <= rom[a_data[13:2]];
   end
 endmodule

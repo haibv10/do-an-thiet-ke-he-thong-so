@@ -60,7 +60,14 @@ module mem_data_ram_tb;
     expect_word(32'h0000_0010, 32'h1234_5678, "region bits ignored");
 
     write_word(32'h2000_0000, 4'b1111, 32'hcafe_0000);
-    expect_word(32'h2000_1000, 32'hcafe_0000, "wrap at 4 KB");
+    write_word(32'h2000_1000, 4'b1111, 32'hbeef_1000);
+    expect_word(32'h2000_1000, 32'hbeef_1000, "upper RAM accessible");
+    expect_word(32'h2000_0000, 32'hcafe_0000, "upper RAM does not alias word zero");
+    write_word(32'h2000_1ffc, 4'b1111, 32'hfeed_ffff);
+    expect_word(32'h2000_1ffc, 32'hfeed_ffff, "last word of expanded RAM");
+    write_word(32'h2000_1ffc, 4'b1000, 32'hab00_0000);
+    expect_word(32'h2000_1ffc, 32'habed_ffff, "byte enable at top of RAM");
+    expect_word(32'h2000_2000, 32'hcafe_0000, "raw array wraps at 8 KiB; SoC decoder blocks it");
 
     write_word(32'h2000_0020, 4'b1111, 32'h1111_1111);
     @(posedge clk);

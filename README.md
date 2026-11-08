@@ -1,7 +1,7 @@
 # FPGA-Based RISC-V SoC
 
-A Tang Nano 9K SoC with a five-stage RV32I processor, 8 KiB instruction ROM
-and 4 KiB data RAM. The CPU executes bare-metal firmware and accesses peripheral
+A Tang Nano 9K SoC with a five-stage RV32I processor, 16 KiB instruction ROM
+and 8 KiB data RAM. The CPU executes bare-metal firmware and accesses peripheral
 registers through MMIO. Environmental monitoring is the integrated application;
 a separate minimal firmware exercises RAM, GPIO, UART, I2C and SPI.
 
@@ -86,8 +86,8 @@ synchronously. I2C runs at 50 kHz; SPI uses mode 0, MSB first, at 6.75 MHz.
 
 | Address range (inclusive) | Device | Purpose |
 |---|---|---|
-| `0x00000000–0x00001FFF` | Instruction ROM | Instructions, `.rodata` and `.data` load image |
-| `0x20000000–0x20000FFF` | Data RAM | Globals, `.bss` and stack |
+| `0x00000000–0x00003FFF` | Instruction ROM | Instructions, `.rodata` and `.data` load image |
+| `0x20000000–0x20001FFF` | Data RAM | Globals, `.bss` and stack |
 | `0x40000000–0x40000003` | GPIO | Onboard LED |
 | `0x50000000–0x5000000F` | UART | TX, status, RX and overrun clear |
 | `0x60000000–0x6000000B` | I2C | Frame command, status and received data |
@@ -98,7 +98,7 @@ Peripheral register addresses must be word-aligned. Full-word accesses and
 stores to the low byte at a register address are supported. Unsupported
 register operations have no effect. Unmapped reads return zero and unmapped
 writes are ignored; invalid UART addresses do not pop its RX FIFO. Fetches
-outside the 8 KiB ROM return zero. There are no access-fault traps.
+outside the 16 KiB ROM return zero. There are no access-fault traps.
 
 The DHT11 uses its own single-wire protocol. Its MMIO registers address the
 controller inside the FPGA, which handles acquisition, timeout and checksum.
@@ -170,9 +170,14 @@ shows ROM image bytes, static RAM, remaining RAM and a conservative direct-call
 stack estimate from `main`. The estimate sums GCC frames along linked call paths,
 including tail calls. Indirect calls, recursion or missing frame information
 make the estimate unavailable. This is not a runtime stack high-water measurement.
-ROM/RAM capacities remain 8 KiB/4 KiB; these are deployment choices, not RV32I
+ROM/RAM capacities are 16 KiB/8 KiB; these are deployment choices, not RV32I
 requirements. FPGA resource utilization and timing must be checked separately
 in the Gowin synthesis and place-and-route reports under `build/gowin/impl/`.
+
+The ROM has separate instruction/data read ports, and RAM has byte write enables.
+Their mapping to BSRAM blocks depends on port configuration and synthesis;
+logical memory size alone does not determine block utilization. Zero-filled
+ROM regions may be optimized out, so check resource usage again as firmware grows.
 
 ```bash
 make demo

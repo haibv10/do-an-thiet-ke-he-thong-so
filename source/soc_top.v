@@ -43,7 +43,7 @@ module soc_top #(
     .a_data(mem_alu_result), .rd_data(rom_rd)
   );
   // Fetches outside ROM return zero; this core has no instruction access trap.
-  assign instr_data = (instr_addr < 32'h00002000) ? rom_instr : 32'd0;
+  assign instr_data = (instr_addr < 32'h00004000) ? rom_instr : 32'd0;
 
   wire we_gpio, we_uart, we_i2c, we_spi, we_dht;
   wire uart_read, dht_read;

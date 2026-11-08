@@ -40,7 +40,7 @@ module cpu_auipc_tb;
 
   initial begin
     #1;
-    for (index = 0; index < 2048; index = index + 1) dut.rom.rom[index] = NOP;
+    for (index = 0; index < $size(dut.rom.rom); index = index + 1) dut.rom.rom[index] = NOP;
 
     dut.rom.rom[0]             = auipc(20'h00000, 5'd1);
     dut.rom.rom[1]             = auipc(20'h00000, 5'd2);

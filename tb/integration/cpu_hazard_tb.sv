@@ -47,7 +47,7 @@ module cpu_hazard_tb;
 
   initial begin
     #1;
-    for (index = 0; index < 2048; index = index + 1) dut.rom.rom[index] = NOP;
+    for (index = 0; index < $size(dut.rom.rom); index = index + 1) dut.rom.rom[index] = NOP;
 
     dut.rom.rom[0]  = {20'h20000, 5'd20, 7'b0110111};
     dut.rom.rom[1]  = addi(5'd1, 5'd0, 12'd4);

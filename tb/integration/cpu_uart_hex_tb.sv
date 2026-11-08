@@ -30,7 +30,7 @@ module cpu_uart_hex_tb;
 
   initial begin
     #1;
-    for (index = 0; index < 2048; index = index + 1) dut.rom.rom[index] = 32'h0000_0013;
+    for (index = 0; index < $size(dut.rom.rom); index = index + 1) dut.rom.rom[index] = 32'h0000_0013;
 
     dut.rom.rom[0]  = 32'h00e0_0793;
     dut.rom.rom[1]  = 32'h00a7_b713;

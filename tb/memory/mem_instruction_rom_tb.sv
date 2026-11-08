@@ -23,24 +23,29 @@ module mem_instruction_rom_tb;
 
   initial begin
 
+    #1;
+    dut.rom[2048] = 32'h1357_9bdf;
+    dut.rom[4095] = 32'h2468_ace0;
     fetch(32'h0000_0000, 32'hdead_beef, "word 0");
     fetch(32'h0000_0004, 32'hcafe_babe, "word 1");
     fetch(32'h0000_0008, 32'h1234_5678, "word 2");
     fetch(32'h0000_000c, 32'h9abc_def0, "word 3");
 
     fetch(32'h0000_0010, 32'h0000_0000, "past the end of the image");
-    fetch(32'h0000_1ffc, 32'h0000_0000, "last word of the ROM");
+    fetch(32'h0000_1ffc, 32'h0000_0000, "last word of original 8 KiB region");
 
     fetch(32'h0000_0002, 32'hdead_beef, "byte offset ignored");
     fetch(32'h0000_1000, 32'h0000_0000, "4 KB up is now inside the ROM, not a wrap");
-    fetch(32'h0000_2000, 32'hdead_beef, "wrap at 8 KB");
+    fetch(32'h0000_2000, 32'h1357_9bdf, "upper ROM does not alias word zero");
+    fetch(32'h0000_3ffc, 32'h2468_ace0, "last word of expanded ROM");
+    fetch(32'h0000_4000, 32'hdead_beef, "raw array wraps at 16 KiB; SoC decoder blocks it");
 
     @(posedge clk);
     a      = 32'h0000_0000;
-    a_data = 32'h0000_0008;
+    a_data = 32'h0000_2000;
     @(posedge clk);
     #1;
-    if (rd !== 32'hdead_beef || rd_data !== 32'h1234_5678)
+    if (rd !== 32'hdead_beef || rd_data !== 32'h1357_9bdf)
       $fatal(1, "ports interfered: rd=%h rd_data=%h", rd, rd_data);
 
     @(posedge clk);

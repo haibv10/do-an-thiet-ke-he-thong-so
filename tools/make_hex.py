@@ -1,6 +1,6 @@
 import sys
 
-ROM_WORDS = 2048
+ROM_WORDS = 4096
 
 def convert_bin_to_hex(bin_path, hex_path, rom_words=ROM_WORDS):
     with open(bin_path, "rb") as f:

@@ -5,8 +5,8 @@ module mem_data_ram (
   input  wire [31:0] wd,
   output reg  [31:0] rd
 );
-  reg  [31:0] ram                 [0:1023];
-  wire [ 9:0] word_addr = a[11:2];
+  reg  [31:0] ram                 [0:2047];
+  wire [10:0] word_addr = a[12:2];
 
   always @(negedge clk) begin
     if (we[0]) ram[word_addr][7:0] <= wd[7:0];

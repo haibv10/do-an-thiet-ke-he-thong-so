@@ -1,12 +1,13 @@
 #ifndef UART_IO_H
 #define UART_IO_H
 
-void uart_putc(unsigned char value);
-void uart_puts(const char *text);
-void uart_hex8(unsigned char value);
-void uart_hex32(unsigned int value);
+// Output functions return 1 on success, 0 on polling timeout.
+int uart_putc(unsigned char value);
+int uart_puts(const char *text);
+int uart_hex8(unsigned char value);
+int uart_hex32(unsigned int value);
 
-void uart_bcd(unsigned char value);
+int uart_bcd(unsigned char value);
 
 int uart_getc(unsigned char *value);
 

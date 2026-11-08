@@ -5,9 +5,13 @@
 #define SPI_DC 0x02
 #define SPI_RST_N 0x04
 
-void spi_set_control(unsigned int bits);
+int spi_set_control(unsigned int bits);
 
-void spi_wait_idle(void);
-void spi_write(unsigned char value);
+int spi_wait_idle(void);
+int spi_write(unsigned char value);
+
+// A timeout latches the error; clear it before an explicit retry.
+int spi_error(void);
+void spi_clear_error(void);
 
 #endif

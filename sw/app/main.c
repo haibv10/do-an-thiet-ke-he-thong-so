@@ -4,6 +4,7 @@
 #include "ds3231_rtc.h"
 #include "st7735_panel.h"
 #include "ui_clock.h"
+#include "spi_bus.h"
 #include "mq5_sensor.h"
 #include "dht11_sensor.h"
 
@@ -21,6 +22,7 @@ int main(void) {
   unsigned int dht_tick = 0;
   unsigned int dht_pending = 0;
   unsigned int dht_status;
+  unsigned int display_fault_reported = 0;
   unsigned char humidity;
   unsigned char temperature;
 
@@ -39,6 +41,10 @@ int main(void) {
   ui_draw_frame();
 
   while (1) {
+    if (spi_error() && !display_fault_reported) {
+      uart_puts("DISPLAY SPI TIMEOUT\r\n");
+      display_fault_reported = 1;
+    }
     if (uart_poll(&command) && command == 'W') {
 
       if (ds3231_set_from_uart())

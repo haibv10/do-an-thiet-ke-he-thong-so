@@ -56,8 +56,8 @@ module cpu_uart_fifo_tb;
     send_byte(8'hc3);
     repeat (5000) @(posedge clk);
 
-    if (dut.rf.x[2] !== 32'h0000_00a5 || dut.rf.x[3] !== 32'h0000_00c3)
-      $fatal(1, "CPU FIFO reads: x2=%h x3=%h", dut.rf.x[2], dut.rf.x[3]);
+    if (dut.cpu.rf.x[2] !== 32'h0000_00a5 || dut.cpu.rf.x[3] !== 32'h0000_00c3)
+      $fatal(1, "CPU FIFO reads: x2=%h x3=%h", dut.cpu.rf.x[2], dut.cpu.rf.x[3]);
     if (dut.serial_port.rx_inst.level !== 5'd0)
       $fatal(1, "CPU did not drain FIFO: level=%d", dut.serial_port.rx_inst.level);
 

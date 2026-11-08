@@ -47,6 +47,7 @@ module spi_master #(
 
         STATE_SCK_LOW: begin
           sck <= 1'b0;
+          if (half_count == 0) mosi <= shift_data[bit_idx];
           if (!half_period_done) begin
             half_count <= half_count + 1'b1;
           end else begin
@@ -65,7 +66,6 @@ module spi_master #(
               state <= STATE_FINISH;
             end else begin
               bit_idx <= bit_idx - 1'b1;
-              mosi    <= shift_data[bit_idx-1'b1];
               state   <= STATE_SCK_LOW;
             end
           end

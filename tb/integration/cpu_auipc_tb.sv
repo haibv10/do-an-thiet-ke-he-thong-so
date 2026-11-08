@@ -34,8 +34,8 @@ module cpu_auipc_tb;
   endfunction
 
   task automatic expect_reg(input integer number, input logic [31:0] value, input string label);
-    if (dut.rf.x[number] !== value)
-      $fatal(1, "%s: x%0d = %h, expected %h", label, number, dut.rf.x[number], value);
+    if (dut.cpu.rf.x[number] !== value)
+      $fatal(1, "%s: x%0d = %h, expected %h", label, number, dut.cpu.rf.x[number], value);
   endtask
 
   initial begin

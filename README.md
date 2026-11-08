@@ -1,7 +1,11 @@
-# FPGA-Based RISC-V SoC for Environmental Monitoring
+# FPGA-Based RISC-V SoC
 
 A Tang Nano 9K SoC with a five-stage RV32I processor, 8 KiB instruction ROM
-and 4 KiB data RAM. Firmware reads DHT11 temperature/humidity, MQ-5 output
+and 4 KiB data RAM. The CPU executes bare-metal firmware and accesses peripheral
+registers through MMIO. Environmental monitoring is the integrated application;
+a separate minimal firmware exercises RAM, GPIO, UART, I2C and SPI.
+
+The environmental firmware reads DHT11 temperature/humidity, MQ-5 output
 voltage through an ADS1115, and DS3231 date/time, then displays readings on
 an ST7735 128x160 TFT. UART provides status output and RTC setup.
 
@@ -12,7 +16,7 @@ MQ-5 levels use voltage thresholds, not calibrated gas concentrations in ppm.
 ```text
 source/
 ├── soc_top.v          SoC integration and FPGA top module
-├── cpu/               Core, pipeline, forwarding and hazards
+├── cpu/               cpu_top, core, pipeline, forwarding and hazards
 ├── bus/               Address decoder
 ├── memory/            Instruction ROM and data RAM
 ├── common/            Clock enable and reset synchronizer
@@ -22,11 +26,12 @@ sw/
 ├── hal/               MMIO access
 ├── drivers/           DS3231, MQ-5/ADS1115 and ST7735
 ├── graphics/          ASCII font
-├── app/               Main loop and display layout
+├── app/               Environmental app, MMIO demo and display layout
 └── common/            Delay utility
 tb/                    CPU, bus, memory, common and peripheral unit tests
+├── firmware/          Native HAL timeout and memory-report tests
 ├── integration/       Full-SoC execution and firmware startup tests
-└── support/           I2C slave model, ROM fixture and VCD helper
+└── support/           I2C/DHT11 models, ROM fixture and VCD helper
 constr/                Pin and timing constraints
 rom/                   Committed firmware.hex
 tools/                 Build, test and programming scripts
@@ -68,20 +73,35 @@ to 3.3 V.
 
 ## Architecture and memory map
 
+`source/cpu/cpu_top.v` contains the processor. `soc_top.v` connects its instruction
+and data ports to ROM, RAM, the address decoder and peripheral controllers.
+The CPU ports have fixed latency and no ready/wait handshake: instruction and
+RAM/ROM data reads settle on the falling edge for capture on the rising edge.
+A slower memory would require extending this interface and CPU stall logic.
+
 The CPU uses IF/ID/EX/MEM/WB, forwarding, load-use interlocking and branch/jump
 flushing. Peripherals use ordinary loads/stores through MMIO. The system runs
 in one 27 MHz clock domain; reset asserts asynchronously and releases
 synchronously. I2C runs at 50 kHz; SPI uses mode 0, MSB first, at 6.75 MHz.
 
-| Base address | Device | Purpose |
+| Address range (inclusive) | Device | Purpose |
 |---|---|---|
-| `0x00000000` | Instruction ROM | Instructions, `.rodata` and `.data` load image |
-| `0x20000000` | Data RAM | Globals, `.bss` and stack |
-| `0x40000000` | GPIO | Onboard LED |
-| `0x50000000` | UART | 115200 8N1 transmit and 16-byte receive FIFO |
-| `0x60000000` | I2C | DS3231 RTC and ADS1115 transactions at 50 kHz |
-| `0x70000000` | SPI | Write-only ST7735 transfers at 6.75 MHz |
-| `0x80000000` | DHT11 | Start, status and whole-number temperature/humidity data |
+| `0x00000000–0x00001FFF` | Instruction ROM | Instructions, `.rodata` and `.data` load image |
+| `0x20000000–0x20000FFF` | Data RAM | Globals, `.bss` and stack |
+| `0x40000000–0x40000003` | GPIO | Onboard LED |
+| `0x50000000–0x5000000F` | UART | TX, status, RX and overrun clear |
+| `0x60000000–0x6000000B` | I2C | Frame command, status and received data |
+| `0x70000000–0x7000000B` | SPI | TX, status and panel control pins |
+| `0x80000000–0x80000007` | DHT11 | Start/status and measurement |
+
+Peripheral register addresses must be word-aligned. Full-word accesses and
+stores to the low byte at a register address are supported. Unsupported
+register operations have no effect. Unmapped reads return zero and unmapped
+writes are ignored; invalid UART addresses do not pop its RX FIFO. Fetches
+outside the 8 KiB ROM return zero. There are no access-fault traps.
+
+The DHT11 uses its own single-wire protocol. Its MMIO registers address the
+controller inside the FPGA, which handles acquisition, timeout and checksum.
 
 ROM has separate instruction and data read ports. ROM/RAM reads register on
 the falling edge before pipeline capture on the rising edge. Startup copies
@@ -112,14 +132,23 @@ needed; the default is `riscv64-unknown-elf`.
 | Command | Result |
 |---|---|
 | `make clean` | Remove the entire `build/` directory |
-| `make test` | Run all 33 RTL testbenches; output under `build/sim/` |
+| `make test` | Run 39 RTL checks across 37 testbenches; output under `build/sim/` |
+| `make test-firmware` | Build both apps; test HAL timeouts and execute the MMIO demo on the simulated CPU |
+| `make demo` | Build minimal firmware under `build/demo/`, preserving `rom/firmware.hex` |
 | `make firmware` | Compile C/assembly and update `rom/firmware.hex` |
 | `make fpga` | Build firmware and synthesize/place/route the FPGA |
 | `make program` | Build and program volatile FPGA SRAM with Gowin |
 | `make flash` | Build and program persistent Flash with openFPGALoader |
 
-`make test` expects 33 `PASS` lines. It covers core logic, protocol controllers,
-SoC integration and startup; it does not validate sensor behavior on hardware.
+`make test` expects 39 `PASS` lines. It covers the standalone CPU, core logic,
+protocol controllers, address boundaries, MMIO side effects, SoC integration
+and startup. SPI timing is checked with clock dividers 1, 2 and 3. DHT11 tests
+cover valid frames, checksum failure, no response, commands while busy,
+recovery and CPU reads through MMIO. These tests do not validate board hardware.
+`make test-firmware` additionally requires a native C compiler and the RISC-V
+toolchain. Its native test maps fake MMIO pages to exercise stuck-BUSY timeouts;
+its RTL test runs the compiled demo with an I2C RTC model and checks RAM, GPIO,
+SPI output and UART echo.
 A short-ROM fixture intentionally produces a `$readmemh` warning in the ROM
 test, which checks that unused words read as zero.
 
@@ -133,6 +162,43 @@ For optional waveforms, install `gtkwave`, compile the desired testbench with
 `tb/support/dump_vcd.sv` as a second top module (`-s dump_vcd`), and run with
 `+vcd=build/sim/wave.vcd`.
 
+## Memory usage and minimal demo
+
+Every firmware build writes `memory_usage.txt`, `firmware.map`, `firmware.symbols`,
+`firmware.asm` and GCC `.su` stack-frame files to its build directory. The report
+shows ROM image bytes, static RAM, remaining RAM and a conservative direct-call
+stack estimate from `main`. The estimate sums GCC frames along linked call paths,
+including tail calls. Indirect calls, recursion or missing frame information
+make the estimate unavailable. This is not a runtime stack high-water measurement.
+ROM/RAM capacities remain 8 KiB/4 KiB; these are deployment choices, not RV32I
+requirements. FPGA resource utilization and timing must be checked separately
+in the Gowin synthesis and place-and-route reports under `build/gowin/impl/`.
+
+```bash
+make demo
+make test-firmware
+make fpga APP=demo GOWIN_ROOT=/path/to/Gowin
+```
+
+The demo writes and reads a small RAM array, writes GPIO, reads DS3231 registers
+through I2C, sends one ST7735 NOP byte through SPI, then echoes UART input.
+Commands `r`, `s` and `l` repeat the RTC read, repeat the SPI transfer and toggle
+the LED. `SPI TX OK` confirms controller completion; the write-only interface
+cannot confirm that a panel received the byte. No DHT11 or MQ-5 is needed.
+A missing RTC produces `I2C NACK/TIMEOUT` and execution continues.
+
+`make program APP=demo` or `make flash APP=demo` builds and programs the demo.
+The default `APP=environment` selects the environmental firmware. Standalone
+`make demo` leaves the committed environmental ROM image untouched. Gowin builds
+select the image through the generated `build/gowin/rom` symlink; both apps use
+the same output bitstream path.
+
+HAL polling uses a bounded iteration budget, not a millisecond deadline.
+UART output returns failure on timeout; I2C returns failure on NACK or timeout.
+SPI returns failure and latches an error until `spi_clear_error()` is called;
+the environmental application reports the display error once over UART. Clearing
+the software error does not reset the hardware controller.
+
 ## Source formatting
 
 ```bash
@@ -141,7 +207,7 @@ make format-check
 ```
 
 The first command formats RTL (`source/**/*.v`, `tb/**/*.sv`), C/header files
-(`sw/`) and shell scripts (`tools/*.sh`). The check command reports differences
+(`sw/` and `tb/firmware/`) and shell scripts (`tools/*.sh`). The check command reports differences
 without modifying files. HEX images, constraints, linker/assembly, Python and
 Tcl files are outside the formatter scope.
 

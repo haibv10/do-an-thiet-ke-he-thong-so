@@ -28,7 +28,7 @@ shfmt=$(resolve_tool "${SHFMT:-shfmt}")
 
 shopt -s globstar nullglob
 rtl_files=(source/**/*.v tb/**/*.sv)
-c_files=(sw/**/*.c sw/**/*.h)
+c_files=(sw/**/*.c sw/**/*.h tb/firmware/*.c)
 shell_files=(tools/*.sh)
 
 if [[ "$mode" == --check ]]; then

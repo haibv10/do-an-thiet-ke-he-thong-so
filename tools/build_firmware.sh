@@ -3,14 +3,29 @@ set -euo pipefail
 
 repo_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 sw_dir="$repo_dir/sw"
-build_dir="$repo_dir/build/firmware"
+app=${1:-environment}
+case "$app" in
+  environment)
+    build_dir="$repo_dir/build/firmware"
+    main_source="$sw_dir/app/main.c"
+    ;;
+  demo)
+    build_dir="$repo_dir/build/demo"
+    main_source="$sw_dir/app/mmio_demo.c"
+    ;;
+  *)
+    echo "Usage: $0 [environment|demo]" >&2
+    exit 2
+    ;;
+esac
 tool_prefix=${RISCV_TOOL_PREFIX:-riscv64-unknown-elf}
 
 gcc_bin="$tool_prefix-gcc"
 objcopy_bin="$tool_prefix-objcopy"
 objdump_bin="$tool_prefix-objdump"
+nm_bin="$tool_prefix-nm"
 
-for tool in "$gcc_bin" "$objcopy_bin" "$objdump_bin"; do
+for tool in "$gcc_bin" "$objcopy_bin" "$objdump_bin" "$nm_bin"; do
   command -v "$tool" >/dev/null || {
     echo "$tool is required" >&2
     exit 1
@@ -30,6 +45,8 @@ cd "$build_dir"
   -I"$sw_dir/graphics" \
   -I"$sw_dir/common" \
   -Os \
+  -Wall -Wextra -Werror \
+  -fstack-usage \
   -ffunction-sections \
   -fdata-sections \
   -msmall-data-limit=0 \
@@ -37,7 +54,7 @@ cd "$build_dir"
   -Wl,--gc-sections \
   -Wl,-Map=firmware.map \
   "$sw_dir/startup/startup.s" \
-  "$sw_dir/app/main.c" \
+  "$main_source" \
   "$sw_dir/common/sys_delay.c" \
   "$sw_dir/hal/gpio_led.c" \
   "$sw_dir/hal/uart_io.c" \
@@ -54,5 +71,9 @@ cd "$build_dir"
 "$objcopy_bin" -O binary firmware.elf firmware.bin
 "$objdump_bin" -d firmware.elf >firmware.asm
 python3 "$repo_dir/tools/make_hex.py" firmware.bin firmware.hex
-mkdir -p "$repo_dir/rom"
-cp firmware.hex "$repo_dir/rom/firmware.hex"
+"$nm_bin" -n firmware.elf > firmware.symbols
+python3 "$repo_dir/tools/report_memory.py" "$build_dir" | tee memory_usage.txt
+if [[ "$app" == environment ]]; then
+  mkdir -p "$repo_dir/rom"
+  cp firmware.hex "$repo_dir/rom/firmware.hex"
+fi

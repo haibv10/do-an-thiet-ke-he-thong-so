@@ -1,15 +1,18 @@
 GOWIN_ROOT ?=
 FLASH_FREQ ?= 1000000
+APP ?= environment
 
-.PHONY: help clean format format-check test firmware fpga program flash
+.PHONY: help clean format format-check test test-firmware firmware demo fpga program flash
 
 help:
 	@printf '%s\n' \
 	  'make clean         Remove the entire build directory.' \
 	  'make format        Format RTL, C/header and shell sources.' \
 	  'make format-check  Check formatting without modifying files.' \
-	  'make test      Run all 33 RTL testbenches.' \
-	  'make firmware  Build the RISC-V firmware ROM image.' \
+	  'make test      Run 39 RTL checks (37 testbenches).' \
+	  'make firmware  Build the environmental firmware and memory report.' \
+	  'make demo      Build the minimal MMIO demo under build/demo/.' \
+	  'make test-firmware  Build both apps; test HAL timeouts and demo execution.' \
 	  'make fpga      Build firmware and generate the FPGA bitstream.' \
 	  'make program   Build the bitstream and program FPGA SRAM.' \
 	  'make flash     Build the bitstream and program persistent Flash.' \
@@ -28,10 +31,18 @@ test:
 	bash tools/run_tests.sh
 
 firmware:
-	bash tools/build_firmware.sh
+	bash tools/build_firmware.sh "$(APP)"
+
+demo:
+	bash tools/build_firmware.sh demo
+
+test-firmware:
+	bash tools/build_firmware.sh environment
+	bash tools/build_firmware.sh demo
+	bash tools/run_firmware_tests.sh
 
 fpga: firmware
-	GOWIN_ROOT="$(GOWIN_ROOT)" bash tools/build_fpga.sh
+	GOWIN_ROOT="$(GOWIN_ROOT)" APP="$(APP)" bash tools/build_fpga.sh
 
 program: fpga
 	sudo env GOWIN_ROOT="$(GOWIN_ROOT)" bash tools/program_fpga.sh

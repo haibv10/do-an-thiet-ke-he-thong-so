@@ -1,7 +1,6 @@
 `timescale 1ns / 1ps
 
-module spi_master_tb;
-  localparam integer CLK_DIV = 3;
+module spi_master_tb #(parameter integer CLK_DIV = 3);
 
   logic         clk = 1'b0;
   logic         rst_n = 1'b0;
@@ -16,6 +15,14 @@ module spi_master_tb;
   integer       sck_rises = 0;
   time          last_rise;
   time          high_width;
+  time last_data_change = 0;
+  always @(mosi) begin
+    if (rst_n && busy && sck === 1'b1)
+      $fatal(1, "MOSI changed while SCK was high");
+    last_data_change = $time;
+  end
+  always @(posedge sck) if (rst_n && $time - last_data_change < CLK_DIV * 10)
+    $fatal(1, "MOSI setup time shorter than one half-period");
 
   spi_master #(.CLK_DIV(CLK_DIV)) dut (.*);
 

@@ -1,4 +1,5 @@
 #include "uart_io.h"
+#include "mmio_poll.h"
 
 #define UART_BASE 0x50000000
 #define UART_TX_REG (*((volatile unsigned int *)UART_BASE))
@@ -11,34 +12,33 @@ static const char hex_digits[] = "0123456789ABCDEF";
 
 #define UART_GETC_TIMEOUT 3000000U
 
-void uart_putc(unsigned char value) {
-  while (UART_STAT_REG & UART_TX_BUSY) {
-  }
+int uart_putc(unsigned char value) {
+  if (!mmio_wait_clear(&UART_STAT_REG, UART_TX_BUSY))
+    return 0;
   UART_TX_REG = value;
+  return 1;
 }
 
-void uart_puts(const char *text) {
+int uart_puts(const char *text) {
   while (*text != '\0') {
-    uart_putc((unsigned char)*text);
+    if (!uart_putc((unsigned char)*text))
+      return 0;
     text++;
   }
+  return 1;
 }
 
-void uart_hex8(unsigned char value) {
-  uart_putc(hex_digits[value >> 4]);
-  uart_putc(hex_digits[value & 0x0f]);
+int uart_hex8(unsigned char value) {
+  return uart_putc(hex_digits[value >> 4]) && uart_putc(hex_digits[value & 0x0f]);
 }
 
-void uart_hex32(unsigned int value) {
-  uart_hex8((unsigned char)(value >> 24));
-  uart_hex8((unsigned char)(value >> 16));
-  uart_hex8((unsigned char)(value >> 8));
-  uart_hex8((unsigned char)value);
+int uart_hex32(unsigned int value) {
+  return uart_hex8((unsigned char)(value >> 24)) && uart_hex8((unsigned char)(value >> 16)) &&
+         uart_hex8((unsigned char)(value >> 8)) && uart_hex8((unsigned char)value);
 }
 
-void uart_bcd(unsigned char value) {
-  uart_putc(hex_digits[(value >> 4) & 0x0f]);
-  uart_putc(hex_digits[value & 0x0f]);
+int uart_bcd(unsigned char value) {
+  return uart_putc(hex_digits[(value >> 4) & 0x0f]) && uart_putc(hex_digits[value & 0x0f]);
 }
 
 int uart_getc(unsigned char *value) {

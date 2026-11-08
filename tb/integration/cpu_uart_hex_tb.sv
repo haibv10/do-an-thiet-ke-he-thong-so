@@ -52,13 +52,13 @@ module cpu_uart_hex_tb;
     @(negedge clk) rst_n = 1'b1;
     repeat (100) @(posedge clk);
 
-    if (dut.rf.x[19] !== 32'd69 || dut.rf.x[20] !== 32'd55 || dut.rf.x[8] !== 32'd40)
+    if (dut.cpu.rf.x[19] !== 32'd69 || dut.cpu.rf.x[20] !== 32'd55 || dut.cpu.rf.x[8] !== 32'd40)
       $fatal(
           1,
           "hex branch or address loop: E=%h 7=%h address=%h",
-          dut.rf.x[19],
-          dut.rf.x[20],
-          dut.rf.x[8]
+          dut.cpu.rf.x[19],
+          dut.cpu.rf.x[20],
+          dut.cpu.rf.x[8]
       );
     $display("cpu_uart_hex_tb: PASS");
     $finish;

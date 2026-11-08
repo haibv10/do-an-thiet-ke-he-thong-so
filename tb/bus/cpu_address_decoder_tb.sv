@@ -1,92 +1,62 @@
 `timescale 1ns / 1ps
-
 module cpu_address_decoder_tb;
-  logic [31:0] addr = 32'd0;
-  logic [ 3:0] we_mask = 4'b0000;
-  wire  [ 3:0] we_dmem;
-  wire we_gpio, we_uart, we_i2c, we_spi, we_dht;
-  logic [31:0] rd_rom = 32'h0000_0000;
-  logic [31:0] rd_dmem = 32'h1111_1111;
-  logic [31:0] rd_gpio = 32'h2222_2222;
-  logic [31:0] rd_uart = 32'h3333_3333;
-  logic [31:0] rd_i2c = 32'h4444_4444;
-  logic [31:0] rd_spi = 32'h5555_5555;
-  logic [31:0] rd_dht = 32'd0;
-  wire  [31:0] rd_out;
-
+  logic [31:0] addr = 0;
+  logic [3:0] we_mask = 0;
+  logic re = 0;
+  wire [3:0] we_dmem;
+  wire we_gpio, we_uart, we_i2c, we_spi, we_dht, re_uart, re_dht;
+  logic [31:0] rd_rom = 32'h11, rd_dmem = 32'h22, rd_gpio = 32'h33;
+  logic [31:0] rd_uart = 32'h44, rd_i2c = 32'h55, rd_spi = 32'h66, rd_dht = 32'h77;
+  wire [31:0] rd_out;
   cpu_address_decoder dut (.*);
 
-  task automatic expect_read(input logic [31:0] address, input logic [31:0] value,
-                             input string label);
-    begin
-      addr = address;
-      #1;
-      if (rd_out !== value)
-        $fatal(1, "%s: read from %h = %h, expected %h", label, address, rd_out, value);
-    end
-  endtask
-
-  task automatic expect_write(input logic [31:0] address, input logic [3:0] dmem_en,
-                              input logic gpio_en, input logic uart_en, input logic i2c_en,
-                              input logic spi_en, input string label);
-    begin
-      addr    = address;
-      we_mask = 4'b1111;
-      #1;
-      if (we_dmem !== dmem_en || we_gpio !== gpio_en ||
-          we_uart !== uart_en || we_i2c !== i2c_en || we_spi !== spi_en)
-        $fatal(
-            1,
-            "%s: write to %h gave mem_data_ram=%b gpio_mmio=%b uart=%b i2c=%b spi=%b",
-            label,
-            address,
-            we_dmem,
-            we_gpio,
-            we_uart,
-            we_i2c,
-            we_spi
-        );
-      we_mask = 4'b0000;
-    end
+  task automatic check(input logic [31:0] address, input logic [31:0] value,
+                       input logic [8:0] enables);
+    addr = address;
+    #1;
+    if (rd_out !== value) $fatal(1, "read %h = %h expected %h", addr, rd_out, value);
+    if ({we_dmem, we_gpio, we_uart, we_i2c, we_spi, we_dht} !== enables)
+      $fatal(1, "unexpected write enables at %h", addr);
+    if (re_uart !== (re && value == rd_uart) || re_dht !== (re && value == rd_dht))
+      $fatal(1, "unexpected read side-effect enables at %h", addr);
   endtask
 
   initial begin
-    rd_rom = 32'h0000_0000;
-
-    rd_rom = 32'h0BAD_C0DE;
-    expect_read(32'h0000_0010, 32'h0BAD_C0DE, "ROM window");
-    expect_read(32'h2000_0000, 32'h1111_1111, "DMEM");
-    expect_read(32'h4000_0000, 32'h2222_2222, "GPIO");
-    expect_read(32'h5000_0000, 32'h3333_3333, "UART");
-    expect_read(32'h6000_0000, 32'h4444_4444, "I2C");
-    expect_read(32'h7000_0000, 32'h5555_5555, "SPI");
-
-    expect_read(32'h2FFF_FFFC, 32'h1111_1111, "DMEM at the top of its region");
-
-    expect_read(32'h1000_0000, 32'd0, "unmapped 0x1");
-    expect_read(32'h3000_0000, 32'd0, "unmapped 0x3");
-    expect_read(32'h9000_0000, 32'd0, "unmapped 0x9");
-    expect_read(32'hF000_0000, 32'd0, "unmapped 0xF");
-
-    expect_write(32'h2000_0000, 4'b1111, 1'b0, 1'b0, 1'b0, 1'b0, "store to DMEM");
-    expect_write(32'h4000_0000, 4'b0000, 1'b1, 1'b0, 1'b0, 1'b0, "store to GPIO");
-    expect_write(32'h5000_0000, 4'b0000, 1'b0, 1'b1, 1'b0, 1'b0, "store to UART");
-    expect_write(32'h6000_0000, 4'b0000, 1'b0, 1'b0, 1'b1, 1'b0, "store to I2C");
-    expect_write(32'h7000_0000, 4'b0000, 1'b0, 1'b0, 1'b0, 1'b1, "store to SPI");
-
-    expect_write(32'h0000_0000, 4'b0000, 1'b0, 1'b0, 1'b0, 1'b0, "store into ROM");
-    expect_write(32'h3000_0000, 4'b0000, 1'b0, 1'b0, 1'b0, 1'b0, "store to unmapped 0x3");
-
-    addr    = 32'h2000_0001;
+    we_mask = 4'hf;
+    re = 1;
+    check(32'h00000000, rd_rom, 0);
+    check(32'h00001fff, rd_rom, 0);
+    check(32'h00002000, 0, 0);
+    check(32'h20000000, rd_dmem, 9'b1111_00000);
+    check(32'h20000fff, rd_dmem, 9'b1111_00000);
+    check(32'h20001000, 0, 0);
+    check(32'h2ffffffc, 0, 0);
+    check(32'h40000000, rd_gpio, 9'b0000_10000);
+    check(32'h40000004, 0, 0);
+    check(32'h50000000, rd_uart, 9'b0000_01000);
+    check(32'h5000000c, rd_uart, 9'b0000_01000);
+    check(32'h50000010, 0, 0);
+    check(32'h50000108, 0, 0);
+    check(32'h60000008, rd_i2c, 9'b0000_00100);
+    check(32'h6000000c, 0, 0);
+    check(32'h70000008, rd_spi, 9'b0000_00010);
+    check(32'h7000000c, 0, 0);
+    check(32'h80000000, rd_dht, 9'b0000_00001);
+    check(32'h80000004, rd_dht, 9'b0000_00001);
+    check(32'h80000008, 0, 0);
+    check(32'h80000010, 0, 0);
+    check(32'h80000100, 0, 0);
+    check(32'h50000001, 0, 0);
+    check(32'h80000001, 0, 0);
+    check(32'hffffffff, 0, 0);
     we_mask = 4'b0010;
-    #1;
-    if (we_dmem !== 4'b0010) $fatal(1, "byte mask not forwarded: %b", we_dmem);
-
-    addr    = 32'h4000_0000;
-    we_mask = 4'b1110;
-    #1;
-    if (we_gpio !== 1'b0) $fatal(1, "GPIO enabled by a mask with bit 0 clear");
-
+    check(32'h20000001, rd_dmem, 9'b0010_00000);
+    check(32'h40000000, rd_gpio, 0);
+    check(32'h80000000, rd_dht, 0);
+    we_mask = 0;
+    re = 0;
+    check(32'h50000008, rd_uart, 0);
+    check(32'h80000004, rd_dht, 0);
     $display("cpu_address_decoder_tb: PASS");
     $finish;
   end

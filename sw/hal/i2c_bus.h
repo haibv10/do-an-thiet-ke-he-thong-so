@@ -8,6 +8,7 @@
 
 unsigned char i2c_last_byte(void);
 
+// Returns 0 for NACK or polling timeout; 1 for ACK.
 int i2c_frame(unsigned int value);
 
 void i2c_release(void);

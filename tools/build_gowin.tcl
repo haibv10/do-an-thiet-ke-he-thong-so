@@ -4,6 +4,7 @@ set repo_dir [file dirname $tools_dir]
 set_device -name GW1NR-9C GW1NR-LV9QN88PC6/I5
 
 add_file [file join $repo_dir source soc_top.v]
+add_file [file join $repo_dir source cpu cpu_top.v]
 add_file [file join $repo_dir source cpu core_pc.v]
 add_file [file join $repo_dir source common reset_sync.v]
 add_file [file join $repo_dir source cpu core_control.v]

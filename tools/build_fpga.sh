@@ -4,6 +4,18 @@ set -euo pipefail
 repo_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 build_dir="$repo_dir/build/gowin"
 gowin_root=${GOWIN_ROOT:-}
+case "${APP:-environment}" in
+  environment) firmware_dir="$repo_dir/rom" ;;
+  demo) firmware_dir="$repo_dir/build/demo" ;;
+  *)
+    echo "APP must be environment or demo" >&2
+    exit 2
+    ;;
+esac
+if [[ ! -f "$firmware_dir/firmware.hex" ]]; then
+  echo "Firmware image missing; run make firmware APP=${APP:-environment}" >&2
+  exit 1
+fi
 system_libstdcpp=${SYSTEM_LIBSTDCXX:-/usr/lib/x86_64-linux-gnu/libstdc++.so.6}
 system_libfreetype=${SYSTEM_FREETYPE:-/lib/x86_64-linux-gnu/libfreetype.so.6}
 
@@ -31,7 +43,7 @@ if [[ ! -f "$system_libfreetype" ]]; then
 fi
 
 mkdir -p "$build_dir"
-ln -sfn "$repo_dir/rom" "$build_dir/rom"
+ln -sfn "$firmware_dir" "$build_dir/rom"
 cd "$build_dir"
 
 exec env -u DISPLAY \

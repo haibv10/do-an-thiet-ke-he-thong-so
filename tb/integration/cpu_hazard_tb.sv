@@ -22,7 +22,7 @@ module cpu_hazard_tb;
     .i2c_scl    (i2c_scl)
   );
 
-  always @(posedge clk) if (rst_n && dut.stall) stall_count <= stall_count + 1;
+  always @(posedge clk) if (rst_n && dut.cpu.stall) stall_count <= stall_count + 1;
 
   function automatic logic [31:0] encode_i(input logic [11:0] immediate, input logic [4:0] rs1,
                                            input logic [2:0] funct3, input logic [4:0] rd,
@@ -41,8 +41,8 @@ module cpu_hazard_tb;
   endfunction
 
   task automatic expect_reg(input integer number, input logic [31:0] value, input string label);
-    if (dut.rf.x[number] !== value)
-      $fatal(1, "%s: x%0d = %0d, expected %0d", label, number, dut.rf.x[number], value);
+    if (dut.cpu.rf.x[number] !== value)
+      $fatal(1, "%s: x%0d = %0d, expected %0d", label, number, dut.cpu.rf.x[number], value);
   endtask
 
   initial begin

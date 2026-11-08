@@ -6,6 +6,9 @@ MEMORY
     RAM (rwx) : ORIGIN = 0x20000000, LENGTH = 4K
 }
 
+_rom_capacity = LENGTH(ROM);
+_ram_capacity = LENGTH(RAM);
+
 _stack_top = ORIGIN(RAM) + LENGTH(RAM);
 
 SECTIONS

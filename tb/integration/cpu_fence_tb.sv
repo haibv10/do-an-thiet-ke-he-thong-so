@@ -25,7 +25,7 @@ module cpu_fence_tb;
     .i2c_scl    (i2c_scl)
   );
 
-  always @(posedge clk) if (rst_n && dut.id_Fence) fence_count <= fence_count + 1;
+  always @(posedge clk) if (rst_n && dut.cpu.id_Fence) fence_count <= fence_count + 1;
 
   initial begin
     #1;
@@ -42,7 +42,7 @@ module cpu_fence_tb;
     @(negedge clk) rst_n = 1'b1;
     repeat (30) @(posedge clk);
 
-    if (dut.rf.x[3] !== 32'd90) $fatal(1, "load after FENCE = %h", dut.rf.x[3]);
+    if (dut.cpu.rf.x[3] !== 32'd90) $fatal(1, "load after FENCE = %h", dut.cpu.rf.x[3]);
     if (fence_count !== 1) $fatal(1, "FENCE decoded %0d times", fence_count);
 
     $display("cpu_fence_tb: PASS");

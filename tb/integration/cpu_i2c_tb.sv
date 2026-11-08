@@ -41,7 +41,7 @@ module cpu_i2c_tb;
 
   initial begin
     #6000000;
-    $fatal(1, "timeout, slave state %0d, x20=%h x21=%h", slave.state, dut.rf.x[20], dut.rf.x[21]);
+    $fatal(1, "timeout, slave state %0d, x20=%h x21=%h", slave.state, dut.cpu.rf.x[20], dut.cpu.rf.x[21]);
   end
 
   initial begin
@@ -94,10 +94,10 @@ module cpu_i2c_tb;
     wait (dut.clock_port.busy === 1'b0);
     repeat (400) @(posedge clk);
 
-    if (dut.rf.x[20] !== 32'h0000_0045)
-      $fatal(1, "first byte in x20 = %h, expected 45", dut.rf.x[20]);
-    if (dut.rf.x[21] !== 32'h0000_0030)
-      $fatal(1, "second byte in x21 = %h, expected 30", dut.rf.x[21]);
+    if (dut.cpu.rf.x[20] !== 32'h0000_0045)
+      $fatal(1, "first byte in x20 = %h, expected 45", dut.cpu.rf.x[20]);
+    if (dut.cpu.rf.x[21] !== 32'h0000_0030)
+      $fatal(1, "second byte in x21 = %h, expected 30", dut.cpu.rf.x[21]);
 
     if (slave.start_conditions !== 2)
       $fatal(1, "%0d START conditions, expected 2", slave.start_conditions);

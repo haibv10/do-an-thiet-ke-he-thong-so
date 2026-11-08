@@ -1,6 +1,6 @@
 module soc_top #(
   parameter UART_CLKS_PER_BIT = 234,
-  parameter SPI_CLK_DIV = 2,
+  parameter SPI_CLK_DIV = 1,
   parameter ROM_HEX_PATH = "rom/firmware.hex"
 ) (
   input  wire clk,

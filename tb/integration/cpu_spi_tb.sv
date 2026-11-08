@@ -13,6 +13,15 @@ module cpu_spi_tb;
   tri1          i2c_sda;
   tri1          i2c_scl;
 
+  time last_sck_rise = 0;
+  integer checked_widths = 0;
+  always @(posedge spi_sck_out) last_sck_rise = $time;
+  always @(negedge spi_sck_out) if (rst_n && last_sck_rise) begin
+    if ($time - last_sck_rise != 37)
+      $fatal(1, "SPI high width must be one system clock (13.5 MHz at 27 MHz)");
+    checked_widths = checked_widths + 1;
+  end
+
   integer       index;
   integer       bit_count = 0;
   integer       byte_count = 0;
@@ -101,7 +110,8 @@ module cpu_spi_tb;
     if (spi_rst_n_out !== 1'b1)
       $fatal(1, "panel rst_n = %b after firmware released it", spi_rst_n_out);
 
-    $display("cpu_spi_tb: PASS");
+    if (!checked_widths) $fatal(1, "No SPI widths checked");
+    $display("cpu_spi_tb: PASS (13.5 MHz divider)");
     $finish;
   end
 endmodule

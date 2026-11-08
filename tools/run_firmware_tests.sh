@@ -3,6 +3,7 @@ set -euo pipefail
 repo_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 mkdir -p "$repo_dir/build/tests"
 python3 "$repo_dir/tb/firmware/test_memory_report.py"
+bash "$repo_dir/tools/run_ui_tests.sh"
 "${CC:-cc}" -std=c11 -Wall -Wextra -Werror -DMMIO_POLL_LIMIT=8 \
   -I"$repo_dir/sw/hal" "$repo_dir/tb/firmware/hal_timeout_test.c" \
   "$repo_dir/sw/hal/i2c_bus.c" "$repo_dir/sw/hal/spi_bus.c" \

@@ -9,6 +9,8 @@
 #define TFT_BLACK 0x0000
 
 void tft_init(void);
+void tft_blit(unsigned int x, unsigned int y, unsigned int width, unsigned int height,
+              const unsigned short *pixels);
 
 void tft_fill_rect(unsigned char x0, unsigned char y0, unsigned char x1, unsigned char y1,
                    unsigned short colour);

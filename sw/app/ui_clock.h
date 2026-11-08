@@ -2,6 +2,8 @@
 #define UI_CLOCK_H
 
 void ui_draw_frame(void);
+void ui_toggle_page(void);
+void ui_show_rtc_fault(void);
 
 void ui_show_time(const unsigned char *time);
 

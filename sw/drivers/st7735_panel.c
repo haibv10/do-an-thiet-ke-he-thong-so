@@ -63,6 +63,22 @@ static void tft_set_window(unsigned char x0, unsigned char y0, unsigned char x1,
   tft_command(0x2c);
 }
 
+void tft_blit(unsigned int x, unsigned int y, unsigned int width, unsigned int height,
+              const unsigned short *pixels) {
+  if (!width || !height || x + width > TFT_WIDTH || y + height > TFT_HEIGHT)
+    return;
+  tft_set_window(x, y, x + width - 1u, y + height - 1u);
+  spi_set_control(SPI_RST_N | SPI_DC);
+  for (unsigned int row = 0; row < height; row++) {
+    for (unsigned int column = 0; column < width; column++) {
+      unsigned short colour = *pixels++;
+      spi_write((unsigned char)(colour >> 8));
+      spi_write((unsigned char)colour);
+    }
+  }
+  tft_deselect();
+}
+
 void tft_fill_rect(unsigned char x0, unsigned char y0, unsigned char x1, unsigned char y1,
                    unsigned short colour) {
   unsigned int columns = (unsigned int)(x1 - x0) + 1;

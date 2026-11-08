@@ -45,10 +45,11 @@ int main(void) {
       uart_puts("DISPLAY SPI TIMEOUT\r\n");
       display_fault_reported = 1;
     }
-    if (uart_poll(&command) && command == 'W') {
-
-      if (ds3231_set_from_uart())
+    if (uart_poll(&command)) {
+      if (command == 'W' && ds3231_set_from_uart())
         rtc_time_trusted = 1;
+      else if (command == 'P')
+        ui_toggle_page();
     }
 
     if (++gas_tick >= 10u) {
@@ -77,6 +78,7 @@ int main(void) {
 
     if (!ds3231_read_time(time)) {
       uart_puts("RTC NACK\r\n");
+      ui_show_rtc_fault();
       delay_loop(DELAY_MS(1000));
       continue;
     }

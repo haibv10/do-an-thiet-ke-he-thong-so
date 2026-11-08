@@ -14,6 +14,19 @@ module cpu_i2c_tb;
   wire    spi_rst_n_out;
 
   integer index;
+  integer cycles = 0, last_data_rise = 0, checked_periods = 0;
+  always @(posedge clk) cycles = cycles + 1;
+  always @(posedge i2c_scl) begin
+    if (rst_n && dut.clock_port.master_inst.state == 6) begin
+      if (dut.clock_port.master_inst.bit_cnt > 1) begin
+        if (cycles - last_data_rise != 270)
+          $fatal(1, "I2C period %0d clocks, expected 270 (100 kHz at 27 MHz)",
+                 cycles - last_data_rise);
+        checked_periods = checked_periods + 1;
+      end
+      last_data_rise = cycles;
+    end
+  end
 
   always #18.5 clk = ~clk;
 
@@ -104,7 +117,8 @@ module cpu_i2c_tb;
     if (i2c_sda !== 1'b1 || i2c_scl !== 1'b1)
       $fatal(1, "bus not released, sda=%b scl=%b", i2c_sda, i2c_scl);
 
-    $display("cpu_i2c_tb: PASS");
+    if (!checked_periods) $fatal(1, "No I2C periods checked");
+    $display("cpu_i2c_tb: PASS (100 kHz divider)");
     $finish;
   end
 endmodule

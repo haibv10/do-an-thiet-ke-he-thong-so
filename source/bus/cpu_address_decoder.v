@@ -8,15 +8,17 @@ module cpu_address_decoder (
   input wire [31:0] rd_rom, rd_dmem, rd_gpio, rd_uart, rd_i2c, rd_spi, rd_dht,
   output reg [31:0] rd_out
 );
-  wire sel_rom = addr < 32'h00004000;
-  wire sel_ram = addr >= 32'h20000000 && addr < 32'h20002000;
+  // Aligned memory windows need only upper-bit equality, avoiding chained
+  // magnitude comparisons on the half-cycle RAM write-enable path.
+  wire sel_rom = addr[31:14] == 18'h00000;
+  wire sel_ram = addr[31:13] == 19'h10000;
   // Peripheral registers support aligned 32-bit accesses and low-byte stores.
   wire aligned = addr[1:0] == 2'b00;
   wire sel_gpio = aligned && addr == 32'h40000000;
-  wire sel_uart = aligned && addr >= 32'h50000000 && addr < 32'h50000010;
-  wire sel_i2c = aligned && addr >= 32'h60000000 && addr < 32'h6000000c;
-  wire sel_spi = aligned && addr >= 32'h70000000 && addr < 32'h7000000c;
-  wire sel_dht = aligned && addr >= 32'h80000000 && addr < 32'h80000008;
+  wire sel_uart = aligned && addr[31:4] == 28'h5000000;
+  wire sel_i2c = aligned && addr[31:4] == 28'h6000000 && addr[3:2] != 2'b11;
+  wire sel_spi = aligned && addr[31:4] == 28'h7000000 && addr[3:2] != 2'b11;
+  wire sel_dht = aligned && addr[31:3] == 29'h10000000;
 
   assign we_dmem = sel_ram ? we_mask : 4'b0000;
   assign we_gpio = sel_gpio && we_mask[0];

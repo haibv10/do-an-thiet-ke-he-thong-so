@@ -2,7 +2,7 @@ GOWIN_ROOT ?=
 FLASH_FREQ ?= 1000000
 APP ?= environment
 
-.PHONY: help clean format format-check test test-firmware firmware demo fpga program flash
+.PHONY: help clean format format-check test test-ui test-firmware firmware demo fpga program flash
 
 help:
 	@printf '%s\n' \
@@ -12,7 +12,8 @@ help:
 	  'make test      Run 39 RTL checks (37 testbenches).' \
 	  'make firmware  Build the environmental firmware and memory report.' \
 	  'make demo      Build the minimal MMIO demo under build/demo/.' \
-	  'make test-firmware  Build both apps; test HAL timeouts and demo execution.' \
+	  'make test-firmware  Build both apps; test UI, HAL timeouts and demo execution.' \
+	  'make test-ui   Check partial TFT updates and render UI snapshots.' \
 	  'make fpga      Build firmware and generate the FPGA bitstream.' \
 	  'make program   Build the bitstream and program FPGA SRAM.' \
 	  'make flash     Build the bitstream and program persistent Flash.' \
@@ -35,6 +36,9 @@ firmware:
 
 demo:
 	bash tools/build_firmware.sh demo
+
+test-ui:
+	bash tools/run_ui_tests.sh
 
 test-firmware:
 	bash tools/build_firmware.sh environment

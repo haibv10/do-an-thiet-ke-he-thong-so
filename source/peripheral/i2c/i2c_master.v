@@ -17,7 +17,9 @@ module i2c_master (
   output reg       sda_en
 );
 
-  localparam DELAY = 10;
+  // One phase takes DELAY + 1 ticks: 5 us at the SoC 1 MHz tick.
+  // Data SCL = 1 MHz / (2 * 5) = 100 kHz.
+  localparam DELAY = 4;
   reg [20:0] cnt;
   reg        cnt_clr;
 

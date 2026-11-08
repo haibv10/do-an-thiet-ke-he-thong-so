@@ -39,6 +39,7 @@ cd "$build_dir"
   -march=rv32i \
   -mabi=ilp32 \
   -nostdlib \
+  -ffreestanding \
   -I"$sw_dir/app" \
   -I"$sw_dir/hal" \
   -I"$sw_dir/drivers" \
@@ -64,6 +65,8 @@ cd "$build_dir"
   "$sw_dir/drivers/mq5_sensor.c" \
   "$sw_dir/hal/spi_bus.c" \
   "$sw_dir/graphics/font_8x8.c" \
+  "$sw_dir/graphics/ui_assets.c" \
+  "$sw_dir/graphics/ui_graphics.c" \
   "$sw_dir/drivers/st7735_panel.c" \
   "$sw_dir/app/ui_clock.c" \
   -o firmware.elf

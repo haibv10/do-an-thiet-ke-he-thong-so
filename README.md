@@ -82,7 +82,7 @@ A slower memory would require extending this interface and CPU stall logic.
 The CPU uses IF/ID/EX/MEM/WB, forwarding, load-use interlocking and branch/jump
 flushing. Peripherals use ordinary loads/stores through MMIO. The system runs
 in one 27 MHz clock domain; reset asserts asynchronously and releases
-synchronously. I2C runs at 50 kHz; SPI uses mode 0, MSB first, at 6.75 MHz.
+synchronously. I2C runs at 100 kHz; SPI uses mode 0, MSB first, at 13.5 MHz.
 
 | Address range (inclusive) | Device | Purpose |
 |---|---|---|
@@ -133,7 +133,8 @@ needed; the default is `riscv64-unknown-elf`.
 |---|---|
 | `make clean` | Remove the entire `build/` directory |
 | `make test` | Run 39 RTL checks across 37 testbenches; output under `build/sim/` |
-| `make test-firmware` | Build both apps; test HAL timeouts and execute the MMIO demo on the simulated CPU |
+| `make test-firmware` | Build both apps; test partial UI updates, HAL timeouts and execute the MMIO demo on the simulated CPU |
+| `make test-ui` | Verify incremental TFT rendering and write PPM snapshots under `build/tests/ui/` |
 | `make demo` | Build minimal firmware under `build/demo/`, preserving `rom/firmware.hex` |
 | `make firmware` | Compile C/assembly and update `rom/firmware.hex` |
 | `make fpga` | Build firmware and synthesize/place/route the FPGA |
@@ -228,6 +229,40 @@ Use matching versions for reproducible formatting. Tools are resolved from
 `PATH`, with a fallback to `build/format-tools/bin/` for project-local binaries.
 Explicit executable paths can be supplied through `VERIBLE_FORMAT`,
 `CLANG_FORMAT` and `SHFMT`.
+
+## TFT dashboard and history
+
+The dashboard displays a clock with inline seconds, temperature/humidity cards,
+MQ-5 voltage, threshold status and a small gas trend. Send uppercase `P` over UART
+(or press `P` in picocom) to switch between dashboard and gas history. The history
+shows the most recent 60 samples, with min/max over valid samples in that window.
+Missing ADC samples create gaps. Its vertical scale adapts to the sampled range;
+it displays voltage in mV, not calibrated gas concentrations. No automatic page
+switching is used.
+
+Only startup and an explicit page change paint the full screen. During operation,
+cached values determine which rectangles need updating: seconds, minutes, hours,
+date, each sensor value, status or plot. Identical values produce no SPI traffic
+when the plot is unchanged. Four scanlines (1024 bytes) are composed in RAM before
+each strip is sent, so no intermediate erase is shown on the TFT. The renderer
+uses no full-screen framebuffer. A plot can change as its sample window advances
+even when the newest voltage equals the previous reading.
+
+`make test-ui` checks unchanged-data traffic, seconds-only writes, fault/recovery,
+rollover, history wrap and incremental-versus-full-frame pixel equality through
+an ST7735 command-stream model. It does not measure panel flicker or latency on
+hardware. Native PPM snapshots are written to `build/tests/ui/`.
+
+UI masks are committed as generated 1-bit pixel masks in `sw/graphics/ui_assets.*`.
+Small labels use native 3x5 pixel glyphs; large values use bold, monochrome
+Lato glyphs. Masks contain no anti-aliasing levels.
+Lato font derivatives and Lucide icons have their own notices under
+`sw/graphics/licenses/`; the original SVGs are under `sw/graphics/icons/`.
+Normal firmware builds need no font/SVG tools. To regenerate assets on Ubuntu,
+install `fonts-lato`, `python3-pil`, `python3-gi`, `python3-cairo` and
+`gir1.2-rsvg-2.0`, then run `python3 tools/generate_ui_assets.py`. The generator uses
+clang-format when available. The freestanding firmware build does not depend on
+host libc.
 
 ## Operation and RTC setup
 

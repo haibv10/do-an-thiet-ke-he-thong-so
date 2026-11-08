@@ -248,7 +248,22 @@ Startup prints `BOOT 5A5A5A5A 00000000` to check `.data`/`.bss` initialization.
 RTC status and time follow. An oscillator-stop flag or invalid calendar value
 causes the display to show `NOT SET`.
 
-Exit picocom with `Ctrl-A`, then `Ctrl-X`. Send `WYYMMDDhhmmss` to set the RTC;
+Exit picocom with `Ctrl-A`, then `Ctrl-X`. Synchronize the RTC from the laptop:
+
+```bash
+python3 tools/sync_rtc.py --port /dev/ttyUSB0
+```
+
+This requires Python 3.9+ and `pyserial` (`sudo apt install python3-serial` on
+Ubuntu). The script sends the laptop time in `Asia/Ho_Chi_Minh` at 115200 8N1,
+then checks both `RTC SET OK` and the RTC time readback (within three seconds
+of the expected time). Use `--timezone` to change the timezone and `--timeout`
+to change the response wait. The laptop clock must already be correct.
+Run it after programming or whenever the RTC needs its time restored; it does
+not run automatically when a cable is connected. No FPGA firmware rebuild is
+needed. Another laptop can run the same script with its own UART device path.
+
+To set a specific time manually, send `WYYMMDDhhmmss`;
 for example, 2026-11-08 12:30:00:
 
 ```bash

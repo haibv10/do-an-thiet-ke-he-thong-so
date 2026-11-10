@@ -37,10 +37,6 @@ int uart_hex32(unsigned int value) {
          uart_hex8((unsigned char)(value >> 8)) && uart_hex8((unsigned char)value);
 }
 
-int uart_bcd(unsigned char value) {
-  return uart_putc(hex_digits[(value >> 4) & 0x0f]) && uart_putc(hex_digits[value & 0x0f]);
-}
-
 int uart_getc(unsigned char *value) {
   unsigned int timeout = UART_GETC_TIMEOUT;
 

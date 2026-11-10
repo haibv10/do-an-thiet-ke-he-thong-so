@@ -26,7 +26,6 @@ cd "$build_dir"
   -mabi=ilp32 \
   -nostdlib \
   -ffreestanding \
-  -I"$sw_dir/app" \
   -I"$sw_dir/hal" \
   -I"$sw_dir/drivers" \
   -I"$sw_dir/graphics" \

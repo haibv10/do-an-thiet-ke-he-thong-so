@@ -1,6 +1,7 @@
 #include "i2c_bus.h"
 #include "uart_io.h"
 #include "ds3231_rtc.h"
+#include "bcd.h"
 
 #define DS3231_WRITE 0xd0
 #define DS3231_READ 0xd1
@@ -24,16 +25,6 @@ static unsigned int weekday_of(unsigned int year, unsigned int month, unsigned i
   return days + 1u;
 }
 
-static unsigned char bcd_of(unsigned int value) {
-  unsigned int tens = 0;
-
-  while (value >= 10u) {
-    value -= 10u;
-    tens++;
-  }
-
-  return (unsigned char)((tens << 4) | value);
-}
 
 static int ds3231_read(unsigned char first, unsigned char *buffer, unsigned int count) {
   unsigned int index;
@@ -146,17 +137,17 @@ int ds3231_time_is_valid(const unsigned char *time) {
 
 void ds3231_print(const unsigned char *time) {
   uart_puts("RTC 20");
-  uart_bcd(time[6]);
+  uart_hex8(time[6]);
   uart_putc('-');
-  uart_bcd(time[5] & 0x1f);
+  uart_hex8(time[5] & 0x1f);
   uart_putc('-');
-  uart_bcd(time[4] & 0x3f);
+  uart_hex8(time[4] & 0x3f);
   uart_putc(' ');
-  uart_bcd(time[2] & 0x3f);
+  uart_hex8(time[2] & 0x3f);
   uart_putc(':');
-  uart_bcd(time[1] & 0x7f);
+  uart_hex8(time[1] & 0x7f);
   uart_putc(':');
-  uart_bcd(time[0] & 0x7f);
+  uart_hex8(time[0] & 0x7f);
   uart_puts("\r\n");
 }
 
@@ -202,13 +193,13 @@ int ds3231_set_from_uart(void) {
     return 0;
   }
 
-  time[0] = bcd_of(field[5]);
-  time[1] = bcd_of(field[4]);
-  time[2] = bcd_of(field[3]);
+  time[0] = to_bcd(field[5]);
+  time[1] = to_bcd(field[4]);
+  time[2] = to_bcd(field[3]);
   time[3] = (unsigned char)weekday_of(field[0], field[1], field[2]);
-  time[4] = bcd_of(field[2]);
-  time[5] = bcd_of(field[1]);
-  time[6] = bcd_of(field[0]);
+  time[4] = to_bcd(field[2]);
+  time[5] = to_bcd(field[1]);
+  time[6] = to_bcd(field[0]);
 
   if (!ds3231_write(0x00, time, DS3231_TIME_BYTES)) {
     uart_puts("RTC SET FAIL\r\n");

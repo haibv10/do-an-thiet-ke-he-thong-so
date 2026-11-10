@@ -1,4 +1,3 @@
-GOWIN_ROOT ?=
 FLASH_FREQ ?= 1000000
 
 .PHONY: help clean test firmware fpga program flash
@@ -23,10 +22,10 @@ firmware:
 	bash tools/build_firmware.sh
 
 fpga: firmware
-	GOWIN_ROOT="$(GOWIN_ROOT)" bash tools/build_fpga.sh
+	bash tools/build_fpga.sh
 
 program: fpga
 	sudo env GOWIN_ROOT="$(GOWIN_ROOT)" bash tools/program_fpga.sh
 
 flash: fpga
-	sudo env OPENFPGALOADER_FREQ="$(FLASH_FREQ)" bash tools/program_flash.sh
+	sudo env FLASH_FREQ="$(FLASH_FREQ)" bash tools/program_flash.sh

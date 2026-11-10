@@ -83,8 +83,10 @@ are no access-fault traps. The DHT11 controller in RTL handles acquisition,
 timeout and checksum.
 
 Startup copies `.data` from ROM to RAM, clears `.bss` and sets the stack to the
-top of RAM. Memory size is defined in three places that must agree: the RTL
-memories, `sw/startup/linker.ld` and `ROM_WORDS` in `tools/make_hex.py`.
+top of RAM. Memory size is hard-coded in several places that must agree: the
+RTL memory depths (`source/memory/`), the decoder windows
+(`source/bus/cpu_address_decoder.v`), the ROM fetch limit in `source/soc_top.v`,
+`sw/startup/linker.ld` and `ROM_WORDS` in `tools/make_hex.py`.
 
 ## Toolchain and build
 

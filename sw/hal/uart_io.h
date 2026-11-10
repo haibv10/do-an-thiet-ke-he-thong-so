@@ -4,10 +4,8 @@
 // Output functions return 1 on success, 0 on polling timeout.
 int uart_putc(unsigned char value);
 int uart_puts(const char *text);
-int uart_hex8(unsigned char value);
+int uart_hex8(unsigned char value);  // also prints a BCD byte as two digits
 int uart_hex32(unsigned int value);
-
-int uart_bcd(unsigned char value);
 
 int uart_getc(unsigned char *value);
 

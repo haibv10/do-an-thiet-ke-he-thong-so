@@ -11,8 +11,6 @@ static unsigned int failed;
 
 int spi_error(void) { return failed != 0u; }
 
-void spi_clear_error(void) { failed = 0u; }
-
 int spi_wait_idle(void) {
   if (failed)
     return 0;

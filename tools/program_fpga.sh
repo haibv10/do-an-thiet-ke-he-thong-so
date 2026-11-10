@@ -18,7 +18,7 @@ if [[ ! -x "$programmer_bin" ]]; then
 fi
 
 if [[ ! -f "$bitstream" ]]; then
-  echo "bitstream not found; run bash tools/build_fpga.sh first" >&2
+  echo "bitstream not found; run make fpga first" >&2
   exit 1
 fi
 

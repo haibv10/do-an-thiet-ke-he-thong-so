@@ -7,12 +7,9 @@ static unsigned short pixels[TFT_WIDTH * 4];
 static unsigned short *rows[4];
 static int left, top, right, bottom;
 
-static void pixel(int x, int y, unsigned short colour, unsigned int coverage) {
-  unsigned short *destination;
-  if (x < left || x >= right || y < top || y >= bottom || !coverage)
-    return;
-  destination = &rows[y - top][x - left];
-  *destination = colour;
+static void pixel(int x, int y, unsigned short colour) {
+  if (x >= left && x < right && y >= top && y < bottom)
+    rows[y - top][x - left] = colour;
 }
 
 void ui_rect(int x, int y, int width, int height, unsigned short colour) {
@@ -51,7 +48,7 @@ void ui_line(int x0, int y0, int x1, int y1, unsigned short colour) {
     return;
   while (1) {
     int twice = error + error;
-    pixel(x0, y0, colour, 3);
+    pixel(x0, y0, colour);
     if (x0 == x1 && y0 == y1)
       break;
     if (twice >= dy) {
@@ -77,7 +74,8 @@ static void mask(int x, int y, unsigned int width, unsigned int height, const un
         bits = 8;
       }
       bits -= 1;
-      pixel(x + (int)column, y + (int)row, colour, (value >> bits) & 1u);
+      if ((value >> bits) & 1u)
+        pixel(x + (int)column, y + (int)row, colour);
     }
   }
 }

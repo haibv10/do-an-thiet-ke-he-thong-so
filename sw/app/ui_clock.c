@@ -2,6 +2,7 @@
 #include "ui_graphics.h"
 #include "st7735_panel.h"
 #include "mq5_sensor.h"
+#include "bcd.h"
 
 #define BG 0x0863u
 #define PANEL 0x1106u
@@ -69,16 +70,6 @@ static void pair(int x, int baseline, unsigned char value, const struct ui_font 
   ui_text(x + step, baseline, second, font, colour);
 }
 
-static unsigned char bcd(unsigned int value) {
-  unsigned int tens = 0;
-  if (value > 99u)
-    value = 99u;
-  while (value >= 10u) {
-    value -= 10u;
-    tens++;
-  }
-  return (unsigned char)((tens << 4) | value);
-}
 
 static unsigned int footer_state(void) {
   if (gas_valid == 2)
@@ -278,8 +269,8 @@ static void dashboard(void) {
   ui_icon(70, 72, &ui_droplets, BLUE);
   label(28, 75, "TEMP", &ui_label, MUTED);
   label(86, 75, "HUMID", &ui_label, MUTED);
-  pair(13, 104, env_valid == 1 ? bcd(temperature) : 0xff, &ui_sensor, WHITE, 13);
-  pair(71, 104, env_valid == 1 ? bcd(humidity) : 0xff, &ui_sensor, WHITE, 13);
+  pair(13, 104, env_valid == 1 ? to_bcd(temperature) : 0xff, &ui_sensor, WHITE, 13);
+  pair(71, 104, env_valid == 1 ? to_bcd(humidity) : 0xff, &ui_sensor, WHITE, 13);
   ui_rect(41, 94, 3, 1, ORANGE);
   ui_rect(41, 96, 3, 1, ORANGE);
   ui_rect(41, 94, 1, 3, ORANGE);

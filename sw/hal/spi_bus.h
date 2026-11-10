@@ -10,8 +10,7 @@ int spi_set_control(unsigned int bits);
 int spi_wait_idle(void);
 int spi_write(unsigned char value);
 
-// A timeout latches the error; clear it before an explicit retry.
+// A timeout latches the error until reset.
 int spi_error(void);
-void spi_clear_error(void);
 
 #endif

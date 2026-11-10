@@ -8,8 +8,9 @@
 #include "mq5_sensor.h"
 #include "dht11_sensor.h"
 
-unsigned int data_marker = 0x5a5a5a5a;
-unsigned int bss_marker;
+// Startup must copy .data from ROM and clear .bss; volatile keeps the check real.
+volatile unsigned int data_marker = 0x5a5a5a5a;
+volatile unsigned int bss_marker;
 
 int main(void) {
   unsigned char time[DS3231_TIME_BYTES];
@@ -28,11 +29,15 @@ int main(void) {
 
   led_set(0);
 
-  uart_puts("BOOT ");
-  uart_hex32(data_marker);
-  uart_putc(' ');
-  uart_hex32(bss_marker);
-  uart_puts("\r\n");
+  if (data_marker == 0x5a5a5a5au && bss_marker == 0u) {
+    uart_puts("BOOT OK\r\n");
+  } else {
+    uart_puts("BOOT FAIL data=");
+    uart_hex32(data_marker);
+    uart_puts(" bss=");
+    uart_hex32(bss_marker);
+    uart_puts("\r\n");
+  }
 
   tft_init();
 

@@ -159,7 +159,9 @@ int ds3231_report_osf(void) {
     return 0;
   }
 
-  uart_puts((status & DS3231_OSF) ? "RTC OSF SET\r\n" : "RTC OSF CLEAR\r\n");
+  // OSF: the oscillator stopped (e.g. backup battery lost), so the time is not valid.
+  uart_puts((status & DS3231_OSF) ? "RTC TIME LOST, set it with tools/sync_rtc.py\r\n"
+                                  : "RTC OK\r\n");
   return (status & DS3231_OSF) == 0;
 }
 

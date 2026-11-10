@@ -121,7 +121,7 @@ changing RTL, before programming the board.
 | `tb/cpu/cpu_top_tb.sv` | Standalone CPU: forwarding, store/load and load-use stall |
 | `tb/integration/cpu_isa_tb.sv` | Each remaining RV32I instruction once in the SoC: ALU, shifts, compares, byte/halfword loads/stores, all branches, AUIPC/JALR, x0 |
 | `tb/integration/soc_top_tb.sv` | CPU turns the LED on, sends `H` over UART and echoes a received byte |
-| `tb/integration/cpu_firmware_boot_tb.sv` | Runs `rom/firmware.hex`; expects the `BOOT 5A5A5A5A 00000000` banner |
+| `tb/integration/cpu_firmware_boot_tb.sv` | Runs `rom/firmware.hex`; expects `BOOT OK` (startup copied `.data` and cleared `.bss`) |
 | `tb/peripheral/uart/uart_mmio_tb.sv` | UART registers: send one byte, receive one byte and read it |
 | `tb/peripheral/i2c/i2c_master_tb.sv` | Write a register on a slave model, then read it back with repeated START |
 | `tb/peripheral/spi/spi_master_tb.sv` | Send one byte in mode 0 at `CLK_DIV=1` (the SoC setting) |
@@ -141,10 +141,12 @@ Open the UART at 115200 8N1 without flow control, then press S2:
 picocom -b 115200 --flow n /dev/ttyUSB0
 ```
 
-Startup prints `BOOT 5A5A5A5A 00000000` (checks `.data`/`.bss` init), then RTC
-status and time each second. The display shows `--` for invalid DHT11 readings,
-`NO ADC` if the ADC fails, and `NOT SET` if the RTC lost its time. Press `P` to
-switch between the dashboard and the 60-sample gas history.
+Startup prints `BOOT OK` once `.data`/`.bss` initialization is verified
+(otherwise `BOOT FAIL` with the observed values), then `RTC OK` and the time
+each second. `RTC TIME LOST` means the DS3231 oscillator stopped, e.g. after
+losing its backup battery; set the time as below. The display shows `--` for
+invalid DHT11 readings, `NO ADC` if the ADC fails, and `NOT SET` if the RTC lost
+its time. Press `P` to switch between the dashboard and the 60-sample gas history.
 
 MQ-5 thresholds are in `sw/drivers/mq5_sensor.h`: `CLEAN` below 1500 mV,
 `WARN` from 1500 mV, `DANGER` from 2500 mV. Calibrate them for the actual module.

@@ -1,10 +1,10 @@
 `timescale 1ns / 1ps
 
-// Runs rom/firmware.hex and expects the startup banner on UART.
+// Runs rom/firmware.hex and expects BOOT OK: startup copied .data and cleared .bss.
 module cpu_firmware_boot_tb;
   localparam integer BIT = 234;  // clocks per UART bit at 115200 baud
-  localparam integer LEN = 22;
-  localparam [LEN*8-1:0] BANNER = "BOOT 5A5A5A5A 00000000";
+  localparam integer LEN = 7;
+  localparam [LEN*8-1:0] BANNER = "BOOT OK";
 
   logic clk = 0, rst_n = 0;
   wire uart_tx_out;

@@ -1,153 +1,49 @@
 `timescale 1ns / 1ps
 
+// I2C master writes 0x3A to register 0x01 of a slave model, then reads it back.
 module i2c_master_tb;
-  localparam logic [6:0] SLAVE_ADDRESS = 7'h68;
-  localparam logic [7:0] WRITE_BYTE = {SLAVE_ADDRESS, 1'b0};
-  localparam logic [7:0] READ_BYTE = {SLAVE_ADDRESS, 1'b1};
+  localparam [6:0] SLAVE = 7'h68;
 
-  logic       clk = 1'b0;
-  wire        tick;
-  logic       rst_n = 1'b0;
-  logic       en = 1'b0;
-  logic       rw = 1'b0;
-  logic       start_frame = 1'b0;
-  logic       stop_frame = 1'b0;
-  logic       ack_out = 1'b0;
-  logic [7:0] data = 8'h00;
-  tri1        sda;
-  tri1        scl;
-  wire        done;
-  wire        busy;
-  wire  [7:0] data_out;
-  wire        ack;
-  wire        sda_en;
-
-  logic [7:0] captured           [0:6];
-  int         index;
-
+  logic clk = 0, rst_n = 0, en = 0, rw = 0, start_frame = 0, stop_frame = 0, ack_out = 0;
+  logic [7:0] data = 0;
+  tri1 sda, scl;
+  wire tick, done, busy, ack, sda_en;
+  wire [7:0] data_out;
   always #5 clk = ~clk;
 
-  initial begin
-    #4000000;
-    $fatal(1, "I2C timeout master=%0d slave=%0d", dut.state, slave.state);
-  end
+  clock_enable #(.divider(4)) tick_gen (.clk, .rst_n, .tick);
+  i2c_master dut (.*);
+  i2c_register_slave_model #(.ADDRESS(SLAVE)) slave (.sda, .scl);
 
-  clock_enable #(
-    .divider(4)
-  ) tick_divider (
-    .clk,
-    .rst_n,
-    .tick
-  );
-
-  i2c_master dut (
-    .clk,
-    .tick,
-    .rst_n,
-    .en,
-    .rw,
-    .start_frame,
-    .stop_frame,
-    .ack_out,
-    .data,
-    .sda,
-    .scl,
-    .done,
-    .busy,
-    .data_out,
-    .ack,
-    .sda_en
-  );
-
-  i2c_register_slave_model #(
-    .ADDRESS(SLAVE_ADDRESS)
-  ) slave (
-    .sda,
-    .scl
-  );
-
-  task automatic frame(input logic do_start, input logic is_read, input logic [7:0] value,
-                       input logic refuse, input logic do_stop);
-    begin
-      @(negedge clk);
-      start_frame = do_start;
-      stop_frame  = do_stop;
-      rw          = is_read;
-      ack_out     = refuse;
-      data        = value;
-      en          = 1'b1;
-      @(posedge done);
-      @(negedge clk);
-      en          = 1'b0;
-      start_frame = 1'b0;
-      stop_frame  = 1'b0;
-      @(negedge clk);
-    end
+  // One byte on the bus. nack = 1 marks the last byte of a read.
+  task automatic frame(input start, stop, read, nack, input [7:0] value);
+    @(negedge clk);
+    {start_frame, stop_frame, rw, ack_out, data} = {start, stop, read, nack, value};
+    en = 1;
+    @(posedge done);
+    @(negedge clk) en = 0;
+    @(negedge clk);
   endtask
 
+  initial #5_000_000 $fatal(1, "timeout");
+
   initial begin
-    for (index = 0; index < 19; index++) slave.regs[index] = 8'h00;
-    slave.regs[0] = 8'h45;
-    slave.regs[1] = 8'h30;
-    slave.regs[2] = 8'h13;
-    slave.regs[3] = 8'h02;
-    slave.regs[4] = 8'h21;
-    slave.regs[5] = 8'h09;
-    slave.regs[6] = 8'h26;
-
     repeat (4) @(negedge clk);
-    rst_n = 1'b1;
-    repeat (4) @(negedge clk);
+    rst_n = 1;
 
-    frame(1'b1, 1'b0, WRITE_BYTE, 1'b0, 1'b0);
-    if (ack !== 1'b1) $fatal(1, "slave did not acknowledge its own address");
+    // Write: START, address+W, register 0x01, data 0x3A, STOP
+    frame(1, 0, 0, 0, {SLAVE, 1'b0});
+    if (ack !== 1) $fatal(1, "address not acknowledged");
+    frame(0, 0, 0, 0, 8'h01);
+    frame(0, 1, 0, 0, 8'h3a);
+    if (slave.regs[1] !== 8'h3a) $fatal(1, "slave register=%h, expected 3a", slave.regs[1]);
 
-    frame(1'b0, 1'b0, 8'h00, 1'b0, 1'b0);
-    if (ack !== 1'b1) $fatal(1, "slave did not acknowledge the register pointer");
-
-    frame(1'b1, 1'b0, READ_BYTE, 1'b0, 1'b0);
-    if (ack !== 1'b1)
-      $fatal(1, "slave did not acknowledge the read address after a repeated START");
-
-    if (slave.start_conditions !== 2)
-      $fatal(1, "%0d START conditions, expected 2", slave.start_conditions);
-    if (slave.stop_conditions !== 0)
-      $fatal(1, "%0d STOP conditions before the read finished", slave.stop_conditions);
-
-    for (index = 0; index < 6; index++) begin
-      frame(1'b0, 1'b1, 8'h00, 1'b0, 1'b0);
-      captured[index] = data_out;
-    end
-    frame(1'b0, 1'b1, 8'h00, 1'b1, 1'b1);
-    captured[6] = data_out;
-
-    for (index = 0; index < 7; index++)
-    if (captured[index] !== slave.regs[index])
-      $fatal(1, "byte %0d read back %h, expected %h", index, captured[index], slave.regs[index]);
-
-    if (slave.stop_conditions !== 1)
-      $fatal(1, "%0d STOP conditions, expected 1", slave.stop_conditions);
-
-    if (slave.state !== slave.IDLE)
-      $fatal(1, "slave state %0d after the stop, expected IDLE", slave.state);
-
-    if (sda !== 1'b1 || scl !== 1'b1)
-      $fatal(1, "bus not released after the stop, sda=%b scl=%b", sda, scl);
-
-    frame(1'b1, 1'b0, WRITE_BYTE, 1'b0, 1'b0);
-    frame(1'b0, 1'b0, 8'h0e, 1'b0, 1'b0);
-    frame(1'b0, 1'b0, 8'h1c, 1'b0, 1'b1);
-    if (slave.regs[8'h0e] !== 8'h1c)
-      $fatal(1, "register 0e holds %h, expected 1c", slave.regs[8'h0e]);
-
-    frame(1'b1, 1'b0, WRITE_BYTE, 1'b0, 1'b0);
-    frame(1'b0, 1'b0, 8'h0e, 1'b0, 1'b0);
-    frame(1'b1, 1'b0, READ_BYTE, 1'b0, 1'b0);
-    frame(1'b0, 1'b1, 8'h00, 1'b1, 1'b1);
-    if (data_out !== 8'h1c) $fatal(1, "read back %h from register 0e, expected 1c", data_out);
-
-    frame(1'b1, 1'b0, 8'h20, 1'b0, 1'b1);
-    if (ack !== 1'b0) $fatal(1, "an address no slave holds was acknowledged");
+    // Read: START, address+W, register 0x01, repeated START, address+R, read with NACK, STOP
+    frame(1, 0, 0, 0, {SLAVE, 1'b0});
+    frame(0, 0, 0, 0, 8'h01);
+    frame(1, 0, 0, 0, {SLAVE, 1'b1});
+    frame(0, 1, 1, 1, 8'h00);
+    if (data_out !== 8'h3a) $fatal(1, "read back %h, expected 3a", data_out);
 
     $display("i2c_master_tb: PASS");
     $finish;

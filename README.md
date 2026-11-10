@@ -109,26 +109,27 @@ with `make flash FLASH_FREQ=500000`. Override the compiler prefix with
 
 ## Core testbenches
 
-`make test` runs eight self-checking iverilog testbenches. Each prints
-`<name>: PASS` or stops with `$fatal` on the first mismatch. Output goes to
-`build/sim/`. Run it after changing RTL or the memory map, before programming
-the board.
+`make test` runs eight happy-path iverilog testbenches: each drives the normal
+use case once and checks the result. Each prints `<name>: PASS` or stops with
+`$fatal` on the first mismatch. Output goes to `build/sim/`. Run it after
+changing RTL, before programming the board.
 
 | Testbench | Checks |
 |---|---|
-| `tb/cpu/cpu_top_tb.sv` | Standalone CPU: RV32I results, store address/mask, exactly one load-use stall |
-| `tb/integration/cpu_hazard_tb.sv` | Forwarding and load-use stall inside the full SoC |
-| `tb/integration/soc_top_tb.sv` | Branch/JAL flush, RAM, GPIO write, UART TX and RX echo through MMIO |
+| `tb/cpu/cpu_top_tb.sv` | Standalone CPU: forwarding, store/load and load-use stall |
+| `tb/integration/cpu_isa_tb.sv` | Each remaining RV32I instruction once in the SoC: ALU, shifts, compares, byte/halfword loads/stores, all branches, AUIPC/JALR, x0 |
+| `tb/integration/soc_top_tb.sv` | CPU turns the LED on, sends `H` over UART and echoes a received byte |
 | `tb/integration/cpu_firmware_boot_tb.sv` | Runs `rom/firmware.hex`; expects the `BOOT 5A5A5A5A 00000000` banner |
-| `tb/peripheral/uart/uart_mmio_tb.sv` | UART RX status, 16-byte FIFO, full/overrun flags and W1C clear, TX busy |
-| `tb/peripheral/i2c/i2c_master_tb.sv` | START/repeated START/STOP, ACK/NACK, register write and read against a slave model |
-| `tb/peripheral/spi/spi_master_tb.sv` | Mode 0 timing at `CLK_DIV=1` (the SoC setting): 8 edges/byte, MOSI setup, ignored mid-transfer start |
-| `tb/peripheral/dht11/dht11_mmio_tb.sv` | Valid frame, checksum failure, no-response timeout, start while busy, recovery |
+| `tb/peripheral/uart/uart_mmio_tb.sv` | UART registers: send one byte, receive one byte and read it |
+| `tb/peripheral/i2c/i2c_master_tb.sv` | Write a register on a slave model, then read it back with repeated START |
+| `tb/peripheral/spi/spi_master_tb.sv` | Send one byte in mode 0 at `CLK_DIV=1` (the SoC setting) |
+| `tb/peripheral/dht11/dht11_mmio_tb.sv` | Read one humidity/temperature frame from a sensor model |
 
 `tb/support/` holds the I2C slave and DHT11 sensor models used by these tests.
-The boot test depends on the committed ROM image, so run `make firmware` before
-`make test` after changing firmware. These tests check RTL behaviour only, not
-board wiring or real sensors.
+Test bytes are not bit-symmetric, so a wrong bit order fails. The boot test
+depends on the committed ROM image, so run `make firmware` before `make test`
+after changing firmware. Error cases (noise, timeouts, NACK) are not tested;
+these tests check RTL behaviour only, not board wiring or real sensors.
 
 ## Operation
 

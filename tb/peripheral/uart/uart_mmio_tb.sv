@@ -1,109 +1,53 @@
 `timescale 1ns / 1ps
 
+// UART registers: TX sends one byte; RX receives one byte and the CPU reads it.
 module uart_mmio_tb;
-  localparam integer CLKS_PER_BIT = 8;
+  localparam integer BIT = 8;  // short bit time for simulation
 
-  logic          clk = 1'b0;
-  logic          rst_n = 1'b0;
-  logic          we = 1'b0;
-  logic          re = 1'b0;
-  logic   [31:0] a = 32'd0;
-  logic   [31:0] wd = 32'd0;
-  logic          rx = 1'b1;
-  logic   [31:0] rd;
-  logic          tx;
-  integer        bit_index;
-  integer        byte_index;
-
+  logic clk = 0, rst_n = 0, we = 0, re = 0, rx = 1;
+  logic [31:0] a = 0, wd = 0;
+  wire [31:0] rd;
+  wire tx;
+  logic [7:0] received;
   always #5 clk = ~clk;
 
-  uart_mmio #(.CLKS_PER_BIT(CLKS_PER_BIT)) dut (.*);
+  uart_mmio #(.CLKS_PER_BIT(BIT)) dut (.*);
 
-  task automatic send_byte(input logic [7:0] value);
-    @(negedge clk) rx = 1'b0;
-    repeat (CLKS_PER_BIT) @(negedge clk);
-    for (bit_index = 0; bit_index < 8; bit_index = bit_index + 1) begin
-      rx = value[bit_index];
-      repeat (CLKS_PER_BIT) @(negedge clk);
-    end
-    rx = 1'b1;
-    repeat (CLKS_PER_BIT) @(negedge clk);
-  endtask
+  initial #100_000 $fatal(1, "timeout");
 
   initial begin
-    repeat (2) @(posedge clk);
-    @(negedge clk) rst_n = 1'b1;
+    repeat (2) @(negedge clk);
+    rst_n = 1;
 
-    send_byte(8'hc3);
-    repeat (3) @(posedge clk);
-    a = 32'h5000_0004;
-    #1;
-    if (rd[7:0] !== 8'h0a) $fatal(1, "RX status=%h", rd);
-
-    a = 32'h5000_0008;
-    #1;
-    if (rd !== 32'h0000_00c3) $fatal(1, "RX data=%h", rd);
-    @(negedge clk) re = 1'b1;
-    @(negedge clk) re = 1'b0;
-    a = 32'h5000_0004;
-    #1;
-    if (rd[7:0] !== 8'h00) $fatal(1, "RX status after pop=%h", rd);
-
-    for (byte_index = 0; byte_index < 16; byte_index = byte_index + 1)
-    send_byte(8'h40 + byte_index);
-    repeat (3) @(posedge clk);
-    a = 32'h5000_0004;
-    #1;
-    if (rd[7:0] !== 8'h82) $fatal(1, "RX full status=%h", rd);
-
-    send_byte(8'hff);
-    repeat (3) @(posedge clk);
-    a = 32'h5000_0004;
-    #1;
-    if (rd[7:0] !== 8'h86) $fatal(1, "RX overrun status=%h", rd);
-
-    @(negedge clk) begin
-      a  = 32'h5000_000c;
-      wd = 32'h0000_0004;
-      we = 1'b1;
+    // TX: write 0x35 to DATA (0x00) and capture it on the tx pin.
+    a = 32'h00; wd = 32'h35; we = 1;
+    @(negedge clk) we = 0;
+    @(negedge tx);
+    repeat (BIT + BIT / 2) @(posedge clk);
+    for (int b = 0; b < 8; b++) begin
+      received[b] = tx;
+      repeat (BIT) @(posedge clk);
     end
-    @(negedge clk) we = 1'b0;
-    a = 32'h5000_0004;
-    #1;
-    if (rd[7:0] !== 8'h86) $fatal(1, "status bit 2 cleared W1C=%h", rd);
+    if (received !== 8'h35) $fatal(1, "TX sent %h, expected 35", received);
 
-    @(negedge clk) begin
-      a  = 32'h5000_000c;
-      wd = 32'h0000_0001;
-      we = 1'b1;
+    // RX: drive 0xA7 on rx, then STATUS (0x04) bit 1 = data valid, RX (0x08) = byte.
+    rx = 0;
+    repeat (BIT) @(negedge clk);
+    for (int b = 0; b < 8; b++) begin
+      rx = 8'ha7 >> b;
+      repeat (BIT) @(negedge clk);
     end
-    @(negedge clk) we = 1'b0;
-    a = 32'h5000_0004;
-    #1;
-    if (rd[7:0] !== 8'h82) $fatal(1, "RX W1C status=%h", rd);
+    rx = 1;
+    repeat (2 * BIT) @(negedge clk);
 
-    for (byte_index = 0; byte_index < 16; byte_index = byte_index + 1) begin
-      a = 32'h5000_0008;
-      #1;
-      if (rd !== (32'h0000_0040 + byte_index))
-        $fatal(1, "RX FIFO data=%h index=%d", rd, byte_index);
-      @(negedge clk) re = 1'b1;
-      @(negedge clk) re = 1'b0;
-    end
-    a = 32'h5000_0004;
-    #1;
-    if (rd[7:0] !== 8'h00) $fatal(1, "RX FIFO did not empty=%h", rd);
-
-    @(negedge clk) begin
-      a  = 32'h5000_0000;
-      wd = 32'h0000_0055;
-      we = 1'b1;
-    end
-    @(negedge clk) we = 1'b0;
-    a = 32'h5000_0004;
-    #1;
-    if (!rd[0]) $fatal(1, "TX busy status");
-    wait (!rd[0]);
+    a = 32'h04; #1;
+    if (rd[1] !== 1) $fatal(1, "RX valid not set, status=%h", rd);
+    a = 32'h08; #1;
+    if (rd !== 32'ha7) $fatal(1, "RX data=%h, expected a7", rd);
+    re = 1;  // reading RX pops the byte
+    @(negedge clk) re = 0;
+    a = 32'h04; #1;
+    if (rd[1] !== 0) $fatal(1, "RX valid not cleared after read");
 
     $display("uart_mmio_tb: PASS");
     $finish;

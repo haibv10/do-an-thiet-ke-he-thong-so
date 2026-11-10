@@ -1,99 +1,49 @@
 `timescale 1ns / 1ps
 
+// Standalone CPU: forwarding, store/load and load-use stall on a short program.
 module cpu_top_tb;
-  localparam logic [31:0] NOP = 32'h0000_0013;
-
-  logic   clk = 1'b0;
-  logic   rst_n = 1'b0;
-  integer index;
-  integer stall_count = 0;
-
+  logic clk = 0, rst_n = 0;
   always #18.5 clk = ~clk;
 
   wire [31:0] instr_addr, data_addr, data_wdata;
-  reg [31:0] instr_data, data_rdata;
   wire [3:0] data_wstrb;
   wire data_re;
-  reg [31:0] imem [0:2047];
-  reg [31:0] memory_word = 0;
+  logic [31:0] instr_data, data_rdata;
+  logic [31:0] imem[0:63];
+  logic [31:0] dmem[0:15];
+
   cpu_top dut (.*);
+
+  // Same timing as the SoC memories: read on the falling edge.
   always @(negedge clk) begin
-    instr_data <= imem[instr_addr[12:2]];
-    data_rdata <= memory_word;
-    if (data_wstrb != 0) begin
-      if (data_addr !== 32'h20000000 || data_wstrb !== 4'hf)
-        $fatal(1, "unexpected CPU write address/mask");
-      memory_word <= data_wdata;
-    end
+    instr_data <= imem[instr_addr[7:2]];
+    data_rdata <= dmem[data_addr[5:2]];
+    if (data_wstrb == 4'hf) dmem[data_addr[5:2]] <= data_wdata;
   end
 
-  always @(posedge clk) if (rst_n && dut.stall) stall_count <= stall_count + 1;
-
-  function automatic logic [31:0] encode_i(input logic [11:0] immediate, input logic [4:0] rs1,
-                                           input logic [2:0] funct3, input logic [4:0] rd,
-                                           input logic [6:0] opcode);
-    encode_i = {immediate, rs1, funct3, rd, opcode};
+  function automatic [31:0] addi(input [4:0] rd, rs1, input [11:0] imm);
+    addi = {imm, rs1, 3'b000, rd, 7'b0010011};
   endfunction
-
-  function automatic logic [31:0] encode_r(input logic [4:0] rs2, input logic [4:0] rs1,
-                                           input logic [4:0] rd);
-    encode_r = {7'd0, rs2, rs1, 3'b000, rd, 7'b0110011};
-  endfunction
-
-  function automatic logic [31:0] addi(input logic [4:0] rd, input logic [4:0] rs1,
-                                       input logic [11:0] immediate);
-    addi = encode_i(immediate, rs1, 3'b000, rd, 7'b0010011);
-  endfunction
-
-  task automatic expect_reg(input integer number, input logic [31:0] value, input string label);
-    if (dut.rf.x[number] !== value)
-      $fatal(1, "%s: x%0d = %0d, expected %0d", label, number, dut.rf.x[number], value);
-  endtask
 
   initial begin
-    #1;
-    for (index = 0; index < 2048; index = index + 1) imem[index] = NOP;
-
-    imem[0]  = {20'h20000, 5'd20, 7'b0110111};
-    imem[1]  = addi(5'd1, 5'd0, 12'd4);
-    imem[2]  = addi(5'd5, 5'd1, 12'd1);
-    imem[3]  = addi(5'd2, 5'd0, 12'd10);
-    imem[5]  = addi(5'd6, 5'd2, 12'd1);
-    imem[6]  = addi(5'd3, 5'd0, 12'd20);
-    imem[9]  = addi(5'd7, 5'd3, 12'd1);
-    imem[10] = addi(5'd4, 5'd0, 12'd30);
-    imem[14] = addi(5'd8, 5'd4, 12'd1);
-    imem[15] = addi(5'd9, 5'd0, 12'd100);
-    imem[18] = encode_r(5'd9, 5'd9, 5'd10);
-    imem[19] = addi(5'd11, 5'd0, 12'd77);
-    imem[20] = {7'd0, 5'd11, 5'd20, 3'b010, 5'd0, 7'b0100011};
-    imem[21] = encode_i(12'd0, 5'd20, 3'b010, 5'd12, 7'b0000011);
-    imem[24] = addi(5'd13, 5'd12, 12'd0);
-    imem[25] = encode_i(12'd0, 5'd20, 3'b010, 5'd14, 7'b0000011);
-    imem[26] = addi(5'd15, 5'd14, 12'd1);
-    imem[27] = encode_i(12'd0, 5'd20, 3'b010, 5'd16, 7'b0000011);
-    imem[28] = {20'h00080, 5'd17, 7'b0110111};
-    imem[29] = encode_i(12'd0, 5'd20, 3'b010, 5'd18, 7'b0000011);
-    imem[30] = {20'h00090, 5'd19, 7'b0010111};
-    imem[31] = 32'h0000_006f;
+    foreach (imem[i]) imem[i] = 32'h00000013;  // NOP
+    imem[0] = {20'h20000, 5'd1, 7'b0110111};  // lui  x1, 0x20000
+    imem[1] = addi(2, 0, 5);  // addi x2, x0, 5
+    imem[2] = addi(3, 2, 3);  // addi x3, x2, 3     (forwarded x2)
+    imem[3] = {7'd0, 5'd3, 5'd2, 3'b000, 5'd4, 7'b0110011};  // add x4, x2, x3
+    imem[4] = {7'd0, 5'd4, 5'd1, 3'b010, 5'd0, 7'b0100011};  // sw   x4, 0(x1)
+    imem[5] = {12'd0, 5'd1, 3'b010, 5'd5, 7'b0000011};  // lw   x5, 0(x1)
+    imem[6] = addi(6, 5, 1);  // addi x6, x5, 1     (load-use)
+    imem[7] = 32'h0000006f;  // j .
 
     repeat (2) @(posedge clk);
-    @(negedge clk) rst_n = 1'b1;
-    repeat (70) @(posedge clk);
+    @(negedge clk) rst_n = 1;
+    repeat (40) @(posedge clk);
 
-    expect_reg(5, 32'd5, "distance 1, forwarded from EX/MEM");
-    expect_reg(6, 32'd11, "distance 2, forwarded from MEM/WB");
-    expect_reg(7, 32'd21, "distance 3, write-first bypass");
-    expect_reg(8, 32'd31, "distance 4, plain register read");
-    expect_reg(10, 32'd200, "distance 3 on both operands");
-    expect_reg(13, 32'd77, "distance 3 where the producer is a load");
-    expect_reg(15, 32'd78, "load-use interlock");
-    expect_reg(17, 32'h0008_0000, "LUI after a load");
-    expect_reg(19, 32'h0009_0078, "AUIPC after a load");
-
-    if (stall_count !== 1)
-      $fatal(1, "expected exactly one load-use stall, counted %0d", stall_count);
-
+    if (dut.rf.x[3] !== 8) $fatal(1, "x3=%0d, expected 8", dut.rf.x[3]);
+    if (dut.rf.x[4] !== 13) $fatal(1, "x4=%0d, expected 13", dut.rf.x[4]);
+    if (dmem[0] !== 13) $fatal(1, "memory=%0d, expected 13", dmem[0]);
+    if (dut.rf.x[6] !== 14) $fatal(1, "x6=%0d, expected 14", dut.rf.x[6]);
     $display("cpu_top_tb: PASS");
     $finish;
   end

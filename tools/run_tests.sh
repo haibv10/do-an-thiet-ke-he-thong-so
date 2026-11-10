@@ -23,15 +23,13 @@ run_test() {
 soc_sources=(source/*.v source/cpu/*.v source/bus/*.v source/memory/*.v source/common/*.v source/peripheral/*/*.v)
 
 run_test cpu_top_tb source/cpu/*.v tb/cpu/cpu_top_tb.sv
-run_test cpu_hazard_tb "${soc_sources[@]}" tb/integration/cpu_hazard_tb.sv
+run_test cpu_isa_tb "${soc_sources[@]}" tb/integration/cpu_isa_tb.sv
 run_test soc_top_tb "${soc_sources[@]}" tb/integration/soc_top_tb.sv
 run_test cpu_firmware_boot_tb "${soc_sources[@]}" tb/integration/cpu_firmware_boot_tb.sv
 
 run_test uart_mmio_tb source/peripheral/uart/*.v tb/peripheral/uart/uart_mmio_tb.sv
 run_test i2c_master_tb source/common/clock_enable.v source/peripheral/i2c/i2c_master.v \
   tb/support/i2c_register_slave_model.sv tb/peripheral/i2c/i2c_master_tb.sv
-# CLK_DIV=1 matches SPI_CLK_DIV in soc_top.v (13.5 MHz SCK).
-run_test spi_master_tb -Pspi_master_tb.CLK_DIV=1 source/peripheral/spi/spi_master.v \
-  tb/peripheral/spi/spi_master_tb.sv
+run_test spi_master_tb source/peripheral/spi/spi_master.v tb/peripheral/spi/spi_master_tb.sv
 run_test dht11_mmio_tb source/peripheral/dht11/dht11_mmio.v tb/support/dht11_sensor_model.sv \
   tb/peripheral/dht11/dht11_mmio_tb.sv

@@ -144,7 +144,10 @@ struct ui_icon { const unsigned char *pixels; unsigned char width, height; };
     (ROOT / "sw/graphics/ui_assets.h").write_text(header + "#endif\n")
     (ROOT / "sw/graphics/ui_assets.c").write_text("\n".join(code))
     if shutil.which("clang-format"):
-        subprocess.run(["clang-format", "-i", str(ROOT / "sw/graphics/ui_assets.c"),
+        style = ("{BasedOnStyle: LLVM, IndentWidth: 2, ContinuationIndentWidth: 4, "
+                 "ColumnLimit: 100, SortIncludes: Never}")
+        subprocess.run(["clang-format", "-i", "--style=" + style,
+                        str(ROOT / "sw/graphics/ui_assets.c"),
                         str(ROOT / "sw/graphics/ui_assets.h")], check=True)
 
 

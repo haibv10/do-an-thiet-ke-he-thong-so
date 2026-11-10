@@ -3,21 +3,7 @@ set -euo pipefail
 
 repo_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 sw_dir="$repo_dir/sw"
-app=${1:-environment}
-case "$app" in
-  environment)
-    build_dir="$repo_dir/build/firmware"
-    main_source="$sw_dir/app/main.c"
-    ;;
-  demo)
-    build_dir="$repo_dir/build/demo"
-    main_source="$sw_dir/app/mmio_demo.c"
-    ;;
-  *)
-    echo "Usage: $0 [environment|demo]" >&2
-    exit 2
-    ;;
-esac
+build_dir="$repo_dir/build/firmware"
 tool_prefix=${RISCV_TOOL_PREFIX:-riscv64-unknown-elf}
 
 gcc_bin="$tool_prefix-gcc"
@@ -47,7 +33,6 @@ cd "$build_dir"
   -I"$sw_dir/common" \
   -Os \
   -Wall -Wextra -Werror \
-  -fstack-usage \
   -ffunction-sections \
   -fdata-sections \
   -msmall-data-limit=0 \
@@ -55,7 +40,7 @@ cd "$build_dir"
   -Wl,--gc-sections \
   -Wl,-Map=firmware.map \
   "$sw_dir/startup/startup.s" \
-  "$main_source" \
+  "$sw_dir/app/main.c" \
   "$sw_dir/common/sys_delay.c" \
   "$sw_dir/hal/gpio_led.c" \
   "$sw_dir/hal/uart_io.c" \
@@ -64,7 +49,6 @@ cd "$build_dir"
   "$sw_dir/hal/dht11_sensor.c" \
   "$sw_dir/drivers/mq5_sensor.c" \
   "$sw_dir/hal/spi_bus.c" \
-  "$sw_dir/graphics/font_8x8.c" \
   "$sw_dir/graphics/ui_assets.c" \
   "$sw_dir/graphics/ui_graphics.c" \
   "$sw_dir/drivers/st7735_panel.c" \
@@ -72,11 +56,8 @@ cd "$build_dir"
   -o firmware.elf
 
 "$objcopy_bin" -O binary firmware.elf firmware.bin
-"$objdump_bin" -d firmware.elf >firmware.asm
+"$objdump_bin" -d firmware.elf > firmware.asm
 python3 "$repo_dir/tools/make_hex.py" firmware.bin firmware.hex
 "$nm_bin" -n firmware.elf > firmware.symbols
 python3 "$repo_dir/tools/report_memory.py" "$build_dir" | tee memory_usage.txt
-if [[ "$app" == environment ]]; then
-  mkdir -p "$repo_dir/rom"
-  cp firmware.hex "$repo_dir/rom/firmware.hex"
-fi
+cp firmware.hex "$repo_dir/rom/firmware.hex"

@@ -1,53 +1,24 @@
-# Local editor and agent state
+# Editor and OS files
 .DS_Store
 Thumbs.db
 *.swp
-*.swo
 *~
 .vscode/
 .idea/
-.agents/
-.codex/
 
-# Local tool state and generated FPGA output
-*.lic
+# Build output (firmware, simulation, Gowin)
 build/
-logs/
-docs/
 impl/
-*.gprj.user
+*.lic
 *.log
 *.fs
-*.binx
-*.vg
-*.rpt
-*.rpt.html
-*.tr
-*.tr.html
-*.timing_paths
-
-# Simulator output
-work/
-transcript
-vsim.wlf
-*.wlf
-*.vcd
-*.fst
-*.ghw
-*.dump
 *.vvp
-
-# Firmware build intermediates
+*.vcd
 *.o
 *.elf
 *.bin
 *.map
-sw/*.asm
-sw/*.hex
 
-# The committed ROM boot image and simulation HEX fixtures are intentional.
-# Other build products belong under build/.
-
-# Python tool caches
+# Python caches
 __pycache__/
 *.py[cod]

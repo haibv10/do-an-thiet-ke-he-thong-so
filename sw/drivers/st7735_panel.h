@@ -4,24 +4,8 @@
 #define TFT_WIDTH 128
 #define TFT_HEIGHT 160
 
-#define TFT_RED 0xf800
-#define TFT_GREEN 0x07e0
-#define TFT_BLACK 0x0000
-
 void tft_init(void);
 void tft_blit(unsigned int x, unsigned int y, unsigned int width, unsigned int height,
               const unsigned short *pixels);
-
-void tft_fill_rect(unsigned char x0, unsigned char y0, unsigned char x1, unsigned char y1,
-                   unsigned short colour);
-
-void tft_draw_glyph(unsigned char x, unsigned char y, const unsigned char *glyph, unsigned short fg,
-                    unsigned short bg, unsigned int scale);
-void tft_draw_char(unsigned char x, unsigned char y, char value, unsigned short fg,
-                   unsigned short bg, unsigned int scale);
-void tft_draw_string(unsigned char x, unsigned char y, const char *text, unsigned short fg,
-                     unsigned short bg, unsigned int scale);
-void tft_draw_bcd(unsigned char x, unsigned char y, unsigned char value, unsigned short fg,
-                  unsigned short bg, unsigned int scale);
 
 #endif
